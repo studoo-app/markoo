@@ -1,6 +1,3 @@
-# Markoo
-
-> 🇬🇧 [English version](README.md)
 
 <p align="center">
   <picture>
@@ -14,6 +11,8 @@
 Markoo est un connecteur bidirectionnel intelligent entre une **base de connaissance** et un **dépôt Git local**. Vous écrivez une note dans votre base de connaissance : elle arrive dans le `docs/` du repo, avec des liens Markdown qui fonctionnent. Vous récupérez la modification d'un collègue dans `docs/` : votre base de connaissance est mise à jour.
 
 Les outils de base de connaissance sont pris en charge par des **adaptateurs**. **Obsidian est le premier implémenté** ; Logseq, Foam, Dendron et les simples dossiers Markdown sont prévus ensuite. Quand les deux côtés ont changé, Markoo fusionne comme le fait Git, et ne vous demande votre avis qu'en cas de vrai conflit.
+
+> 🇬🇧 [English version](README.md)
 
 > [!WARNING]
 > **Phase de conception.** Markoo n'est pas encore utilisable : ce dépôt ne contient pour l'instant que la documentation de conception. Voir la [feuille de route](documentation/fr/07-feuille-de-route.md).
