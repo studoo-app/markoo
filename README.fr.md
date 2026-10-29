@@ -116,4 +116,4 @@ Les contributions seront les bienvenues une fois les premiers jalons livrés. Av
 
 ## Licence
 
-À définir.
+Distribué sous [licence Apache, version 2.0](LICENSE).

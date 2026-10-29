@@ -116,4 +116,4 @@ Contributions are welcome once the first milestones land. Before contributing:
 
 ## License
 
-To be decided.
+Licensed under the [Apache License, Version 2.0](LICENSE).
