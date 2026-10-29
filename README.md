@@ -1,6 +1,3 @@
-# Markoo
-
-> 🇫🇷 [Version française](README.fr.md)
 
 <p align="center">
   <picture>
@@ -9,11 +6,14 @@
   </picture>
 </p>
 
+
 **Keep your knowledge base and your project docs in sync.**
 
 Markoo is a smart two-way connector between a **knowledge base** and a **local Git repository**. Write a note in your knowledge base and it lands in your repo's `docs/` with working Markdown links; pull a teammate's change to `docs/` and your knowledge base is updated.
 
 Knowledge base tools are supported through **adapters**. **Obsidian is the first one implemented**; Logseq, Foam, Dendron and plain Markdown folders are designed to follow. When both sides changed, Markoo merges them like Git does, and only asks you when there is a real conflict.
+
+> 🇫🇷 [Version française](README.fr.md)
 
 > [!WARNING]
 > **Design phase.** Markoo is not usable yet: this repository currently contains the design documentation only. See the [roadmap](documentation/en/07-roadmap.md).
