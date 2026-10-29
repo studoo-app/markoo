@@ -115,6 +115,20 @@ The `markoo` binary (`clap`):
 | `markoo daemon` | Starts the daemon (scheduler + API + MCP) |
 | `markoo mcp` | MCP server over stdio (for Claude Desktop / Claude Code) |
 
+#### Banner
+
+`markoo --version` and `markoo init` display a banner in figlet's `standard` font, stored in [`assets/cli-banner.txt`](../../assets/cli-banner.txt):
+
+```text
+  __ __                         _
+ / / \ \   _ __ ___   __ _ _ __| | _____   ___
+/ /   \ \ | '_ ` _ \ / _` | '__| |/ / _ \ / _ \
+\ \   / / | | | | | | (_| | |  |   < (_) | (_) |
+ \_\ /_/  |_| |_| |_|\__,_|_|  |_|\_\___/ \___/
+```
+
+When the terminal supports color, `<` is printed in pink (`#F0418E`) and `>` in green (`#22A55A`), the logo's colors. Otherwise (`NO_COLOR` set, output not a terminal), the banner is printed as plain text.
+
 ### `markoo-daemon`
 
 A long-running process, embedded in the Tauri app or run on its own (`launchd` on macOS). It guarantees **only one sync at a time per pair** through a job queue and a lock (`<data>/lock`), whatever the trigger.

@@ -1,5 +1,12 @@
 # Markoo — Documentation
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/logo-mark-name-dark.svg">
+    <img src="../assets/logo-mark-name.svg" alt="Markoo" width="320">
+  </picture>
+</p>
+
 Markoo synchronise intelligemment la documentation Markdown entre une **base de connaissance** (Obsidian en premier) et un dépôt **Git** local.
 Markoo intelligently syncs Markdown documentation between a **knowledge base** (Obsidian first) and a local **Git** repository.
 

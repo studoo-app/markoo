@@ -115,6 +115,20 @@ Binaire `markoo` (`clap`) :
 | `markoo daemon` | Lance le daemon (planificateur + API + MCP) |
 | `markoo mcp` | Serveur MCP en stdio (pour Claude Desktop / Claude Code) |
 
+#### Bannière
+
+`markoo --version` et `markoo init` affichent une bannière dans la police `standard` de figlet, stockée dans [`assets/cli-banner.txt`](../../assets/cli-banner.txt) :
+
+```text
+  __ __                         _
+ / / \ \   _ __ ___   __ _ _ __| | _____   ___
+/ /   \ \ | '_ ` _ \ / _` | '__| |/ / _ \ / _ \
+\ \   / / | | | | | | (_| | |  |   < (_) | (_) |
+ \_\ /_/  |_| |_| |_|\__,_|_|  |_|\_\___/ \___/
+```
+
+Si le terminal gère les couleurs, `<` est affiché en rose (`#F0418E`) et `>` en vert (`#22A55A`), les couleurs du logo. Sinon (`NO_COLOR` défini, sortie qui n'est pas un terminal), la bannière est affichée en texte brut.
+
 ### `markoo-daemon`
 
 Processus longue durée, embarqué dans l'app Tauri ou lancé seul (`launchd` sur macOS). Il garantit **une seule synchro à la fois par paire** grâce à une file de jobs et un verrou (`<data>/lock`), quel que soit le déclencheur.

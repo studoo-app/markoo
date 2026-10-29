@@ -2,6 +2,13 @@
 
 > 🇫🇷 [Version française](../fr/README.md)
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../../assets/logo-mark-name-dark.svg">
+    <img src="../../assets/logo-mark-name.svg" alt="Markoo" width="320">
+  </picture>
+</p>
+
 **Markoo** is a smart sync connector between a **knowledge base** (KB) and one or more locally cloned **Git repositories**. Each knowledge base type is handled by an adapter; **Obsidian** is the first one implemented. It keeps Markdown documentation consistent on both sides: the knowledge base stays up to date with the project, and the project benefits from what is written in the knowledge base.
 
 ```mermaid

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Markoo">
+  <rect width="192" height="192" rx="44" fill="#0F3D2C"/>
+  <g transform="translate(21.5 29) scale(1.24)">
+    <g fill="none" stroke-linecap="round" stroke-width="10">
+      <circle cx="60" cy="20" r="8" stroke="#FFFFFF"/>
+      <line x1="60" y1="28" x2="60" y2="96" stroke="#FFFFFF"/>
+      <line x1="38" y1="42" x2="82" y2="42" stroke="#FFFFFF"/>
+      <path d="M60 96 Q30 96 27 76" stroke="#FF6FAE"/>
+      <path d="M60 96 Q90 96 93 76" stroke="#4ED37E"/>
+    </g>
+    <polygon points="25.5,54 40,77 12,78" fill="#FF6FAE"/>
+    <polygon points="94.5,54 80,77 108,78" fill="#4ED37E"/>
+  </g>
+</svg>

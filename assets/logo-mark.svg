@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 110" role="img" aria-label="Markoo">
+  <g fill="none" stroke-linecap="round" stroke-width="10">
+    <circle cx="60" cy="20" r="8" stroke="#0F3D2C"/>
+    <line x1="60" y1="28" x2="60" y2="96" stroke="#0F3D2C"/>
+    <line x1="38" y1="42" x2="82" y2="42" stroke="#0F3D2C"/>
+    <path d="M60 96 Q30 96 27 76" stroke="#F0418E"/>
+    <path d="M60 96 Q90 96 93 76" stroke="#22A55A"/>
+  </g>
+  <polygon points="25.5,54 40,77 12,78" fill="#F0418E"/>
+  <polygon points="94.5,54 80,77 108,78" fill="#22A55A"/>
+</svg>

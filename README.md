@@ -2,6 +2,13 @@
 
 > 🇫🇷 [Version française](README.fr.md)
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-mark-name-dark.svg">
+    <img src="assets/logo-mark-name.svg" alt="Markoo" width="320">
+  </picture>
+</p>
+
 **Keep your knowledge base and your project docs in sync.**
 
 Markoo is a smart two-way connector between a **knowledge base** and a **local Git repository**. Write a note in your knowledge base and it lands in your repo's `docs/` with working Markdown links; pull a teammate's change to `docs/` and your knowledge base is updated.

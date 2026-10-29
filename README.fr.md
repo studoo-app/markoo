@@ -2,6 +2,13 @@
 
 > 🇬🇧 [English version](README.md)
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-mark-name-dark.svg">
+    <img src="assets/logo-mark-name.svg" alt="Markoo" width="320">
+  </picture>
+</p>
+
 **Garder sa base de connaissance et la documentation de ses projets synchronisées.**
 
 Markoo est un connecteur bidirectionnel intelligent entre une **base de connaissance** et un **dépôt Git local**. Vous écrivez une note dans votre base de connaissance : elle arrive dans le `docs/` du repo, avec des liens Markdown qui fonctionnent. Vous récupérez la modification d'un collègue dans `docs/` : votre base de connaissance est mise à jour.
