@@ -1,0 +1,20 @@
+[package]
+name = "markoo-cli"
+description = "Command-line interface for Markoo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "markoo"
+path = "src/main.rs"
+
+[dependencies]
+markoo-core.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true

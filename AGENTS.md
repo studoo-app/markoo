@@ -17,7 +17,7 @@ The design lives in [`documentation/`](documentation/INDEX.md). **Read it before
 
 ## Current status
 
-Design phase: **only documentation exists**. No Rust code yet. The next milestone is **M0** (workspace + CI), then **M1** (sync engine in `markoo-core`). Don't build ahead of the roadmap without being asked.
+**M0 done**: Cargo workspace (`markoo-core`, `markoo-cli`), `markoo-core::paths` and the `markoo paths` command, CI (fmt, clippy, tests on Linux, macOS, Windows), test fixtures in `tests/fixtures/`. The next milestone is **M1** (sync engine in `markoo-core`). Don't build ahead of the roadmap without being asked.
 
 ## Repository layout (target)
 

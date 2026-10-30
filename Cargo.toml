@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = ["crates/markoo-core", "crates/markoo-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/studoo-app/markoo"
+description = "Smart sync between a knowledge base and a Git repository"
+
+[workspace.dependencies]
+markoo-core = { path = "crates/markoo-core" }
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
+directories = "6.0.0"
+thiserror = "2.0.21"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"

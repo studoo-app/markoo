@@ -1,0 +1,3 @@
+# ADR 001 — Stack
+
+Rust workspace and a Tauri 2 desktop app.
