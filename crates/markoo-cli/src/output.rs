@@ -85,10 +85,15 @@ impl Style {
 mod tests {
     use super::*;
 
+    /// The asset without its line endings: Git may check it out with CRLF on Windows.
+    fn asset_lines() -> Vec<&'static str> {
+        BANNER.lines().collect()
+    }
+
     #[test]
     fn plain_banner_is_the_asset() {
         let style = Style { enabled: false };
-        assert_eq!(style.banner().trim_end(), BANNER.trim_end());
+        assert_eq!(style.banner().lines().collect::<Vec<_>>(), asset_lines());
     }
 
     #[test]
@@ -99,6 +104,6 @@ mod tests {
             .replace("\x1b[38;2;240;65;142m", "")
             .replace("\x1b[38;2;34;165;90m", "")
             .replace("\x1b[0m", "");
-        assert_eq!(stripped.trim_end(), BANNER.trim_end());
+        assert_eq!(stripped.lines().collect::<Vec<_>>(), asset_lines());
     }
 }
