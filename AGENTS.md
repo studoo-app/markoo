@@ -17,7 +17,7 @@ The design lives in [`documentation/`](documentation/INDEX.md). **Read it before
 
 ## Current status
 
-**M0 done**: Cargo workspace (`markoo-core`, `markoo-cli`), `markoo-core::paths` and the `markoo paths` command, CI (fmt, clippy, tests on Linux, macOS, Windows), test fixtures in `tests/fixtures/`. The next milestone is **M1** (sync engine in `markoo-core`). Don't build ahead of the roadmap without being asked.
+**M0 done.** **M1 engine in place** in `markoo-core`: scan, SQLite state, planner (classification table, the three directions, exact renames), 3-way merge and applier, with the `markdown` identity adapter. Not wired to the CLI yet; `markoo.toml` parsing, conflict resolution, the journal and the pair lock are still to do. The next milestone is **M2** (CLI). Don't build ahead of the roadmap without being asked.
 
 ## Repository layout (target)
 
