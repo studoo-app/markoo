@@ -198,7 +198,7 @@ stateDiagram-v2
 Les conflits sont résolus depuis :
 
 - l'**app Tauri** (vue en trois colonnes) ;
-- la **CLI** (`markoo resolve <id> --keep kb|repo|both` ou `--edit` dans `$EDITOR`) ;
+- la **CLI** (`markoo resolve <fichier> --keep kb|repo|both`, `--edit` dans `$EDITOR`, `--content-file <fichier>`, ou `--push-to-source` pour une paire à sens unique) ;
 - l'**API** (`POST /conflicts/{id}/resolve`) ;
 - **MCP** (`resolve_conflict`), ce qui permet à Claude de proposer une fusion.
 
@@ -222,5 +222,7 @@ flowchart TD
 - **Écriture atomique** : écrire dans `fichier.md.markoo-tmp`, `fsync`, puis `rename`.
 - **Vérification juste avant d'écrire** : si le fichier cible a changé depuis le scan (l'outil de la KB, par ex. Obsidian, vient de l'enregistrer), l'action est annulée et sera replanifiée à la synchro suivante.
 - **Journal** : chaque application écrit `<data>/journal/<horodatage>.json`. Une synchro interrompue est reprise ou annulée au démarrage suivant.
+- **Dossier indisponible** : si un dossier de la paire est absent (disque débranché, volume démonté), la synchro est refusée. Sinon, une liste vide ferait croire que tous les fichiers ont été supprimés, et l'autre côté serait vidé.
+- **Fichiers illisibles** : un fichier qu'on ne peut pas lire (UTF-8 invalide) est signalé et laissé hors du plan, des deux côtés ; il ne compte jamais comme supprimé.
 - **Sauvegardes** : le contenu écrasé est copié dans `<data>/backups/` avant l'écriture.
 - **Exclusions** : les exclusions propres à chaque adaptateur (par ex. `.obsidian/` et `.trash/` pour Obsidian ; voir [Bases de connaissance](09-bases-de-connaissance.md#types-de-bases-de-connaissance-pris-en-charge)), ainsi que `.git/`, `node_modules/` et les fichiers temporaires `*.markoo-tmp`, sont toujours ignorés.

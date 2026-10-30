@@ -148,7 +148,8 @@ target_changes = "protect"      # une édition dans la KB est signalée, jamais 
 ### Validation au chargement
 
 - `kb` et `repo` existent et sont des dossiers.
-- Deux paires ne se chevauchent pas (même fichier suivi par deux paires) : erreur explicite.
+- Deux paires ne se chevauchent pas (même fichier suivi par deux paires) : erreur explicite. Les dossiers `kb` et `repo` d'une même paire ne se chevauchent pas non plus.
+- Les clés inconnues dans une table `[[pair]]` sont refusées, pour qu'une faute de frappe comme `directon` ne change pas le sens en silence.
 - `target_changes = "overwrite"` avec `direction = "both"` : avertissement, l'option est sans effet.
 - `repo` se trouve dans un dépôt Git : simple avertissement s'il ne l'est pas, ce qui reste autorisé.
 - `kb` est reconnu par l'adaptateur de son type : si `kb_type` est omis, chaque adaptateur tente la détection et le premier qui reconnaît le dossier l'emporte (`markdown` en dernier recours) ; si `kb_type` est indiqué et que la détection échoue, erreur explicite.

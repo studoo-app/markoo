@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use markoo_core::fs::{Fs, MemFs};
 use markoo_core::state::{IssueKind, State};
-use markoo_core::{Direction, Engine, EntryPath, Pair, Report, Side, TargetChanges};
+use markoo_core::{Direction, Engine, EntryPath, Pair, Report, Resolution, Side, TargetChanges};
 
 struct Harness {
     engine: Engine<MemFs>,
@@ -70,7 +70,7 @@ impl Harness {
 
     fn pending_kinds(&self) -> Vec<IssueKind> {
         self.engine
-            .pending(&self.pair)
+            .issues(&self.pair)
             .unwrap()
             .into_iter()
             .map(|issue| issue.kind)
@@ -412,7 +412,7 @@ fn one_way_never_writes_to_the_source() {
     h.put(Side::Repo, "a.md", "target edit\n");
     h.put(Side::Repo, "extra.md", "extra\n");
     let report = h.sync();
-    assert!(report.written.iter().all(|(side, _)| *side == Side::Repo));
+    assert!(report.written.iter().all(|file| file.side == Side::Repo));
 }
 
 #[test]
@@ -635,4 +635,348 @@ fn unreadable_file_is_left_out_of_the_plan() {
         .write_atomic(Path::new("/kb/a.md"), &[0xff, 0xfe])
         .unwrap();
     assert!(h.engine.plan(&h.pair).unwrap().plan.is_empty());
+}
+
+// --- Unavailable folders ---------------------------------------------------
+
+/// An unplugged disk must not look like every file was deleted.
+#[test]
+fn offline_kb_folder_refuses_to_sync() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.fs().set_offline("/kb");
+    assert!(matches!(
+        h.engine.sync(&h.pair),
+        Err(markoo_core::Error::MissingRoot { side: Side::Kb, .. })
+    ));
+}
+
+#[test]
+fn offline_kb_folder_keeps_the_repo_files() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.fs().set_offline("/kb");
+    let _ = h.engine.sync(&h.pair);
+    assert_eq!(h.get(Side::Repo, "a.md").as_deref(), Some(BASE));
+}
+
+#[test]
+fn offline_repo_folder_keeps_the_kb_files() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.fs().set_offline("/repo");
+    let _ = h.engine.sync(&h.pair);
+    assert_eq!(h.get(Side::Kb, "a.md").as_deref(), Some(BASE));
+}
+
+// --- Resolution -------------------------------------------------------------
+
+fn conflicted() -> Harness {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.put(Side::Kb, "a.md", "L1\nKB\nL3\nL4\n");
+    h.put(Side::Repo, "a.md", "L1\nREPO\nL3\nL4\n");
+    h.sync();
+    h
+}
+
+const KB_TEXT: &str = "L1\nKB\nL3\nL4\n";
+const REPO_TEXT: &str = "L1\nREPO\nL3\nL4\n";
+
+#[test]
+fn resolve_keep_kb_copies_it_to_the_repo() {
+    let h = conflicted();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Kb))
+        .unwrap();
+    assert_eq!(h.get(Side::Repo, "a.md").as_deref(), Some(KB_TEXT));
+}
+
+#[test]
+fn resolve_keep_repo_copies_it_to_the_kb() {
+    let h = conflicted();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Repo))
+        .unwrap();
+    assert_eq!(h.get(Side::Kb, "a.md").as_deref(), Some(REPO_TEXT));
+}
+
+#[test]
+fn resolve_backs_up_the_discarded_version() {
+    let h = conflicted();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Kb))
+        .unwrap();
+    let saved = h
+        .backups()
+        .iter()
+        .filter_map(|p| h.fs().read_string(p))
+        .any(|t| t == REPO_TEXT);
+    assert!(saved);
+}
+
+#[test]
+fn resolve_clears_the_issue() {
+    let h = conflicted();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Kb))
+        .unwrap();
+    assert!(h.engine.issues(&h.pair).unwrap().is_empty());
+}
+
+#[test]
+fn resolve_leaves_nothing_to_sync() {
+    let h = conflicted();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Kb))
+        .unwrap();
+    assert!(h.engine.plan(&h.pair).unwrap().plan.is_empty());
+}
+
+#[test]
+fn resolve_one_issue_keeps_the_others() {
+    let h = conflicted();
+    h.synced("b.md", BASE);
+    h.put(Side::Kb, "b.md", KB_TEXT);
+    h.put(Side::Repo, "b.md", REPO_TEXT);
+    h.sync();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Kb))
+        .unwrap();
+    assert_eq!(h.pending_kinds(), vec![IssueKind::Conflict]);
+}
+
+#[test]
+fn resolve_with_content_writes_both_sides() {
+    let h = conflicted();
+    h.engine
+        .resolve(
+            &h.pair,
+            &entry("a.md"),
+            Resolution::Content("merged\n".into()),
+        )
+        .unwrap();
+    let merged = Some("merged\n".to_owned());
+    assert_eq!(
+        (h.get(Side::Kb, "a.md"), h.get(Side::Repo, "a.md")),
+        (merged.clone(), merged)
+    );
+}
+
+#[test]
+fn resolve_keep_both_saves_the_repo_version_aside() {
+    let h = conflicted();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::KeepBoth)
+        .unwrap();
+    let copy = "a.conflict-repo.md";
+    assert_eq!(
+        (
+            h.get(Side::Kb, copy),
+            h.get(Side::Repo, copy),
+            h.get(Side::Repo, "a.md")
+        ),
+        (
+            Some(REPO_TEXT.to_owned()),
+            Some(REPO_TEXT.to_owned()),
+            Some(KB_TEXT.to_owned())
+        )
+    );
+}
+
+#[test]
+fn resolve_keep_both_leaves_nothing_to_sync() {
+    let h = conflicted();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::KeepBoth)
+        .unwrap();
+    assert!(h.engine.plan(&h.pair).unwrap().plan.is_empty());
+}
+
+#[test]
+fn resolve_keep_both_never_overwrites_an_existing_copy() {
+    let h = conflicted();
+    h.put(Side::Kb, "a.conflict-repo.md", "precious\n");
+    let report = h
+        .engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::KeepBoth)
+        .unwrap();
+    assert_eq!(
+        (
+            report.skipped.len(),
+            h.get(Side::Kb, "a.conflict-repo.md").as_deref()
+        ),
+        (1, Some("precious\n"))
+    );
+}
+
+#[test]
+fn resolve_delete_modify_by_keeping_the_deletion() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.delete(Side::Kb, "a.md");
+    h.put(Side::Repo, "a.md", "changed\n");
+    h.sync();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Kb))
+        .unwrap();
+    assert_eq!((h.get(Side::Repo, "a.md"), h.trashed().len()), (None, 1));
+}
+
+#[test]
+fn resolve_without_issue_is_an_error() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    let result = h
+        .engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Kb));
+    assert!(matches!(result, Err(markoo_core::Error::NotPending(_))));
+}
+
+fn diverged() -> Harness {
+    let h = one_way(TargetChanges::Protect);
+    h.synced("a.md", BASE);
+    h.put(Side::Repo, "a.md", "target edit\n");
+    h.sync();
+    h
+}
+
+#[test]
+fn divergence_keep_source_restores_the_target() {
+    let h = diverged();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Kb))
+        .unwrap();
+    assert_eq!(h.get(Side::Repo, "a.md").as_deref(), Some(BASE));
+}
+
+#[test]
+fn divergence_keep_target_excludes_the_file() {
+    let h = diverged();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Repo))
+        .unwrap();
+    h.put(Side::Kb, "a.md", "source moved on\n");
+    h.sync();
+    assert_eq!(h.get(Side::Repo, "a.md").as_deref(), Some("target edit\n"));
+}
+
+#[test]
+fn excluded_file_comes_back_by_keeping_the_source() {
+    let h = diverged();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Repo))
+        .unwrap();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Keep(Side::Kb))
+        .unwrap();
+    assert_eq!(h.get(Side::Repo, "a.md").as_deref(), Some(BASE));
+}
+
+#[test]
+fn divergence_push_to_source_copies_the_target_edit() {
+    let h = diverged();
+    h.engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::PushToSource)
+        .unwrap();
+    assert_eq!(h.get(Side::Kb, "a.md").as_deref(), Some("target edit\n"));
+}
+
+#[test]
+fn one_way_refuses_writing_merged_content_to_the_source() {
+    let h = diverged();
+    let result = h
+        .engine
+        .resolve(&h.pair, &entry("a.md"), Resolution::Content("x\n".into()));
+    assert!(matches!(
+        result,
+        Err(markoo_core::Error::NeedsBidirectional)
+    ));
+}
+
+// --- Changing direction -----------------------------------------------------
+
+#[test]
+fn run_records_the_direction_without_forcing_a_dry_run_the_first_time() {
+    let h = Harness::new();
+    h.put(Side::Kb, "a.md", "a\n");
+    assert!(h.engine.run(&h.pair, false).unwrap().report.is_some());
+}
+
+#[test]
+fn run_dry_run_writes_nothing() {
+    let h = Harness::new();
+    h.put(Side::Kb, "a.md", "a\n");
+    h.engine.run(&h.pair, true).unwrap();
+    assert_eq!(h.get(Side::Repo, "a.md"), None);
+}
+
+#[test]
+fn changing_direction_forces_one_dry_run() {
+    let mut h = Harness::new();
+    h.synced("a.md", BASE);
+    h.engine.run(&h.pair, false).unwrap();
+    h.pair.direction = Direction::KbToRepo;
+    h.put(Side::Kb, "a.md", "new\n");
+    let outcome = h.engine.run(&h.pair, false).unwrap();
+    assert_eq!(
+        (
+            outcome.direction_changed,
+            outcome.report.is_none(),
+            h.get(Side::Repo, "a.md").as_deref()
+        ),
+        (true, true, Some(BASE))
+    );
+}
+
+#[test]
+fn run_after_the_forced_dry_run_applies() {
+    let mut h = Harness::new();
+    h.synced("a.md", BASE);
+    h.engine.run(&h.pair, false).unwrap();
+    h.pair.direction = Direction::KbToRepo;
+    h.put(Side::Kb, "a.md", "new\n");
+    h.engine.run(&h.pair, false).unwrap();
+    h.engine.run(&h.pair, false).unwrap();
+    assert_eq!(h.get(Side::Repo, "a.md").as_deref(), Some("new\n"));
+}
+
+#[test]
+fn switching_to_one_way_is_refused_with_pending_conflicts() {
+    let mut h = conflicted();
+    h.engine.run(&h.pair, false).unwrap();
+    h.pair.direction = Direction::KbToRepo;
+    assert!(matches!(
+        h.engine.run(&h.pair, false),
+        Err(markoo_core::Error::DirectionBlocked { pending: 1, .. })
+    ));
+}
+
+// --- Diff --------------------------------------------------------------------
+
+#[test]
+fn diff_shows_differing_entries() {
+    let h = Harness::new();
+    h.put(Side::Kb, "a.md", "kb\n");
+    h.put(Side::Repo, "a.md", "repo\n");
+    let diffs = h.engine.diffs(&h.pair, None).unwrap();
+    assert!(diffs[0].patch.contains("-repo") && diffs[0].patch.contains("+kb"));
+}
+
+#[test]
+fn diff_ignores_identical_entries() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    assert!(h.engine.diffs(&h.pair, None).unwrap().is_empty());
+}
+
+#[test]
+fn diff_can_target_one_entry() {
+    let h = Harness::new();
+    h.put(Side::Kb, "a.md", "a\n");
+    h.put(Side::Kb, "b.md", "b\n");
+    assert_eq!(
+        h.engine.diffs(&h.pair, Some(&entry("b.md"))).unwrap().len(),
+        1
+    );
 }

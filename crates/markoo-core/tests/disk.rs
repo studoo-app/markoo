@@ -31,6 +31,7 @@ fn setup() -> Setup {
     let kb = dir.path().join("kb");
     let repo = dir.path().join("repo/docs");
     copy_dir(&fixture(), &kb);
+    std::fs::create_dir_all(&repo).unwrap();
     let paths = Paths::resolve(&Overrides {
         config_file: Some(dir.path().join("markoo.toml")),
         data_dir: Some(dir.path().join("data")),

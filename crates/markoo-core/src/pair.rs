@@ -66,6 +66,8 @@ pub struct Pair {
     pub include: Vec<String>,
     /// Glob patterns of ignored files.
     pub exclude: Vec<String>,
+    /// A paused pair is skipped by every sync.
+    pub paused: bool,
 }
 
 impl Pair {
@@ -80,6 +82,7 @@ impl Pair {
             target_changes: TargetChanges::default(),
             include: vec!["**/*.md".to_owned()],
             exclude: Vec::new(),
+            paused: false,
         }
     }
 

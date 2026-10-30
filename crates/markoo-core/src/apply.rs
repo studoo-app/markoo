@@ -18,19 +18,46 @@ use crate::plan::{Action, Plan, PlannedEntry};
 use crate::scan::{ReadError, read_canonical};
 use crate::state::{BaseEntry, IssueKind, PendingIssue, State, StateError};
 
+/// A file on one side.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FileRef {
+    /// Side of the file.
+    pub side: Side,
+    /// The entry.
+    pub path: EntryPath,
+}
+
+/// An entry waiting for the user.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct IssueRef {
+    /// The entry.
+    pub path: EntryPath,
+    /// Why it is waiting.
+    pub kind: IssueKind,
+}
+
+/// An entry that could not be applied; the next sync will replan it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Skipped {
+    /// The entry.
+    pub path: EntryPath,
+    /// Why it was skipped.
+    pub reason: String,
+}
+
 /// Outcome of applying a plan.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Report {
     /// Files written (copies, merges, renames).
-    pub written: Vec<(Side, EntryPath)>,
+    pub written: Vec<FileRef>,
     /// Files moved to the trash.
-    pub trashed: Vec<(Side, EntryPath)>,
+    pub trashed: Vec<FileRef>,
     /// Entries waiting for the user.
-    pub pending: Vec<(EntryPath, IssueKind)>,
+    pub pending: Vec<IssueRef>,
     /// Entries left alone because they only exist in a one-way target.
     pub not_in_source: Vec<EntryPath>,
-    /// Entries skipped, with the reason (changed since the scan, I/O error…).
-    pub skipped: Vec<(EntryPath, String)>,
+    /// Entries skipped (changed since the scan, I/O error…).
+    pub skipped: Vec<Skipped>,
 }
 
 /// Why an entry could not be applied.
@@ -58,23 +85,33 @@ pub(crate) struct Applier<'a, F: Fs> {
 }
 
 impl<F: Fs> Applier<'_, F> {
+    /// Applies a whole plan, then clears the issues it no longer contains:
+    /// the user solved those by hand.
     pub fn apply(&self, plan: &Plan) -> Result<Report, StateError> {
-        let run = run_id();
-        let mut report = Report::default();
-        for entry in &plan.entries {
-            match self.apply_entry(entry, &run, &mut report) {
-                Ok(()) => {}
-                Err(EntryError::State(e)) => return Err(e),
-                Err(e) => report.skipped.push((entry.path.clone(), e.to_string())),
-            }
-        }
-        // Issues that no longer show up in the plan were resolved by hand.
+        let report = self.apply_entries(&plan.entries)?;
         for issue in self.state.pending(&self.pair.name)? {
             let still_pending = plan.entries.iter().any(|entry| {
                 entry.path == issue.path && matches!(entry.action, Action::Pending { .. })
             });
             if !still_pending {
                 self.state.clear_pending(&self.pair.name, &issue.path)?;
+            }
+        }
+        Ok(report)
+    }
+
+    /// Applies some entries, leaving the other pending issues as they are.
+    pub fn apply_entries(&self, entries: &[PlannedEntry]) -> Result<Report, StateError> {
+        let run = run_id();
+        let mut report = Report::default();
+        for entry in entries {
+            match self.apply_entry(entry, &run, &mut report) {
+                Ok(()) => {}
+                Err(EntryError::State(e)) => return Err(e),
+                Err(e) => report.skipped.push(Skipped {
+                    path: entry.path.clone(),
+                    reason: e.to_string(),
+                }),
             }
         }
         Ok(report)
@@ -102,7 +139,10 @@ impl<F: Fs> Applier<'_, F> {
                         repo: repo_content.clone(),
                     },
                 )?;
-                report.pending.push((path.clone(), *issue));
+                report.pending.push(IssueRef {
+                    path: path.clone(),
+                    kind: *issue,
+                });
                 return Ok(());
             }
             Action::NotInSource { .. } => {
@@ -118,7 +158,10 @@ impl<F: Fs> Applier<'_, F> {
         match &entry.action {
             Action::Copy { to, content } => {
                 self.write(*to, path, content, run)?;
-                report.written.push((*to, path.clone()));
+                report.written.push(FileRef {
+                    side: *to,
+                    path: path.clone(),
+                });
                 self.record(path, content)?;
             }
             Action::Merge { content } => {
@@ -126,14 +169,20 @@ impl<F: Fs> Applier<'_, F> {
                 for side in [Side::Kb, Side::Repo] {
                     if entry.seen(side) != Some(&merged) {
                         self.write(side, path, content, run)?;
-                        report.written.push((side, path.clone()));
+                        report.written.push(FileRef {
+                            side,
+                            path: path.clone(),
+                        });
                     }
                 }
                 self.record(path, content)?;
             }
             Action::Trash { side } => {
                 self.trash(*side, path, run)?;
-                report.trashed.push((*side, path.clone()));
+                report.trashed.push(FileRef {
+                    side: *side,
+                    path: path.clone(),
+                });
                 self.forget(path)?;
             }
             Action::RecordBase { content } => self.record(path, content)?,
@@ -145,7 +194,10 @@ impl<F: Fs> Applier<'_, F> {
                 }
                 self.fs
                     .rename(&path.under(self.pair.root(*side)), &destination)?;
-                report.written.push((*side, to.clone()));
+                report.written.push(FileRef {
+                    side: *side,
+                    path: to.clone(),
+                });
                 self.forget(path)?;
                 self.record(to, content)?;
             }

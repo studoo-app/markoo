@@ -157,8 +157,8 @@ pub fn plan(
 
     let mut entries = BTreeMap::new();
     for path in paths {
-        // Content unknown on one side: planning anything could lose data.
-        if kb.unreadable.contains(path) || repo.unreadable.contains(path) {
+        // Unknown content or excluded by the user: planning anything could lose data.
+        if kb.left_alone.contains(path) || repo.left_alone.contains(path) {
             continue;
         }
         let base = bases.get(path);

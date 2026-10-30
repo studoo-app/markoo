@@ -1,15 +1,23 @@
 //! `markoo` command-line interface.
 
+mod commands;
+mod output;
+mod wizard;
+
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
-use markoo_core::paths::{Overrides, Paths};
+use clap::{ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
 
 /// Smart sync between a knowledge base and a Git repository.
 #[derive(Debug, Parser)]
-#[command(name = "markoo", version, about)]
+#[command(name = "markoo", about, disable_version_flag = true)]
 struct Cli {
+    /// Print the version.
+    #[arg(short = 'V', long)]
+    version: bool,
+
     /// Path to the configuration file (overrides MARKOO_CONFIG).
     #[arg(long, global = true, value_name = "FILE")]
     config: Option<PathBuf>,
@@ -18,45 +26,182 @@ struct Cli {
     #[arg(long, global = true, value_name = "DIR")]
     data_dir: Option<PathBuf>,
 
+    /// Print machine-readable JSON.
+    #[arg(long, global = true)]
+    json: bool,
+
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Create the configuration file and the data directory.
+    Init,
+    /// Show what a sync would do.
+    Status {
+        /// Only this pair.
+        #[arg(long)]
+        pair: Option<String>,
+    },
+    /// Show the differences between the two sides.
+    Diff {
+        /// Only this file, relative to the pair's folders.
+        file: Option<String>,
+        /// Only this pair.
+        #[arg(long)]
+        pair: Option<String>,
+    },
+    /// Synchronize.
+    Sync {
+        /// Show the plan without writing anything.
+        #[arg(long)]
+        dry_run: bool,
+        /// Only this pair.
+        #[arg(long)]
+        pair: Option<String>,
+    },
+    /// List conflicts and divergences.
+    Conflicts {
+        /// Only this pair.
+        #[arg(long)]
+        pair: Option<String>,
+    },
+    /// Settle a conflict or a divergence.
+    #[command(group(ArgGroup::new("how").required(true).args(["keep", "edit", "content_file", "push_to_source"])))]
+    Resolve {
+        /// The file, relative to the pair's folders.
+        file: String,
+        /// The pair, when several have this file.
+        #[arg(long)]
+        pair: Option<String>,
+        /// Keep this version.
+        #[arg(long, value_enum)]
+        keep: Option<Keep>,
+        /// Edit the merged text in $EDITOR.
+        #[arg(long)]
+        edit: bool,
+        /// Use the content of this file on both sides.
+        #[arg(long, value_name = "FILE")]
+        content_file: Option<PathBuf>,
+        /// One-way pairs: copy the target's version to the source, once.
+        #[arg(long)]
+        push_to_source: bool,
+    },
+    /// Manage pairs.
+    #[command(subcommand)]
+    Pair(PairCommand),
     /// Show the configuration file and data directory in use.
     Paths,
 }
 
-fn main() -> Result<()> {
-    let cli = Cli::parse();
-    let overrides = Overrides {
-        config_file: cli.config,
-        data_dir: cli.data_dir,
-    };
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum Keep {
+    Kb,
+    Repo,
+    Both,
+}
 
-    match cli.command {
-        Command::Paths => {
-            let paths = Paths::resolve(&overrides)?;
-            println!(
-                "config  {}  ({})",
-                paths.config_file().display(),
-                paths.config_source()
-            );
-            println!(
-                "data    {}  ({})",
-                paths.data_dir().display(),
-                paths.data_source()
-            );
+#[derive(Debug, Subcommand)]
+enum PairCommand {
+    /// Add a pair; without arguments, asks the questions one by one.
+    Add {
+        /// Name of the pair.
+        name: Option<String>,
+        /// Knowledge base folder.
+        #[arg(long)]
+        kb: Option<String>,
+        /// Knowledge base type; detected if omitted.
+        #[arg(long)]
+        kb_type: Option<String>,
+        /// Repository folder.
+        #[arg(long)]
+        repo: Option<String>,
+        /// both, kb-to-repo or repo-to-kb.
+        #[arg(long)]
+        direction: Option<String>,
+        /// protect or overwrite (one-way pairs).
+        #[arg(long)]
+        target_changes: Option<String>,
+    },
+    /// List the pairs.
+    List,
+    /// Show a pair.
+    Show {
+        /// Name of the pair.
+        name: String,
+    },
+    /// Change a setting of a pair.
+    Set {
+        /// Name of the pair.
+        name: String,
+        /// direction, target_changes, kb, repo, kb_type, include, exclude, paused.
+        key: String,
+        /// New value; lists are comma-separated.
+        value: String,
+        /// Also set target_changes.
+        #[arg(long)]
+        target_changes: Option<String>,
+    },
+    /// Remove a pair. Its files are not touched.
+    Remove {
+        /// Name of the pair.
+        name: String,
+    },
+}
+
+fn main() -> ExitCode {
+    let cli = Cli::parse();
+    match run(cli) {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::FAILURE,
+        Err(error) => {
+            eprintln!("error: {error:#}");
+            ExitCode::FAILURE
         }
     }
-    Ok(())
+}
+
+/// Runs the command; `Ok(false)` means it reported errors along the way.
+fn run(cli: Cli) -> Result<bool> {
+    let style = output::Style::detect();
+    if cli.version {
+        print!("{}", style.banner());
+        println!("markoo {}", env!("CARGO_PKG_VERSION"));
+        return Ok(true);
+    }
+    let Some(command) = cli.command else {
+        Cli::command().print_help()?;
+        return Ok(true);
+    };
+    let ctx = commands::Ctx::new(cli.config, cli.data_dir, cli.json, style)?;
+    match command {
+        Command::Init => ctx.init()?,
+        Command::Status { pair } => ctx.status(pair.as_deref())?,
+        Command::Diff { file, pair } => ctx.diff(file.as_deref(), pair.as_deref())?,
+        Command::Sync { dry_run, pair } => ctx.sync(dry_run, pair.as_deref())?,
+        Command::Conflicts { pair } => ctx.conflicts(pair.as_deref())?,
+        Command::Resolve {
+            file,
+            pair,
+            keep,
+            edit,
+            content_file,
+            push_to_source,
+        } => ctx.resolve(
+            &file,
+            pair.as_deref(),
+            commands::How::from_flags(keep, edit, content_file, push_to_source),
+        )?,
+        Command::Pair(command) => ctx.pair(command)?,
+        Command::Paths => ctx.paths()?,
+    }
+    Ok(ctx.succeeded())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::CommandFactory;
 
     #[test]
     fn cli_definition_is_valid() {

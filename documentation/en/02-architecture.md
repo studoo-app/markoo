@@ -95,7 +95,7 @@ let plan = engine.plan(PairId::all())?;         // changes nothing
 println!("{}", plan.summary());                  // equivalent to `markoo status`
 let report = engine.apply(&plan, ApplyOptions { dry_run: false })?;
 for c in report.conflicts() { /* … */ }
-engine.resolve(conflict_id, Resolution::Merged(text))?;
+engine.resolve(&pair, &path, Resolution::Content(text))?;
 ```
 
 ### `markoo-cli`
@@ -108,7 +108,7 @@ The `markoo` binary (`clap`):
 | `markoo status` | Lists modified, added, deleted and conflicting files |
 | `markoo diff [file]` | Shows the colored diff |
 | `markoo sync [--dry-run] [--pair <name>]` | Plans, then applies |
-| `markoo conflicts` / `markoo resolve <id>` | Lists and resolves conflicts |
+| `markoo conflicts` / `markoo resolve <file>` | Lists and resolves conflicts and divergences, identified by their file path |
 | `markoo hook install\|uninstall` | Manages Git hooks |
 | `markoo pair add\|list\|show\|set\|remove` | Manages pairs (direction, folders, filters…); creation: `markoo pair add <name> --kb <folder> [--kb-type obsidian\|markdown] --repo <folder>` (`--kb-type` auto-detected if omitted); see [Configuration UI](08-configuration-ui.md) |
 | `markoo paths` | Shows the configuration and state paths in use |

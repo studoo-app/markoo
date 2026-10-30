@@ -198,7 +198,7 @@ stateDiagram-v2
 Conflicts can be resolved from:
 
 - the **Tauri app** (three-column view);
-- the **CLI** (`markoo resolve <id> --keep kb|repo|both` or `--edit` in `$EDITOR`);
+- the **CLI** (`markoo resolve <file> --keep kb|repo|both`, `--edit` in `$EDITOR`, `--content-file <file>`, or `--push-to-source` for a one-way pair);
 - the **API** (`POST /conflicts/{id}/resolve`);
 - **MCP** (`resolve_conflict`), which lets Claude propose a merge.
 
@@ -222,5 +222,7 @@ flowchart TD
 - **Atomic writes**: write to `file.md.markoo-tmp`, `fsync`, then `rename`.
 - **Check right before writing**: if the target file changed since the scan (the KB tool, e.g. Obsidian, just saved it), the action is cancelled and rescheduled for the next sync.
 - **Journal**: each apply writes `<data>/journal/<timestamp>.json`. An interrupted sync is resumed or rolled back on the next startup.
+- **Unavailable folder**: if a pair's folder is missing (unplugged disk, unmounted volume), the sync is refused. Otherwise an empty listing would look like every file was deleted, and the other side would be emptied.
+- **Unreadable files**: a file that cannot be read (invalid UTF-8) is reported and left out of the plan, on both sides; it never counts as deleted.
 - **Backups**: overwritten content is copied to `<data>/backups/` before writing.
 - **Exclusions**: each adapter's own exclusions (e.g. `.obsidian/` and `.trash/` for Obsidian; see [Knowledge bases](09-knowledge-bases.md#supported-knowledge-base-types)), plus `.git/`, `node_modules/` and `*.markoo-tmp` temporary files, are always ignored.

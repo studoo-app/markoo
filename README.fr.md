@@ -15,7 +15,7 @@ Les outils de base de connaissance sont pris en charge par des **adaptateurs**. 
 > 🇬🇧 [English version](README.md)
 
 > [!WARNING]
-> **Phase de conception.** Markoo n'est pas encore utilisable : ce dépôt ne contient pour l'instant que la documentation de conception. Voir la [feuille de route](documentation/fr/07-feuille-de-route.md).
+> **Développement en cours.** Le moteur de synchro et la CLI fonctionnent sur de simples dossiers Markdown. La conversion des liens Obsidian, les déclencheurs automatiques et l'application desktop n'existent pas encore : voir la [feuille de route](documentation/fr/07-feuille-de-route.md).
 
 ```mermaid
 flowchart LR
@@ -60,9 +60,9 @@ flowchart LR
 
 Détails : [algorithme de synchronisation](documentation/fr/03-algorithme-de-synchronisation.md).
 
-## Utilisation prévue
+## Utilisation
 
-Les commandes ci-dessous décrivent l'interface visée ; aucune n'existe encore.
+Il n'y a pas encore de version publiée : compilez depuis les sources avec `cargo build --release`. `--kb-type obsidian` et `markoo hook` ci-dessous ne sont pas encore disponibles ; en attendant l'adaptateur Obsidian, un vault ne peut être synchronisé que comme du Markdown simple (`--kb-type markdown`), sans conversion des liens.
 
 ```bash
 markoo pair add clara --kb ~/Obsidian/Knowledge/Projets/Clara --kb-type obsidian --repo ~/code/clara/docs --direction both

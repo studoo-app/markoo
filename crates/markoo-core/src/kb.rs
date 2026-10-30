@@ -53,12 +53,29 @@ pub enum KbType {
 }
 
 impl KbType {
+    /// The `markoo.toml` value of this type.
+    pub fn adapter_id(self) -> &'static str {
+        self.adapter().id()
+    }
+
     /// Returns the adapter for this KB type.
     pub fn adapter(self) -> &'static dyn KbAdapter {
         match self {
             KbType::Markdown => &MarkdownAdapter,
         }
     }
+}
+
+/// Detects a knowledge base whose adapter does not exist yet, looking in the
+/// folder and its parents. Returns the tool's name.
+///
+/// Syncing such a folder as plain Markdown would copy its dialect as is, so it
+/// must be an explicit choice. Replaced by real adapter detection in M3.
+pub fn detect_unsupported(folder: &std::path::Path) -> Option<&'static str> {
+    folder
+        .ancestors()
+        .any(|dir| dir.join(".obsidian").is_dir())
+        .then_some("Obsidian")
 }
 
 /// Plain Markdown folder: the KB already is in canonical form.

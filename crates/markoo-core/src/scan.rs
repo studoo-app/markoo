@@ -37,9 +37,10 @@ pub struct SideScan {
     pub files: BTreeMap<EntryPath, Observed>,
     /// Files skipped because they could not be read or converted.
     pub issues: Vec<ScanIssue>,
-    /// Entries among `issues`. They exist but their content is unknown, so the
-    /// planner must leave them alone rather than treat them as deleted.
-    pub unreadable: BTreeSet<EntryPath>,
+    /// Entries the planner must leave alone: unreadable files (they exist but
+    /// their content is unknown, so they must not look deleted) and entries
+    /// the user chose to exclude.
+    pub left_alone: BTreeSet<EntryPath>,
 }
 
 /// Scans `root` with `dialect`, reusing the base hash of files whose size and
@@ -107,7 +108,7 @@ pub fn scan_side(
                     path: absolute,
                     message,
                 });
-                scan.unreadable.insert(path);
+                scan.left_alone.insert(path);
             }
         }
     }

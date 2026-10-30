@@ -6,7 +6,7 @@
 //! There is deliberately no `remove` operation. Markoo never deletes a user
 //! file: a deletion is a [`Fs::rename`] into the trash folder.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -53,6 +53,8 @@ pub trait Fs {
     /// Lists every file under `root`, recursively, as paths relative to `root`.
     /// A missing `root` is an empty list.
     fn list(&self, root: &Path) -> Result<Vec<PathBuf>, FsError>;
+    /// Whether `path` is an existing folder.
+    fn is_dir(&self, path: &Path) -> bool;
     /// Reads a whole file.
     fn read(&self, path: &Path) -> Result<Vec<u8>, FsError>;
     /// Returns the file's metadata, or `None` if it does not exist.
@@ -110,6 +112,10 @@ impl Fs for DiskFs {
         }
         files.sort();
         Ok(files)
+    }
+
+    fn is_dir(&self, path: &Path) -> bool {
+        path.is_dir()
     }
 
     fn read(&self, path: &Path) -> Result<Vec<u8>, FsError> {
@@ -175,12 +181,22 @@ struct MemInner {
     files: BTreeMap<PathBuf, (Vec<u8>, u64)>,
     clock: u64,
     writes: u64,
+    offline: BTreeSet<PathBuf>,
 }
 
 impl MemFs {
     /// Creates an empty file system.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Simulates a folder becoming unavailable (unplugged disk, unmounted volume):
+    /// its files vanish from listings and [`Fs::is_dir`] returns `false`.
+    pub fn set_offline(&self, root: impl AsRef<Path>) {
+        let root = root.as_ref().to_path_buf();
+        let mut inner = self.lock();
+        inner.files.retain(|path, _| !path.starts_with(&root));
+        inner.offline.insert(root);
     }
 
     /// Number of writes and renames performed so far.
@@ -230,6 +246,10 @@ impl Fs for MemFs {
             .filter(|relative| !relative.as_os_str().is_empty())
             .map(Path::to_path_buf)
             .collect())
+    }
+
+    fn is_dir(&self, path: &Path) -> bool {
+        !self.lock().offline.contains(path)
     }
 
     fn read(&self, path: &Path) -> Result<Vec<u8>, FsError> {

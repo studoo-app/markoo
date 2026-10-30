@@ -11,6 +11,14 @@ pub fn three_way(base: &str, kb: &str, repo: &str) -> Option<String> {
     diffy::merge(base, kb, repo).ok()
 }
 
+/// Merges like [`three_way`] but always returns text: conflicting blocks are
+/// surrounded by `<<<<<<<` / `=======` / `>>>>>>>` markers, for manual editing.
+pub fn with_markers(base: &str, kb: &str, repo: &str) -> String {
+    match diffy::merge(base, kb, repo) {
+        Ok(merged) | Err(merged) => merged,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -35,6 +43,12 @@ mod tests {
     fn identical_changes_do_not_conflict() {
         let same = "L1\nX\nL3\nL4\n";
         assert_eq!(three_way(BASE, same, same).as_deref(), Some(same));
+    }
+
+    #[test]
+    fn conflicting_blocks_get_markers() {
+        let draft = with_markers(BASE, "L1\nKB\nL3\nL4\n", "L1\nREPO\nL3\nL4\n");
+        assert!(draft.contains("<<<<<<<") && draft.contains("KB") && draft.contains("REPO"));
     }
 
     #[test]

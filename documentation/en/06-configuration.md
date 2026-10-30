@@ -148,7 +148,8 @@ target_changes = "protect"      # an edit in the KB is reported, never overwritt
 ### Load-time validation
 
 - `kb` and `repo` exist and are folders.
-- Two pairs must not overlap (same file tracked by two pairs): explicit error.
+- Two pairs must not overlap (same file tracked by two pairs): explicit error. The `kb` and `repo` folders of a pair must not overlap either.
+- Unknown keys in a `[[pair]]` table are refused, so that a typo such as `directon` cannot silently change the direction.
 - `target_changes = "overwrite"` with `direction = "both"`: warning, the option has no effect.
 - `repo` is inside a Git repository: only a warning if it is not, which remains allowed.
 - `kb` is recognized by the adapter for its type: if `kb_type` is omitted, each adapter tries detection and the first one that recognizes the folder wins (`markdown` as a last resort); if `kb_type` is set and detection fails, explicit error.

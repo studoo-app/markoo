@@ -1,7 +1,7 @@
 //! Persistent sync state (`<data>/state.db`): the base of every entry and the
 //! conflicts and divergences waiting for the user.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use rusqlite::{Connection, OptionalExtension, params};
@@ -111,6 +111,15 @@ CREATE TABLE IF NOT EXISTS entries (
     repo_size   INTEGER,
     repo_mtime  INTEGER,
     PRIMARY KEY (pair, path)
+);
+CREATE TABLE IF NOT EXISTS ignored (
+    pair        TEXT NOT NULL,
+    path        TEXT NOT NULL,
+    PRIMARY KEY (pair, path)
+);
+CREATE TABLE IF NOT EXISTS pair_settings (
+    pair        TEXT PRIMARY KEY,
+    direction   TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS pending (
     pair        TEXT NOT NULL,
@@ -256,6 +265,69 @@ impl State {
             });
         }
         Ok(issues)
+    }
+
+    /// Excludes an entry from subsequent syncs (the user kept a one-way target).
+    pub fn ignore(&self, pair: &str, path: &EntryPath) -> Result<(), StateError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO ignored (pair, path) VALUES (?1, ?2)",
+            params![pair, path.as_str()],
+        )?;
+        Ok(())
+    }
+
+    /// Puts an excluded entry back in the sync.
+    pub fn unignore(&self, pair: &str, path: &EntryPath) -> Result<(), StateError> {
+        self.conn.execute(
+            "DELETE FROM ignored WHERE pair = ?1 AND path = ?2",
+            params![pair, path.as_str()],
+        )?;
+        Ok(())
+    }
+
+    /// Entries excluded from the sync, ordered by path.
+    pub fn ignored(&self, pair: &str) -> Result<BTreeSet<EntryPath>, StateError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path FROM ignored WHERE pair = ?1")?;
+        let rows = stmt.query_map(params![pair], |row| row.get::<_, String>(0))?;
+        let mut ignored = BTreeSet::new();
+        for row in rows {
+            ignored.insert(parse_path(row?)?);
+        }
+        Ok(ignored)
+    }
+
+    /// Direction seen at the last sync, as its `markoo.toml` value.
+    pub fn last_direction(&self, pair: &str) -> Result<Option<String>, StateError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT direction FROM pair_settings WHERE pair = ?1",
+                params![pair],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
+    /// Records the direction in use.
+    pub fn set_last_direction(&self, pair: &str, direction: &str) -> Result<(), StateError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO pair_settings (pair, direction) VALUES (?1, ?2)",
+            params![pair, direction],
+        )?;
+        Ok(())
+    }
+
+    /// Forgets everything known about a pair. User files are not touched.
+    pub fn forget_pair(&self, pair: &str) -> Result<(), StateError> {
+        for table in ["entries", "pending", "ignored", "pair_settings"] {
+            self.conn.execute(
+                &format!("DELETE FROM {table} WHERE pair = ?1"),
+                params![pair],
+            )?;
+        }
+        Ok(())
     }
 
     /// Whether an entry has a pending issue.

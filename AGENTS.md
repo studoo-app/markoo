@@ -17,7 +17,7 @@ The design lives in [`documentation/`](documentation/INDEX.md). **Read it before
 
 ## Current status
 
-**M0 done.** **M1 engine in place** in `markoo-core`: scan, SQLite state, planner (classification table, the three directions, exact renames), 3-way merge and applier, with the `markdown` identity adapter. Not wired to the CLI yet; `markoo.toml` parsing, conflict resolution, the journal and the pair lock are still to do. The next milestone is **M2** (CLI). Don't build ahead of the roadmap without being asked.
+**M0 and M1 done, M2 CLI in place**: `init`, `status`, `diff`, `sync`, `conflicts`, `resolve`, `pair`, `paths`, `--json`, on plain Markdown pairs. Not implemented yet: the journal and the pair lock, the `conflict` strategies other than `ask`, `[pair.transform]`, `[pair.kb_options]` and `[pair.hooks]` (accepted in `markoo.toml`, ignored with a warning). The next milestone is **M3** (Obsidian adapter). Don't build ahead of the roadmap without being asked.
 
 ## Repository layout (target)
 
