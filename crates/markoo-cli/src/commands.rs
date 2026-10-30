@@ -7,9 +7,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command as Process;
 
 use anyhow::{Context, Result, bail};
-use markoo_core::config::{Config, ConfigError, ConfigFile, NewPair, PairEntry, expand_home};
+use markoo_core::config::{
+    Config, ConfigError, ConfigFile, NewPair, PairEntry, Problem, expand_home,
+};
 use markoo_core::fs::{DiskFs, Fs};
-use markoo_core::kb::KbType;
+use markoo_core::manage;
 use markoo_core::paths::{Overrides, Paths};
 use markoo_core::plan::{Action, AttachmentAction, PlannedAttachment, PlannedEntry};
 use markoo_core::state::IssueKind;
@@ -17,7 +19,7 @@ use markoo_core::{Direction, Engine, EntryPath, Pair, Report, Resolution, Side, 
 use serde_json::{Value, json};
 
 use crate::output::Style;
-use crate::{Keep, PairCommand, wizard};
+use crate::{DaemonCommand, Keep, PairCommand, wizard};
 
 /// How the user wants to settle an issue.
 #[derive(Debug)]
@@ -470,16 +472,8 @@ impl Ctx {
     fn add_pair(&self, mut new: NewPair) -> Result<()> {
         new.kb = absolute(&new.kb)?;
         new.repo = absolute(&new.repo)?;
-        if new.kb_type.is_none() {
-            // Written down so that the behavior does not change afterwards.
-            new.kb_type = Some(KbType::detect(&expand_home(&new.kb)).id().to_owned());
-        }
-        if !self.config_exists()? {
-            ConfigFile::create(self.paths.config_file())?;
-        }
-        let mut file = ConfigFile::open(self.paths.config_file())?;
-        file.add_pair(&new)?;
-        self.save_if_valid(&file, &new.name)?;
+        let warnings = manage::add_pair(&self.paths, &new)?;
+        self.warn_all(&new.name, &warnings);
         if self.json {
             return self.print_json(&json!({"added": new.name}));
         }
@@ -491,27 +485,10 @@ impl Ctx {
         Ok(())
     }
 
-    fn config_exists(&self) -> Result<bool> {
-        Ok(DiskFs.meta(self.paths.config_file())?.is_some())
-    }
-
-    /// Saves only if the file parses and this pair passes validation.
-    fn save_if_valid(&self, file: &ConfigFile, name: &str) -> Result<()> {
-        let validation = file.preview()?.validate();
-        let errors: Vec<&str> = validation
-            .errors
-            .iter()
-            .filter(|problem| problem.pair == name)
-            .map(|problem| problem.message.as_str())
-            .collect();
-        if !errors.is_empty() {
-            bail!("pair \"{name}\": {}", errors.join("; "));
-        }
-        file.save()?;
-        for problem in validation.warnings.iter().filter(|p| p.pair == name) {
+    fn warn_all(&self, name: &str, warnings: &[Problem]) {
+        for problem in warnings {
             self.warn(&format!("pair \"{name}\": {}", problem.message));
         }
-        Ok(())
     }
 
     fn pair_list(&self) -> Result<()> {
@@ -565,29 +542,21 @@ impl Ctx {
         value: &str,
         target_changes: Option<&str>,
     ) -> Result<()> {
-        let config = self.config()?;
-        let current = config.pair(name)?;
         let key_name = key.replace('-', "_");
-        let mut file = ConfigFile::open(self.paths.config_file())?;
-        file.set(name, &key_name, value)?;
+        let mut changes = vec![(key_name.clone(), value.to_owned())];
         if let Some(target_changes) = target_changes {
-            file.set(name, "target_changes", target_changes)?;
+            changes.push(("target_changes".to_owned(), target_changes.to_owned()));
         }
-        let updated = file.preview()?;
-        let updated_pair = &updated.pair(name)?.pair;
-        if key_name == "direction" && updated_pair.direction != current.pair.direction {
-            let engine = self.engine()?;
-            let pending = engine.pending_count(&current.pair)?;
-            if current.pair.direction == Direction::Both && pending > 0 {
-                bail!(
-                    "{pending} conflict(s) must be resolved before switching to a one-way \
-                     direction; see markoo conflicts"
-                );
-            }
-        }
-        self.save_if_valid(&file, name)?;
+        let warnings = match manage::set_pair(&self.paths, name, &changes) {
+            Err(markoo_core::Error::DirectionBlocked { pending, .. }) => bail!(
+                "{pending} conflict(s) must be resolved before switching to a one-way \
+                 direction; see markoo conflicts"
+            ),
+            other => other?,
+        };
+        self.warn_all(name, &warnings);
         if self.json {
-            return self.print_json(&pair_json(file.preview()?.pair(name)?));
+            return self.print_json(&pair_json(self.config()?.pair(name)?));
         }
         println!("{} Pair \"{name}\" updated.", self.style.green("✓"));
         if key_name == "direction" {
@@ -597,10 +566,7 @@ impl Ctx {
     }
 
     fn pair_remove(&self, name: &str) -> Result<()> {
-        let mut file = ConfigFile::open(self.paths.config_file())?;
-        file.remove_pair(name)?;
-        file.save()?;
-        self.engine()?.forget_pair(name)?;
+        manage::remove_pair(&self.paths, name)?;
         if self.json {
             return self.print_json(&json!({"removed": name}));
         }
@@ -608,6 +574,35 @@ impl Ctx {
             "{} Pair \"{name}\" removed. Its files were not touched.",
             self.style.green("✓")
         );
+        Ok(())
+    }
+
+    pub fn daemon(&self, action: Option<DaemonCommand>) -> Result<()> {
+        match action {
+            None => markoo_daemon::run(self.paths.clone())?,
+            Some(DaemonCommand::Install) => {
+                let file = markoo_daemon::service::install(&self.paths)?;
+                println!(
+                    "{} Service installed: {}",
+                    self.style.green("✓"),
+                    file.display()
+                );
+            }
+            Some(DaemonCommand::Uninstall) => {
+                markoo_daemon::service::uninstall()?;
+                println!("{} Service removed.", self.style.green("✓"));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn token_rotate(&self) -> Result<()> {
+        markoo_daemon::token::rotate(self.paths.data_dir())?;
+        let file = markoo_daemon::token::path(self.paths.data_dir());
+        if self.json {
+            return self.print_json(&json!({"token_file": file}));
+        }
+        println!("{} New token in {}", self.style.green("✓"), file.display());
         Ok(())
     }
 
@@ -752,35 +747,11 @@ impl Ctx {
 
 /// Entries worth showing: base bookkeeping is invisible to the user.
 fn visible_entries(entries: &[PlannedEntry]) -> Vec<&PlannedEntry> {
-    entries
-        .iter()
-        .filter(|entry| !matches!(entry.action, Action::RecordBase { .. } | Action::ForgetBase))
-        .collect()
+    entries.iter().filter(|entry| entry.is_visible()).collect()
 }
 
 fn entry_json(entry: &PlannedEntry) -> Value {
-    let mut view = json!({"path": entry.path});
-    let (kind, side, to) = match &entry.action {
-        Action::Copy { to, .. } => ("copy", Some(*to), None),
-        Action::Merge { .. } => ("merge", None, None),
-        Action::Trash { side } => ("trash", Some(*side), None),
-        Action::RecordBase { .. } => ("record-base", None, None),
-        Action::ForgetBase => ("forget-base", None, None),
-        Action::Rename { side, to, .. } => ("rename", Some(*side), Some(to)),
-        Action::Pending { issue, .. } => {
-            view["issue"] = json!(issue);
-            ("pending", None, None)
-        }
-        Action::NotInSource { side } => ("not-in-source", Some(*side), None),
-    };
-    view["kind"] = json!(kind);
-    if let Some(side) = side {
-        view["side"] = json!(side);
-    }
-    if let Some(to) = to {
-        view["to"] = json!(to);
-    }
-    view
+    json!(entry.view())
 }
 
 fn pair_json(entry: &PairEntry) -> Value {

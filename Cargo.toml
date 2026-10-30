@@ -1,22 +1,25 @@
 [workspace]
 resolver = "3"
-members = ["crates/markoo-core", "crates/markoo-cli"]
+members = ["crates/markoo-core", "crates/markoo-cli", "crates/markoo-daemon"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.86"
+rust-version = "1.89"
 license = "Apache-2.0"
 repository = "https://github.com/studoo-app/markoo"
 description = "Smart sync between a knowledge base and a Git repository"
 
 [workspace.dependencies]
 markoo-core = { path = "crates/markoo-core" }
+markoo-daemon = { path = "crates/markoo-daemon" }
 anyhow = "1.0.104"
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
 blake3 = "1.8.7"
 clap = { version = "4.6.7", features = ["derive"] }
 diffy = "0.5.2"
 directories = "6.0.0"
+getrandom = "0.4.3"
 globset = "0.4.21"
 proptest = "1.12.0"
 pulldown-cmark = { version = "0.13.6", default-features = false }
@@ -25,6 +28,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tempfile = "3.27.0"
 thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-stream = { version = "0.1.19", features = ["sync"] }
 toml = "1.1.8"
 toml_edit = "0.25.17"
 walkdir = "2.5.0"

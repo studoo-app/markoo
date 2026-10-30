@@ -77,18 +77,18 @@ pub fn scan_side(
             Side::Kb => base.kb_meta,
             Side::Repo => base.repo_meta,
         });
-        if let (Some(base), Some(base_meta)) = (base, base_meta) {
-            if base_meta == meta {
-                scan.files.insert(
-                    path,
-                    Observed {
-                        meta,
-                        hash: base.hash.clone(),
-                        content: None,
-                    },
-                );
-                continue;
-            }
+        if let (Some(base), Some(base_meta)) = (base, base_meta)
+            && base_meta == meta
+        {
+            scan.files.insert(
+                path,
+                Observed {
+                    meta,
+                    hash: base.hash.clone(),
+                    content: None,
+                },
+            );
+            continue;
         }
         let ctx = ConvertCtx { path: &path, index };
         match read_canonical(fs, &absolute, dialect, &ctx) {

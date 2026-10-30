@@ -235,10 +235,10 @@ impl NameIndex {
             }
             if path.to_lowercase().ends_with(".md") {
                 index.notes.insert(path.to_owned());
-                if let Some(inside) = index.pair_relative(path) {
-                    if accepted(&inside) {
-                        index.tracked.insert(inside);
-                    }
+                if let Some(inside) = index.pair_relative(path)
+                    && accepted(&inside)
+                {
+                    index.tracked.insert(inside);
                 }
             } else {
                 index.attachments.insert(path.to_owned());

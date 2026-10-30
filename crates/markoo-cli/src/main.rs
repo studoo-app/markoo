@@ -93,6 +93,28 @@ enum Command {
     Pair(PairCommand),
     /// Show the configuration file and data directory in use.
     Paths,
+    /// Run the scheduler and the local API until stopped.
+    Daemon {
+        #[command(subcommand)]
+        action: Option<DaemonCommand>,
+    },
+    /// Manage the token of the local API.
+    #[command(subcommand)]
+    Token(TokenCommand),
+}
+
+#[derive(Debug, Subcommand)]
+enum DaemonCommand {
+    /// Install and start the daemon as a launchd service (macOS).
+    Install,
+    /// Stop and remove the launchd service (macOS).
+    Uninstall,
+}
+
+#[derive(Debug, Subcommand)]
+enum TokenCommand {
+    /// Replace the token; a running daemon picks it up at once.
+    Rotate,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -195,6 +217,8 @@ fn run(cli: Cli) -> Result<bool> {
         )?,
         Command::Pair(command) => ctx.pair(command)?,
         Command::Paths => ctx.paths()?,
+        Command::Daemon { action } => ctx.daemon(action)?,
+        Command::Token(TokenCommand::Rotate) => ctx.token_rotate()?,
     }
     Ok(ctx.succeeded())
 }

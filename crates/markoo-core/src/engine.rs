@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::Error;
 use crate::apply::{Applier, Report};
 use crate::entry::{ContentHash, EntryPath, Side};
-use crate::fs::Fs;
+use crate::fs::{Fs, FsLock};
 use crate::kb::obsidian::{self, ObsidianAdapter, VaultSettings};
 use crate::kb::{ConvertCtx, Dialect, Gfm, KbAdapter, KbType, MarkdownAdapter, NameIndex};
 use crate::merge;
@@ -20,6 +20,15 @@ use crate::state::{BaseEntry, PendingIssue, State};
 
 /// Name of the state database inside `<data>`.
 pub const STATE_FILE: &str = "state.db";
+/// Folder of the per-pair locks inside `<data>`.
+pub const LOCKS_DIR: &str = "locks";
+
+/// Stable identifier of the issue on `path`, for interfaces where a file path
+/// would be awkward (URLs, MCP arguments).
+pub fn issue_id(pair: &str, path: &EntryPath) -> String {
+    let hash = blake3::hash(format!("{pair}\0{path}").as_bytes()).to_hex();
+    format!("c_{}", &hash.as_str()[..16])
+}
 
 /// A plan together with the files the scan had to leave out.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -92,6 +101,15 @@ impl<F: Fs> Engine<F> {
     /// The file system used by the engine.
     pub fn fs(&self) -> &F {
         &self.fs
+    }
+
+    /// Takes the pair's lock, which every write to its files and state needs,
+    /// whichever process it comes from. Fails with [`Error::Busy`] if it is held.
+    pub fn lock_pair(&self, name: &str) -> Result<FsLock, Error> {
+        let path = self.data_dir.join(LOCKS_DIR).join(format!("{name}.lock"));
+        self.fs
+            .try_lock(&path)?
+            .ok_or_else(|| Error::Busy(name.to_owned()))
     }
 
     /// Computes what a sync of `pair` would do, without writing anything.
@@ -245,14 +263,20 @@ impl<F: Fs> Engine<F> {
 
     /// Applies a plan computed by [`Engine::plan`].
     pub fn apply(&self, pair: &Pair, plan: &Plan) -> Result<Report, Error> {
+        let _lock = self.lock_pair(&pair.name)?;
+        self.apply_locked(pair, plan)
+    }
+
+    fn apply_locked(&self, pair: &Pair, plan: &Plan) -> Result<Report, Error> {
         let prepared = self.prepare(pair)?;
         Ok(self.applier(pair, &prepared).apply(plan)?)
     }
 
     /// Plans and applies in one go, without the direction safeguard of [`Engine::run`].
     pub fn sync(&self, pair: &Pair) -> Result<Report, Error> {
+        let _lock = self.lock_pair(&pair.name)?;
         let planned = self.plan(pair)?;
-        self.apply(pair, &planned.plan)
+        self.apply_locked(pair, &planned.plan)
     }
 
     /// The sync used by every trigger: plans, then applies unless `dry_run`.
@@ -264,6 +288,12 @@ impl<F: Fs> Engine<F> {
         let current = direction_key(pair.direction);
         let previous = self.state.last_direction(&pair.name)?;
         let direction_changed = previous.as_deref().is_some_and(|last| last != current);
+        // A plain dry run writes nothing, so it can run alongside a sync.
+        let _lock = if dry_run && !direction_changed {
+            None
+        } else {
+            Some(self.lock_pair(&pair.name)?)
+        };
         let planned = self.plan(pair)?;
 
         if direction_changed
@@ -285,7 +315,7 @@ impl<F: Fs> Engine<F> {
         let report = if dry_run || direction_changed {
             None
         } else {
-            Some(self.apply(pair, &planned.plan)?)
+            Some(self.apply_locked(pair, &planned.plan)?)
         };
         Ok(RunOutcome {
             planned,
@@ -346,6 +376,7 @@ impl<F: Fs> Engine<F> {
         path: &EntryPath,
         resolution: Resolution,
     ) -> Result<Report, Error> {
+        let _lock = self.lock_pair(&pair.name)?;
         let source = pair.direction.source();
         if self.state.ignored(&pair.name)?.contains(path) {
             // The only way back for an excluded file is to restore the source.

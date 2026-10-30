@@ -2,7 +2,7 @@
 
 > 🇬🇧 [English version](../en/05-triggers.md)
 
-Une synchronisation peut être lancée de quatre façons, plus la CLI manuelle. Toutes passent par la **même file de jobs** du daemon : deux déclencheurs simultanés sur la même paire ne lancent jamais deux synchros en parallèle.
+Une synchronisation peut être lancée de quatre façons, plus la CLI manuelle. L'intervalle, le hook, l'API et MCP passent par la **même file de jobs** du daemon. La CLI manuelle appelle directement le moteur. Tous ont besoin du **verrou de la paire** : deux déclencheurs simultanés sur la même paire ne lancent donc jamais deux synchros en parallèle. Une synchro qui trouve le verrou pris s'arrête avec une erreur `busy`, sans rien écrire.
 
 ```mermaid
 flowchart LR
@@ -10,12 +10,13 @@ flowchart LR
     H["🔧 Hook Git"] --> Q
     A["🌐 API HTTP"] --> Q
     M["🤖 MCP"] --> Q
-    C["⌨️ CLI / app"] --> Q
-    Q["File de jobs<br/>+ verrou par paire<br/>+ anti-rebond"] --> E["markoo-core<br/>plan → apply"]
+    C["⌨️ App"] --> Q
+    CLI["⌨️ CLI"] --> E
+    Q["File de jobs<br/>+ anti-rebond"] --> E["markoo-core<br/>verrou par paire<br/>plan → apply"]
     E --> EV["Événements<br/>(app, API SSE, notifications)"]
 ```
 
-**Anti-rebond** : les demandes reçues pendant une synchro en cours sont fusionnées en une seule synchro supplémentaire, lancée à la fin.
+**Anti-rebond** : les demandes reçues pendant une synchro en cours sont fusionnées en une seule synchro supplémentaire, lancée à la fin. Un dry-run n'est jamais fusionné avec une vraie synchro.
 
 ## 1. Intervalle de temps
 
@@ -23,10 +24,13 @@ flowchart LR
 [schedule]
 interval = "5m"        # 30s, 5m, 1h… ; "off" pour désactiver
 on_startup = true      # synchro au lancement du daemon
-pause_on_battery = false
+pause_on_battery = false # pas encore implémenté : accepté et ignoré, avec un avertissement
 ```
 
-- Le planificateur `tokio` lance une synchro de chaque paire à chaque intervalle.
+- Le planificateur `tokio` lance une synchro de chaque paire à chaque intervalle, sauf les paires en pause et celles qui échouent à la validation.
+- `markoo daemon` tourne au premier plan. Sur macOS, `markoo daemon install` le lance comme service `launchd` de l'utilisateur courant, avec les dossiers de configuration et de données utilisés à ce moment-là ; `markoo daemon uninstall` le retire.
+- Un dossier de données n'a qu'un seul daemon à la fois (`<data>/daemon.lock`).
+- `markoo.toml` est vérifié toutes les quelques secondes. Une paire dont les réglages ont changé, ou une nouvelle paire, est synchronisée aussitôt ; les changements de `[api]` demandent un redémarrage. Tant que le fichier est invalide, le daemon **suspend ses synchros** : utiliser les anciens réglages pourrait écrire dans un sens que l'utilisateur vient de changer.
 - La comparaison rapide (`mtime` + taille) rend une synchro « à vide » quasi gratuite, ce qui autorise des intervalles courts.
 - **Évolution prévue** : un mode `watch` basé sur les événements du système de fichiers (`notify`, FSEvents sur macOS), avec un anti-rebond de quelques secondes.
 
@@ -74,7 +78,7 @@ Servie par `axum`, uniquement sur `127.0.0.1` (port par défaut `4848`). L'authe
 | `GET` | `/health` | état du daemon |
 | `GET` | `/pairs` | liste des paires configurées |
 | `GET` | `/pairs/{pair}/status` | plan courant (sans rien appliquer) |
-| `GET` | `/pairs/{pair}/diff?path=…` | diff d'un fichier |
+| `GET` | `/pairs/{pair}/diff?path=…` | diff d'un fichier, ou de tous les fichiers sans `path` |
 | `POST` | `/pairs/{pair}/sync` | lance une synchro (`{"dry_run": false}`) → `202` + id du job |
 | `GET` | `/jobs/{id}` | état et rapport d'un job |
 | `POST` | `/pairs` | crée une paire |
@@ -82,19 +86,28 @@ Servie par `axum`, uniquement sur `127.0.0.1` (port par défaut `4848`). L'authe
 | `PATCH` | `/pairs/{pair}/config` | modifie la paire (sens, filtres…) ; renvoie l'aperçu du plan |
 | `DELETE` | `/pairs/{pair}` | supprime la paire (les fichiers ne sont pas touchés) |
 | `GET` | `/conflicts` | conflits et divergences en attente |
-| `POST` | `/conflicts/{id}/resolve` | `{"keep": "kb" \| "repo" \| "both"}` ou `{"content": "…"}` |
-| `GET` | `/events` | flux SSE : progression, fin de job, nouveaux conflits |
+| `POST` | `/conflicts/{id}/resolve` | `{"keep": "kb" \| "repo" \| "both"}`, `{"content": "…"}` ou `{"push_to_source": true}` |
+| `GET` | `/events` | flux SSE : `job-started`, `job-finished`, `new-conflicts`, `config-reloaded`, `shutdown` |
 
-Exemple de rapport :
+Toutes les routes exigent le jeton. Les erreurs ont la forme `{"error": "…"}`, avec `400` pour une requête invalide, `401` sans jeton valide, `404` pour une paire, un job ou un conflit inconnu, et `409` quand l'état l'interdit (paire occupée ou en pause, conflits en attente, dossier indisponible). Les plans et les rapports de job ne contiennent jamais le contenu des fichiers ; seul `/conflicts` le renvoie.
+
+Exemple de job (`GET /jobs/{id}`) :
 
 ```json
 {
-  "job": "j_01JB…",
+  "job": "j_12",
   "pair": "clara",
-  "kb_type": "obsidian",
   "dry_run": false,
-  "summary": { "kb_to_repo": 2, "repo_to_kb": 1, "merged": 1, "conflicts": 1, "deleted": 0 },
-  "conflicts": [{ "id": "c_42", "path": "architecture.md", "hunks": 1 }],
+  "trigger": "api",
+  "status": "done",
+  "outcome": {
+    "kb_type": "obsidian",
+    "direction_changed": false,
+    "summary": { "kb_to_repo": 2, "repo_to_kb": 1, "merged": 1, "conflicts": 1, "deleted": 0 },
+    "conflicts": [{ "id": "c_5f2a91d03b7c44e8", "path": "architecture.md", "kind": "conflict" }],
+    "report": { "written": [], "trashed": [], "pending": [], "not_in_source": [], "skipped": [], "attachment_conflicts": [] }
+  },
+  "error": null,
   "duration_ms": 184
 }
 ```
@@ -159,5 +172,5 @@ sequenceDiagram
 ## Sécurité commune
 
 - Écoute uniquement sur `127.0.0.1`, jamais sur `0.0.0.0`.
-- Jeton d'API régénérable (`markoo token rotate`).
+- Jeton d'API régénérable (`markoo token rotate`), appliqué sans redémarrer le daemon. Le fichier `token` n'est lisible que par son propriétaire.
 - Les chemins reçus (API, MCP) sont normalisés et **confinés** à la paire : aucune lecture ni écriture hors des dossiers configurés (protection contre `../`).

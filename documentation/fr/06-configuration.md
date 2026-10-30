@@ -20,7 +20,8 @@ flowchart TD
     S --> B["backups/"]
     S --> T["trash/"]
     S --> TK["token"]
-    S --> L["lock"]
+    S --> L["locks/"]
+    S --> DL["daemon.lock"]
 ```
 
 ### Chemins par système

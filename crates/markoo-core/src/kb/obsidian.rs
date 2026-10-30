@@ -140,18 +140,19 @@ impl KbAdapter for ObsidianAdapter {
     fn referenced_assets(&self, canonical: &str, ctx: &ConvertCtx<'_>) -> Vec<String> {
         let mut names = Vec::new();
         for link in inline_links(canonical) {
-            if link.is_image {
-                if let Some(name) = asset_name_of_href(&link.href, ctx) {
-                    names.push(name);
-                }
+            if link.is_image
+                && let Some(name) = asset_name_of_href(&link.href, ctx)
+            {
+                names.push(name);
             }
         }
         for found in markers(canonical, &code_ranges(canonical)) {
             let payload = found.payload;
-            if let Some(wiki) = Wikilink::parse(payload) {
-                if wiki.embed && ctx.index.find_attachment(wiki.target, ctx).is_some() {
-                    names.extend(asset_basename(wiki.target).map(str::to_owned));
-                }
+            if let Some(wiki) = Wikilink::parse(payload)
+                && wiki.embed
+                && ctx.index.find_attachment(wiki.target, ctx).is_some()
+            {
+                names.extend(asset_basename(wiki.target).map(str::to_owned));
             }
         }
         names.sort();
@@ -172,14 +173,13 @@ impl ObsidianAdapter {
                 }
                 let original = &body[link.range.clone()];
                 let rendered = self.render_markdown_link(link, ctx);
-                if rendered != original
+                if (rendered != original
                     || self
                         .default_form(&rendered, ctx)
-                        .is_some_and(|form| form != rendered)
+                        .is_some_and(|form| form != rendered))
+                    && let Some(marked) = marked(&rendered, original)
                 {
-                    if let Some(marked) = marked(&rendered, original) {
-                        edits.push((link.range.clone(), marked));
-                    }
+                    edits.push((link.range.clone(), marked));
                 }
             }
             for found in wikilinks(body) {
@@ -273,40 +273,38 @@ impl ObsidianAdapter {
     /// Canonical form of a Markdown link written in the vault: only images
     /// pointing into the vault need rewriting, towards the assets folder.
     fn render_markdown_link(&self, link: &InlineLink, ctx: &ConvertCtx<'_>) -> String {
-        if link.is_image {
-            if let Some(name) = ctx
+        if link.is_image
+            && let Some(name) = ctx
                 .index
                 .attachment_at(&link.href, ctx)
                 .and_then(|path| asset_basename(&path).map(str::to_owned))
                 .filter(|_| asset_name_of_href(&link.href, ctx).is_none())
-            {
-                let href = encode_href(&relative_to(
-                    ctx.path.as_str(),
-                    &ctx.index.asset_path(&name),
-                ));
-                return format!("![{}]({href})", link.text);
-            }
+        {
+            let href = encode_href(&relative_to(
+                ctx.path.as_str(),
+                &ctx.index.asset_path(&name),
+            ));
+            return format!("![{}]({href})", link.text);
         }
         link.source.clone()
     }
 
     fn render_wikilink(&self, wiki: &Wikilink<'_>, ctx: &ConvertCtx<'_>) -> Option<String> {
-        if wiki.embed {
-            if let Some(path) = ctx.index.find_attachment(wiki.target, ctx) {
-                let name = asset_basename(&path)?;
-                if !ctx.index.attachment_name_is_unique(name) {
-                    return None;
-                }
-                let href =
-                    encode_href(&relative_to(ctx.path.as_str(), &ctx.index.asset_path(name)));
-                return Some(match wiki.alias {
-                    Some(size) if !size.is_empty() && size.chars().all(|c| c.is_ascii_digit()) => {
-                        format!("<img src=\"{href}\" width=\"{size}\">")
-                    }
-                    Some(alt) => format!("![{alt}]({href})"),
-                    None => format!("![{}]({href})", stem(name)),
-                });
+        if wiki.embed
+            && let Some(path) = ctx.index.find_attachment(wiki.target, ctx)
+        {
+            let name = asset_basename(&path)?;
+            if !ctx.index.attachment_name_is_unique(name) {
+                return None;
             }
+            let href = encode_href(&relative_to(ctx.path.as_str(), &ctx.index.asset_path(name)));
+            return Some(match wiki.alias {
+                Some(size) if !size.is_empty() && size.chars().all(|c| c.is_ascii_digit()) => {
+                    format!("<img src=\"{href}\" width=\"{size}\">")
+                }
+                Some(alt) => format!("![{alt}]({href})"),
+                None => format!("![{}]({href})", stem(name)),
+            });
         }
         let note = ctx.index.find_note(wiki.target, ctx)?;
         let text = wiki

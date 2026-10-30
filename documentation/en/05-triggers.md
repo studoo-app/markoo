@@ -2,7 +2,7 @@
 
 > 🇫🇷 [Version française](../fr/05-declencheurs.md)
 
-A sync can be started in four ways, plus the manual CLI. All of them go through the daemon's **single job queue**: two simultaneous triggers on the same pair never run two syncs in parallel.
+A sync can be started in four ways, plus the manual CLI. Interval, hook, API and MCP go through the daemon's **single job queue**. The manual CLI runs the engine directly. Every one of them needs the **pair's lock**, so two simultaneous triggers on the same pair never run two syncs in parallel: a sync that finds the lock taken stops with a `busy` error, without writing anything.
 
 ```mermaid
 flowchart LR
@@ -10,12 +10,13 @@ flowchart LR
     H["🔧 Git hook"] --> Q
     A["🌐 HTTP API"] --> Q
     M["🤖 MCP"] --> Q
-    C["⌨️ CLI / app"] --> Q
-    Q["Job queue<br/>+ per-pair lock<br/>+ debounce"] --> E["markoo-core<br/>plan → apply"]
+    C["⌨️ App"] --> Q
+    CLI["⌨️ CLI"] --> E
+    Q["Job queue<br/>+ debounce"] --> E["markoo-core<br/>per-pair lock<br/>plan → apply"]
     E --> EV["Events<br/>(app, API SSE, notifications)"]
 ```
 
-**Debounce**: requests received while a sync is running are merged into a single extra sync, started once the current one finishes.
+**Debounce**: requests received while a sync is running are merged into a single extra sync, started once the current one finishes. A dry run is never merged into a real sync.
 
 ## 1. Time interval
 
@@ -23,10 +24,13 @@ flowchart LR
 [schedule]
 interval = "5m"        # 30s, 5m, 1h… ; "off" to disable
 on_startup = true      # sync when the daemon starts
-pause_on_battery = false
+pause_on_battery = false # not implemented yet: accepted and ignored, with a warning
 ```
 
-- The `tokio` scheduler syncs every pair at each interval.
+- The `tokio` scheduler syncs every pair at each interval, except paused pairs and pairs failing validation.
+- `markoo daemon` runs in the foreground. On macOS, `markoo daemon install` runs it as a `launchd` service for the current user, using the configuration and data folders in use at that moment; `markoo daemon uninstall` removes it.
+- A data folder has only one daemon at a time (`<data>/daemon.lock`).
+- `markoo.toml` is checked every few seconds. A pair whose settings changed, or a new one, is synced at once; changes to `[api]` need a restart. While the file is invalid, the daemon **suspends its syncs**: using the previous settings could write in a direction the user has just changed.
 - The fast comparison (`mtime` + size) makes a no-op sync almost free, so short intervals are fine.
 - **Planned**: a `watch` mode based on file system events (`notify`, FSEvents on macOS), with a debounce of a few seconds.
 
@@ -74,7 +78,7 @@ Served by `axum`, on `127.0.0.1` only (default port `4848`). Authentication uses
 | `GET` | `/health` | daemon status |
 | `GET` | `/pairs` | list of configured pairs |
 | `GET` | `/pairs/{pair}/status` | current plan (nothing applied) |
-| `GET` | `/pairs/{pair}/diff?path=…` | diff of one file |
+| `GET` | `/pairs/{pair}/diff?path=…` | diff of one file, or of every file without `path` |
 | `POST` | `/pairs/{pair}/sync` | start a sync (`{"dry_run": false}`) → `202` + job id |
 | `GET` | `/jobs/{id}` | status and report of a job |
 | `POST` | `/pairs` | create a pair |
@@ -82,19 +86,28 @@ Served by `axum`, on `127.0.0.1` only (default port `4848`). Authentication uses
 | `PATCH` | `/pairs/{pair}/config` | update the pair (direction, filters…); returns the plan preview |
 | `DELETE` | `/pairs/{pair}` | delete the pair (files are left untouched) |
 | `GET` | `/conflicts` | pending conflicts and divergences |
-| `POST` | `/conflicts/{id}/resolve` | `{"keep": "kb" \| "repo" \| "both"}` or `{"content": "…"}` |
-| `GET` | `/events` | SSE stream: progress, job completion, new conflicts |
+| `POST` | `/conflicts/{id}/resolve` | `{"keep": "kb" \| "repo" \| "both"}`, `{"content": "…"}` or `{"push_to_source": true}` |
+| `GET` | `/events` | SSE stream: `job-started`, `job-finished`, `new-conflicts`, `config-reloaded`, `shutdown` |
 
-Sample report:
+Every route needs the token. Errors are `{"error": "…"}`, with `400` for an invalid request, `401` without a valid token, `404` for an unknown pair, job or conflict, and `409` when the state forbids it (pair busy or paused, conflicts pending, folder unavailable). Plans and job reports never contain file contents; only `/conflicts` does.
+
+Sample job (`GET /jobs/{id}`):
 
 ```json
 {
-  "job": "j_01JB…",
+  "job": "j_12",
   "pair": "clara",
-  "kb_type": "obsidian",
   "dry_run": false,
-  "summary": { "kb_to_repo": 2, "repo_to_kb": 1, "merged": 1, "conflicts": 1, "deleted": 0 },
-  "conflicts": [{ "id": "c_42", "path": "architecture.md", "hunks": 1 }],
+  "trigger": "api",
+  "status": "done",
+  "outcome": {
+    "kb_type": "obsidian",
+    "direction_changed": false,
+    "summary": { "kb_to_repo": 2, "repo_to_kb": 1, "merged": 1, "conflicts": 1, "deleted": 0 },
+    "conflicts": [{ "id": "c_5f2a91d03b7c44e8", "path": "architecture.md", "kind": "conflict" }],
+    "report": { "written": [], "trashed": [], "pending": [], "not_in_source": [], "skipped": [], "attachment_conflicts": [] }
+  },
+  "error": null,
   "duration_ms": 184
 }
 ```
@@ -159,5 +172,5 @@ sequenceDiagram
 ## Shared security
 
 - Listens on `127.0.0.1` only, never on `0.0.0.0`.
-- Regenerable API token (`markoo token rotate`).
+- Regenerable API token (`markoo token rotate`), applied without restarting the daemon. The `token` file can only be read by its owner.
 - Incoming paths (API, MCP) are normalized and **confined** to the pair: no reads or writes outside the configured folders (protection against `../`).

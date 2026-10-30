@@ -1,0 +1,25 @@
+[package]
+name = "markoo-daemon"
+description = "Scheduler and local HTTP API for Markoo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+markoo-core.workspace = true
+axum.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["io-util"] }
+
+[lints]
+workspace = true

@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::UNIX_EPOCH;
 
 /// Suffix of the temporary file used for atomic writes.
@@ -48,6 +48,15 @@ pub struct FileMeta {
     pub modified: u64,
 }
 
+/// An exclusive lock, released when dropped (also when the process dies).
+pub struct FsLock(#[expect(dead_code, reason = "only held for its Drop")] Box<dyn Send>);
+
+impl std::fmt::Debug for FsLock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("FsLock")
+    }
+}
+
 /// Minimal file system interface needed by the engine.
 pub trait Fs {
     /// Lists every file under `root`, recursively, as paths relative to `root`.
@@ -68,6 +77,9 @@ pub trait Fs {
     fn write_atomic(&self, path: &Path, bytes: &[u8]) -> Result<(), FsError>;
     /// Moves a file, creating the destination's parent folders.
     fn rename(&self, from: &Path, to: &Path) -> Result<(), FsError>;
+    /// Takes an exclusive lock named by `path`, across threads and processes.
+    /// Returns `None` if someone else holds it; never waits.
+    fn try_lock(&self, path: &Path) -> Result<Option<FsLock>, FsError>;
 }
 
 /// The real file system.
@@ -97,6 +109,23 @@ fn create_parent(path: &Path) -> Result<(), FsError> {
 }
 
 impl Fs for DiskFs {
+    fn try_lock(&self, path: &Path) -> Result<Option<FsLock>, FsError> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(io_err(parent))?;
+        }
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path)
+            .map_err(io_err(path))?;
+        match file.try_lock() {
+            Ok(()) => Ok(Some(FsLock(Box::new(file)))),
+            Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+            Err(std::fs::TryLockError::Error(source)) => Err(io_err(path)(source)),
+        }
+    }
+
     fn list(&self, root: &Path) -> Result<Vec<PathBuf>, FsError> {
         if !root.exists() {
             return Ok(Vec::new());
@@ -179,6 +208,22 @@ impl Fs for DiskFs {
 #[derive(Debug, Default)]
 pub struct MemFs {
     inner: Mutex<MemInner>,
+    locks: Arc<Mutex<BTreeSet<PathBuf>>>,
+}
+
+/// Lock of a [`MemFs`]: frees its path when dropped.
+struct MemLock {
+    locks: Arc<Mutex<BTreeSet<PathBuf>>>,
+    path: PathBuf,
+}
+
+impl Drop for MemLock {
+    fn drop(&mut self) {
+        self.locks
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&self.path);
+    }
 }
 
 #[derive(Debug, Default)]
@@ -242,6 +287,17 @@ impl MemFs {
 }
 
 impl Fs for MemFs {
+    fn try_lock(&self, path: &Path) -> Result<Option<FsLock>, FsError> {
+        let mut locks = self.locks.lock().unwrap_or_else(PoisonError::into_inner);
+        if !locks.insert(path.to_path_buf()) {
+            return Ok(None);
+        }
+        Ok(Some(FsLock(Box::new(MemLock {
+            locks: Arc::clone(&self.locks),
+            path: path.to_path_buf(),
+        }))))
+    }
+
     fn list(&self, root: &Path) -> Result<Vec<PathBuf>, FsError> {
         Ok(self
             .lock()

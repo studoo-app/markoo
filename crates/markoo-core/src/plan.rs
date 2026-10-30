@@ -144,6 +144,53 @@ pub enum Action {
     },
 }
 
+/// What an entry's action means for the user, without the file contents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct EntryView {
+    /// The entry.
+    pub path: EntryPath,
+    /// Kind of action.
+    pub kind: &'static str,
+    /// Side affected.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub side: Option<Side>,
+    /// New path of a rename.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to: Option<EntryPath>,
+    /// Why the entry waits for the user.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub issue: Option<IssueKind>,
+}
+
+impl PlannedEntry {
+    /// Whether the user has any reason to see this entry: recording the base
+    /// changes nothing on either side.
+    pub fn is_visible(&self) -> bool {
+        !matches!(self.action, Action::RecordBase { .. } | Action::ForgetBase)
+    }
+
+    /// The entry without its file contents.
+    pub fn view(&self) -> EntryView {
+        let (kind, side, to, issue) = match &self.action {
+            Action::Copy { to, .. } => ("copy", Some(*to), None, None),
+            Action::Merge { .. } => ("merge", None, None, None),
+            Action::Trash { side } => ("trash", Some(*side), None, None),
+            Action::RecordBase { .. } => ("record-base", None, None, None),
+            Action::ForgetBase => ("forget-base", None, None, None),
+            Action::Rename { side, to, .. } => ("rename", Some(*side), Some(to.clone()), None),
+            Action::Pending { issue, .. } => ("pending", None, None, Some(*issue)),
+            Action::NotInSource { side } => ("not-in-source", Some(*side), None, None),
+        };
+        EntryView {
+            path: self.path.clone(),
+            kind,
+            side,
+            to,
+            issue,
+        }
+    }
+}
+
 /// State of an entry on one side, compared with its base.
 #[derive(Debug, Clone, Copy)]
 enum Seen<'a> {

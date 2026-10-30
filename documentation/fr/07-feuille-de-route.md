@@ -62,6 +62,8 @@ gantt
 - API HTTP (`axum`), jeton, flux SSE.
 - Service `launchd` sur macOS.
 
+**État** : terminé, sauf que `markoo daemon install` n'a pas encore été essayé avec un vrai `launchd` (son fichier de propriétés est vérifié avec `plutil`). Les événements de progression se limitent au début et à la fin des jobs : le moteur ne signale pas sa progression pendant une synchro.
+
 ### M5 — Hooks Git
 - `markoo hook install|uninstall`, cohabitation avec les hooks existants, husky et lefthook.
 

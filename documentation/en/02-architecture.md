@@ -112,7 +112,8 @@ The `markoo` binary (`clap`):
 | `markoo hook install\|uninstall` | Manages Git hooks |
 | `markoo pair add\|list\|show\|set\|remove` | Manages pairs (direction, folders, filters…); creation: `markoo pair add <name> --kb <folder> [--kb-type obsidian\|markdown] --repo <folder>` (`--kb-type` auto-detected if omitted); see [Configuration UI](08-configuration-ui.md) |
 | `markoo paths` | Shows the configuration and state paths in use |
-| `markoo daemon` | Starts the daemon (scheduler + API + MCP) |
+| `markoo daemon [install\|uninstall]` | Starts the daemon (scheduler + API + MCP), or manages its `launchd` service on macOS |
+| `markoo token rotate` | Replaces the API token |
 | `markoo mcp` | MCP server over stdio (for Claude Desktop / Claude Code) |
 
 #### Banner
@@ -131,7 +132,7 @@ When the terminal supports color, `<` is printed in pink (`#F0418E`) and `>` in 
 
 ### `markoo-daemon`
 
-A long-running process, embedded in the Tauri app or run on its own (`launchd` on macOS). It guarantees **only one sync at a time per pair** through a job queue and a lock (`<data>/lock`), whatever the trigger.
+A long-running process, embedded in the Tauri app or run on its own (`launchd` on macOS). It guarantees **only one sync at a time per pair** through a job queue and one lock per pair (`<data>/locks/<pair>.lock`), whatever the trigger. The engine takes this lock itself, so a CLI command running alongside the daemon is covered too.
 
 ### `markoo-mcp`
 

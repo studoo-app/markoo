@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 markoo-core.workspace = true
+markoo-daemon.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 serde_json.workspace = true

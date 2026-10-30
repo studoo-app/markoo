@@ -980,3 +980,17 @@ fn diff_can_target_one_entry() {
         1
     );
 }
+
+#[test]
+fn resolving_is_refused_while_the_pair_is_locked() {
+    let t = Harness::new();
+    t.put(Side::Kb, "a.md", "kb\n");
+    t.put(Side::Repo, "a.md", "repo\n");
+    t.sync();
+    let _lock = t.engine.lock_pair(&t.pair.name).unwrap();
+    assert!(matches!(
+        t.engine
+            .resolve(&t.pair, &entry("a.md"), Resolution::Keep(Side::Kb)),
+        Err(markoo_core::Error::Busy(_))
+    ));
+}

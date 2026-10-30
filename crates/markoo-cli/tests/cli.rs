@@ -804,3 +804,95 @@ fn untouched_vault_file_is_not_rewritten() {
     env.ok(&["sync"]);
     assert_eq!(env.read(&env.kb(), "a.md").as_deref(), Some(text));
 }
+
+#[test]
+fn token_rotate_creates_a_token_file() {
+    let env = Env::with_pair();
+    env.ok(&["token", "rotate"]);
+    assert_eq!(
+        std::fs::read_to_string(env.path("data/token"))
+            .unwrap()
+            .len(),
+        64
+    );
+}
+
+#[test]
+fn token_rotate_replaces_the_token() {
+    let env = Env::with_pair();
+    env.ok(&["token", "rotate"]);
+    let first = std::fs::read_to_string(env.path("data/token")).unwrap();
+    env.ok(&["token", "rotate"]);
+    assert_ne!(
+        first,
+        std::fs::read_to_string(env.path("data/token")).unwrap()
+    );
+}
+
+/// Stops the daemon even when an assertion fails.
+struct Running(std::process::Child);
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+#[test]
+fn daemon_serves_the_api_and_syncs_on_startup() {
+    use std::io::{BufRead, Read, Write};
+
+    let env = Env::with_pair();
+    std::fs::write(env.kb().join("note.md"), "hello\n").unwrap();
+    let config = std::fs::read_to_string(env.config()).unwrap();
+    std::fs::write(
+        env.config(),
+        format!("[schedule]\ninterval = \"off\"\n[api]\nport = 0\n\n{config}"),
+    )
+    .unwrap();
+    let mut child = env
+        .command(&["daemon"])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let running = Running(child);
+    let mut line = String::new();
+    std::io::BufReader::new(stdout)
+        .read_line(&mut line)
+        .unwrap();
+    let addr = line.trim().rsplit("http://").next().unwrap().to_owned();
+
+    let mut stream = std::net::TcpStream::connect(&addr).unwrap();
+    let token = std::fs::read_to_string(env.path("data/token")).unwrap();
+    write!(
+        stream,
+        "GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\
+         Authorization: Bearer {token}\r\n\r\n"
+    )
+    .unwrap();
+    let mut response = String::new();
+    stream.read_to_string(&mut response).unwrap();
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+
+    let target = env.repo().join("note.md");
+    for _ in 0..500 {
+        if target.exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(target.exists());
+    drop(running);
+}
+
+#[test]
+fn sync_reports_a_busy_pair() {
+    let env = Env::with_pair();
+    env.ok(&["sync"]);
+    std::fs::create_dir_all(env.path("data/locks")).unwrap();
+    let lock = std::fs::File::create(env.path("data/locks/clara.lock")).unwrap();
+    lock.lock().unwrap();
+    assert!(env.fails(&["sync"]).contains("busy"));
+}

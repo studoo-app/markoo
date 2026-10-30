@@ -112,7 +112,8 @@ Binaire `markoo` (`clap`) :
 | `markoo hook install\|uninstall` | Gère les hooks Git |
 | `markoo pair add\|list\|show\|set\|remove` | Gère les paires (sens, dossiers, filtres…) ; création : `markoo pair add <nom> --kb <dossier> [--kb-type obsidian\|markdown] --repo <dossier>` (`--kb-type` détecté si omis) ; voir [Interface de configuration](08-interface-de-configuration.md) |
 | `markoo paths` | Affiche les chemins de configuration et d'état utilisés |
-| `markoo daemon` | Lance le daemon (planificateur + API + MCP) |
+| `markoo daemon [install\|uninstall]` | Lance le daemon (planificateur + API + MCP), ou gère son service `launchd` sur macOS |
+| `markoo token rotate` | Remplace le jeton de l'API |
 | `markoo mcp` | Serveur MCP en stdio (pour Claude Desktop / Claude Code) |
 
 #### Bannière
@@ -131,7 +132,7 @@ Si le terminal gère les couleurs, `<` est affiché en rose (`#F0418E`) et `>` e
 
 ### `markoo-daemon`
 
-Processus longue durée, embarqué dans l'app Tauri ou lancé seul (`launchd` sur macOS). Il garantit **une seule synchro à la fois par paire** grâce à une file de jobs et un verrou (`<data>/lock`), quel que soit le déclencheur.
+Processus longue durée, embarqué dans l'app Tauri ou lancé seul (`launchd` sur macOS). Il garantit **une seule synchro à la fois par paire** grâce à une file de jobs et un verrou par paire (`<data>/locks/<paire>.lock`), quel que soit le déclencheur. Le moteur prend lui-même ce verrou : une commande CLI lancée à côté du daemon est donc couverte aussi.
 
 ### `markoo-mcp`
 

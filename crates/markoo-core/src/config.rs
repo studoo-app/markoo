@@ -6,6 +6,7 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use directories::BaseDirs;
 use serde::Deserialize;
@@ -58,6 +59,14 @@ pub enum ConfigError {
         pair: String,
         /// The requested type.
         kb_type: String,
+    },
+    /// The pair does not pass validation.
+    #[error("pair \"{pair}\": {message}")]
+    InvalidPair {
+        /// The pair.
+        pair: String,
+        /// What is wrong with it.
+        message: String,
     },
     /// This key cannot be set.
     #[error("unknown pair setting \"{0}\"")]
@@ -117,6 +126,85 @@ enum FrontmatterMode {
 struct RawConfig {
     #[serde(default)]
     pair: Vec<RawPair>,
+    schedule: Option<RawSchedule>,
+    api: Option<RawApi>,
+}
+
+/// `[schedule]`
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawSchedule {
+    interval: Option<String>,
+    on_startup: Option<bool>,
+    pause_on_battery: Option<bool>,
+}
+
+/// `[api]`
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawApi {
+    enabled: Option<bool>,
+    port: Option<u16>,
+}
+
+/// When the daemon syncs on its own (`[schedule]`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Schedule {
+    /// Time between two syncs of every pair, `None` for `"off"`.
+    pub interval: Option<Duration>,
+    /// Whether to sync as soon as the daemon starts.
+    pub on_startup: bool,
+}
+
+impl Default for Schedule {
+    fn default() -> Self {
+        Self {
+            interval: Some(Duration::from_secs(5 * 60)),
+            on_startup: true,
+        }
+    }
+}
+
+/// The daemon's local HTTP API (`[api]`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Api {
+    /// Whether the API is served.
+    pub enabled: bool,
+    /// Port on `127.0.0.1`.
+    pub port: u16,
+}
+
+impl Default for Api {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            port: 4848,
+        }
+    }
+}
+
+/// Parses `30s`, `5m`, `1h`, or `off` into `None`.
+fn parse_interval(text: &str) -> Result<Option<Duration>, ConfigError> {
+    if text == "off" {
+        return Ok(None);
+    }
+    let invalid = || {
+        ConfigError::Invalid(format!(
+            "invalid interval \"{text}\": use a number followed by s, m or h, or \"off\""
+        ))
+    };
+    let digits = text.len().saturating_sub(1);
+    let (number, unit) = (text.get(..digits).ok_or_else(invalid)?, &text[digits..]);
+    let number: u64 = number.parse().map_err(|_| invalid())?;
+    let seconds = match unit {
+        "s" => Some(number),
+        "m" => number.checked_mul(60),
+        "h" => number.checked_mul(3600),
+        _ => None,
+    }
+    .filter(|seconds| *seconds > 0)
+    .ok_or_else(invalid)?;
+    Ok(Some(Duration::from_secs(seconds)))
 }
 
 /// A pair read from the configuration.
@@ -137,6 +225,12 @@ pub struct PairEntry {
 pub struct Config {
     /// Pairs, in file order.
     pub pairs: Vec<PairEntry>,
+    /// When the daemon syncs on its own.
+    pub schedule: Schedule,
+    /// The daemon's local HTTP API.
+    pub api: Api,
+    /// General options accepted in the file but not honored yet.
+    pub not_implemented: Vec<String>,
 }
 
 /// A problem found while validating a pair.
@@ -188,7 +282,28 @@ impl Config {
             }
             pairs.push(PairEntry::from_raw(raw)?);
         }
-        Ok(Self { pairs })
+        let mut schedule = Schedule::default();
+        let mut not_implemented = Vec::new();
+        if let Some(raw) = raw.schedule {
+            if let Some(interval) = raw.interval {
+                schedule.interval = parse_interval(&interval)?;
+            }
+            schedule.on_startup = raw.on_startup.unwrap_or(schedule.on_startup);
+            if raw.pause_on_battery.is_some() {
+                not_implemented.push("schedule.pause_on_battery".to_owned());
+            }
+        }
+        let mut api = Api::default();
+        if let Some(raw) = raw.api {
+            api.enabled = raw.enabled.unwrap_or(api.enabled);
+            api.port = raw.port.unwrap_or(api.port);
+        }
+        Ok(Self {
+            pairs,
+            schedule,
+            api,
+            not_implemented,
+        })
     }
 
     /// Finds a pair by name.
@@ -560,6 +675,65 @@ fn in_git_repository(folder: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn interval_is_parsed_in_seconds_minutes_and_hours() {
+        let durations = ["30s", "5m", "1h"].map(|text| parse_interval(text).unwrap().unwrap());
+        assert_eq!(durations.map(|d| d.as_secs()), [30, 300, 3600]);
+    }
+
+    #[test]
+    fn interval_off_disables_the_schedule() {
+        assert_eq!(parse_interval("off").unwrap(), None);
+    }
+
+    #[test]
+    fn invalid_intervals_are_refused() {
+        for text in [
+            "",
+            "m",
+            "0s",
+            "5",
+            "5d",
+            "-5m",
+            "é",
+            "99999999999999999999h",
+        ] {
+            assert!(parse_interval(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn schedule_and_api_have_defaults() {
+        let config = Config::parse("").unwrap();
+        assert_eq!(
+            (config.schedule, config.api),
+            (Schedule::default(), Api::default())
+        );
+    }
+
+    #[test]
+    fn schedule_and_api_are_read() {
+        let config = Config::parse(
+            "[schedule]\ninterval = \"off\"\non_startup = false\n[api]\nenabled = false\nport = 5000\n",
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                config.schedule.interval,
+                config.schedule.on_startup,
+                config.api.enabled,
+                config.api.port
+            ),
+            (None, false, false, 5000)
+        );
+    }
+
+    #[test]
+    fn pause_on_battery_is_reported_as_not_implemented() {
+        let config = Config::parse("[schedule]\npause_on_battery = true\n").unwrap();
+        assert_eq!(config.not_implemented, ["schedule.pause_on_battery"]);
+    }
+
     use super::*;
 
     const SAMPLE: &str = r#"

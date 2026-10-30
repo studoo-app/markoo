@@ -9,6 +9,7 @@ pub mod engine;
 pub mod entry;
 pub mod fs;
 pub mod kb;
+pub mod manage;
 pub mod merge;
 pub mod pair;
 pub mod paths;
@@ -48,6 +49,9 @@ pub enum Error {
         /// The folder.
         path: PathBuf,
     },
+    /// Another sync of this pair is running, here or in another process.
+    #[error("pair \"{0}\" is busy: another sync is running")]
+    Busy(String),
     /// Moving from `both` to a one-way mode with unresolved issues.
     #[error(
         "pair \"{pair}\": {pending} conflict(s) must be resolved before switching to a one-way direction"
