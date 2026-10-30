@@ -148,7 +148,7 @@ The `obsidian` adapter, **the first knowledge base implemented** and the referen
 - **Notes**: `*.md` files. `.canvas` files are not converted.
 - **Fixed exclusions**: `.obsidian/` and `.trash/`, whatever the pair's filters.
 - **Attachments**: a new attachment coming from the repo is stored in the folder configured in Obsidian (`attachmentFolderPath` key of `.obsidian/app.json`), or next to the note otherwise.
-- **New link format**: with `useMarkdownLinks` in `.obsidian/app.json`, links coming from the repo stay Markdown links instead of becoming wikilinks. `newLinkFormat` is not taken into account yet.
+- **New link format**: with `useMarkdownLinks` in `.obsidian/app.json`, links coming from the repo stay Markdown links instead of becoming wikilinks. `newLinkFormat` is not taken into account yet for these new links; links already written from the vault root are understood (see [Transformations](04-transformations.md#resolution)).
 
 ### Dialect
 

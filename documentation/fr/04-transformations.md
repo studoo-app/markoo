@@ -82,6 +82,8 @@ Un wikilink `[[Cible]]` désigne une note par son **nom**, pas par son chemin. M
 | Cible **hors de la paire** (ailleurs dans le vault) | Texte simple + commentaire de restauration (voir plus bas) |
 | Cible **introuvable** | Laissé tel quel, avertissement dans le rapport |
 
+Un **lien Markdown** écrit dans le vault se lit ainsi : un fichier à côté de la note a la priorité, comme sur GitHub ; sinon le chemin est cherché depuis la racine du vault, la forme qu'Obsidian écrit avec `newLinkFormat = "absolute"`. Les chemins commençant par `./` ou `../` ne sont jamais cherchés depuis la racine. Un lien vers une note écrit depuis la racine suit le tableau ci-dessus, et sa forme d'origine est gardée dans un commentaire. Un lien vers une pièce jointe, image ou non, pointe vers le dossier des pièces jointes et le fichier y est copié, sauf si deux pièces jointes portent le même nom : le lien reste alors tel quel.
+
 ### Information non représentable
 
 Certains détails n'ont pas d'équivalent en GFM (lien vers une note hors périmètre, alias identique au titre…). Markoo les conserve dans la forme canonique sous forme de **commentaire HTML invisible** pour pouvoir restaurer la forme exacte au retour :

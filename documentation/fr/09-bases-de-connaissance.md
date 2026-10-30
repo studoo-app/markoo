@@ -148,7 +148,7 @@ Adaptateur `obsidian`, **première base de connaissance implémentée** et réf�
 - **Notes** : fichiers `*.md`. Les fichiers `.canvas` ne sont pas convertis.
 - **Exclusions fixes** : `.obsidian/` et `.trash/`, quels que soient les filtres de la paire.
 - **Pièces jointes** : une nouvelle pièce jointe venue du repo est rangée dans le dossier configuré dans Obsidian (clé `attachmentFolderPath` de `.obsidian/app.json`), ou à défaut à côté de la note.
-- **Format des nouveaux liens** : avec `useMarkdownLinks` dans `.obsidian/app.json`, les liens venant du repo restent des liens Markdown au lieu de devenir des wikilinks. `newLinkFormat` n'est pas encore pris en compte.
+- **Format des nouveaux liens** : avec `useMarkdownLinks` dans `.obsidian/app.json`, les liens venant du repo restent des liens Markdown au lieu de devenir des wikilinks. `newLinkFormat` n'est pas encore pris en compte pour ces nouveaux liens ; les liens déjà écrits depuis la racine du vault sont compris (voir [Transformations](04-transformations.md#résolution)).
 
 ### Dialecte
 

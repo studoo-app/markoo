@@ -140,9 +140,7 @@ impl KbAdapter for ObsidianAdapter {
     fn referenced_assets(&self, canonical: &str, ctx: &ConvertCtx<'_>) -> Vec<String> {
         let mut names = Vec::new();
         for link in inline_links(canonical) {
-            if link.is_image
-                && let Some(name) = asset_name_of_href(&link.href, ctx)
-            {
+            if let Some(name) = asset_name_of_href(split_fragment(&link.href).0, ctx) {
                 names.push(name);
             }
         }
@@ -270,23 +268,51 @@ impl ObsidianAdapter {
         }
     }
 
-    /// Canonical form of a Markdown link written in the vault: only images
-    /// pointing into the vault need rewriting, towards the assets folder.
+    /// Canonical form of a Markdown link written in the vault. Links to an
+    /// attachment go to the assets folder, and links written from the vault
+    /// root, which only Obsidian understands, become relative.
     fn render_markdown_link(&self, link: &InlineLink, ctx: &ConvertCtx<'_>) -> String {
-        if link.is_image
-            && let Some(name) = ctx
-                .index
-                .attachment_at(&link.href, ctx)
-                .and_then(|path| asset_basename(&path).map(str::to_owned))
-                .filter(|_| asset_name_of_href(&link.href, ctx).is_none())
-        {
-            let href = encode_href(&relative_to(
-                ctx.path.as_str(),
-                &ctx.index.asset_path(&name),
-            ));
-            return format!("![{}]({href})", link.text);
+        let (path, fragment) = split_fragment(&link.href);
+        if asset_name_of_href(path, ctx).is_some() {
+            return link.source.clone();
         }
-        link.source.clone()
+        let Some(found) = ctx.index.vault_path_of_href(path, ctx) else {
+            return link.source.clone();
+        };
+        if ctx.index.attachments.contains(&found.path) {
+            let Some(name) = asset_basename(&found.path)
+                .filter(|name| ctx.index.attachment_name_is_unique(name))
+            else {
+                return link.source.clone();
+            };
+            let mut href =
+                encode_href(&relative_to(ctx.path.as_str(), &ctx.index.asset_path(name)));
+            if let Some(fragment) = fragment {
+                href.push('#');
+                href.push_str(fragment);
+            }
+            let bang = if link.is_image { "!" } else { "" };
+            return format!("{bang}[{}]({href})", link.text);
+        }
+        if !found.from_root {
+            return link.source.clone();
+        }
+        let text = if link.text.is_empty() {
+            stem(&found.path)
+        } else {
+            &link.text
+        };
+        let Some(inside) = ctx.index.tracked_relative(&found.path) else {
+            // Outside the pair: GitHub could not follow the link.
+            return text.to_owned();
+        };
+        let mut href = encode_href(&relative_to(ctx.path.as_str(), &inside));
+        if let Some(fragment) = fragment.filter(|fragment| !fragment.starts_with('^')) {
+            href.push('#');
+            href.push_str(&github_slug(&decode_href(fragment)));
+        }
+        // An embedded note cannot display as an image: it stays a plain link.
+        format!("[{text}]({href})")
     }
 
     fn render_wikilink(&self, wiki: &Wikilink<'_>, ctx: &ConvertCtx<'_>) -> Option<String> {
@@ -853,12 +879,30 @@ impl NameIndex {
         })
     }
 
-    /// The attachment a relative `href` of the current note points to.
-    fn attachment_at(&self, href: &str, ctx: &ConvertCtx<'_>) -> Option<String> {
-        // The attachment may be anywhere in the vault, not only in the pair.
+    /// The vault file a link path of the current note points to. A path next
+    /// to the note wins, since that is how GitHub reads it; otherwise it is
+    /// looked up from the vault root, unless it is explicitly relative.
+    fn vault_path_of_href(&self, path: &str, ctx: &ConvertCtx<'_>) -> Option<LinkedFile> {
+        let decoded = decode_href(path);
+        let exists = |file: &String| self.notes.contains(file) || self.attachments.contains(file);
+        // The file may be anywhere in the vault, not only in the pair.
         let from = self.vault_relative(ctx.path.as_str());
-        let vault_path = resolve_relative(&from, &decode_href(href))?;
-        self.attachments.contains(&vault_path).then_some(vault_path)
+        let next_to_note = resolve_relative(&from, &decoded)?;
+        if exists(&next_to_note) {
+            return Some(LinkedFile {
+                path: next_to_note,
+                from_root: false,
+            });
+        }
+        if decoded.starts_with("./") || decoded.starts_with("../") {
+            return None;
+        }
+        resolve_relative("", &decoded)
+            .filter(exists)
+            .map(|path| LinkedFile {
+                path,
+                from_root: true,
+            })
     }
 
     fn attachment_name_is_unique(&self, name: &str) -> bool {
@@ -890,6 +934,22 @@ impl NameIndex {
             .iter()
             .find(|file| asset_basename(file) == Some(name))
             .cloned()
+    }
+}
+
+/// A file of the vault a link points to.
+struct LinkedFile {
+    /// Path relative to the vault root.
+    path: String,
+    /// The link is written from the vault root rather than from the note.
+    from_root: bool,
+}
+
+/// Splits a link destination into its path and its `#fragment`.
+fn split_fragment(href: &str) -> (&str, Option<&str>) {
+    match href.split_once('#') {
+        Some((path, fragment)) => (path, Some(fragment)),
+        None => (href, None),
     }
 }
 

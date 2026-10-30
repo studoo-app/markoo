@@ -3,6 +3,7 @@
 // Test helpers panic on failure: that is what fails the test.
 #![expect(clippy::unwrap_used)]
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use markoo_core::fs::{DiskFs, Fs, MemFs};
@@ -455,11 +456,36 @@ fn broken_links(root: &Path) -> Vec<String> {
     broken
 }
 
+/// The hash of every file of a folder.
+fn fingerprints(root: &Path) -> BTreeMap<PathBuf, blake3::Hash> {
+    DiskFs
+        .list(root)
+        .unwrap()
+        .into_iter()
+        .map(|file| {
+            let hash = blake3::hash(&DiskFs.read(&root.join(&file)).unwrap());
+            (file, hash)
+        })
+        .collect()
+}
+
+/// Prints the first lines of a long list, so that the results stay on screen.
+fn print_some(items: &[String]) {
+    const SHOWN: usize = 30;
+    for item in items.iter().take(SHOWN) {
+        println!("  {item}");
+    }
+    if items.len() > SHOWN {
+        println!("  ... and {} more", items.len() - SHOWN);
+    }
+}
+
 /// Runs a real vault through the engine, on a copy: the vault itself is only read.
 ///
 /// `MARKOO_CORPUS=/path/to/vault cargo test -p markoo-core --test obsidian -- --ignored --nocapture`
 ///
-/// Prints file names, never their content.
+/// Prints file names, never their content. The vault may be in use during the
+/// run, so it is only read once: everything is compared to the copy made then.
 #[test]
 #[ignore = "needs MARKOO_CORPUS, the path of a real vault"]
 fn real_vault_round_trip() {
@@ -467,7 +493,9 @@ fn real_vault_round_trip() {
     let dir = tempfile::tempdir().unwrap();
     let kb = dir.path().join("vault");
     let repo = dir.path().join("repo");
+    assert!(source.is_dir(), "no such folder: {}", source.display());
     copy_dir(&source, &kb);
+    let before = fingerprints(&kb);
     std::fs::create_dir_all(&repo).unwrap();
     let paths = Paths::resolve(&Overrides {
         config_file: Some(dir.path().join("c.toml")),
@@ -484,40 +512,48 @@ fn real_vault_round_trip() {
         planned.plan.entries.len(),
         planned.plan.attachments.len()
     );
-    println!("{} scan issues", planned.scan_issues.len());
-    for issue in &planned.scan_issues {
-        println!("  {}: {}", issue.path.display(), issue.message);
-    }
+    let (unresolved, other_issues): (Vec<_>, Vec<_>) = planned
+        .scan_issues
+        .iter()
+        .partition(|issue| issue.message.starts_with("link target not found"));
+    let other_issues: Vec<String> = other_issues
+        .iter()
+        .map(|issue| format!("{}: {}", issue.path.display(), issue.message))
+        .collect();
+    println!("{} links without a target in the vault", unresolved.len());
+    println!("{} other scan issues", other_issues.len());
+    print_some(&other_issues);
     let report = engine.apply(&pair, &planned.plan).unwrap();
     println!(
         "{} written, {} skipped",
         report.written.len(),
         report.skipped.len()
     );
-    for skipped in &report.skipped {
-        println!("  skipped {}: {}", skipped.path, skipped.reason);
-    }
+    let skipped: Vec<String> = report
+        .skipped
+        .iter()
+        .map(|skipped| format!("{}: {}", skipped.path, skipped.reason))
+        .collect();
+    print_some(&skipped);
 
-    let mut changed = Vec::new();
-    for file in DiskFs.list(&source).unwrap() {
-        if DiskFs.read(&source.join(&file)).unwrap() != DiskFs.read(&kb.join(&file)).unwrap() {
-            changed.push(file);
-        }
-    }
+    let after = fingerprints(&kb);
+    let changed: Vec<String> = before
+        .keys()
+        .chain(after.keys())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .filter(|file| before.get(*file) != after.get(*file))
+        .map(|file| file.display().to_string())
+        .collect();
     println!("{} vault files changed by the sync", changed.len());
-    for file in &changed {
-        println!("  {}", file.display());
-    }
+    print_some(&changed);
 
     let again = engine.plan(&pair).unwrap().plan;
     println!("{} entries left after the sync", again.entries.len());
-    for entry in &again.entries {
-        println!("  {}", entry.path);
-    }
+    let left: Vec<String> = again.entries.iter().map(|e| e.path.to_string()).collect();
+    print_some(&left);
     let broken = broken_links(&repo);
     println!("{} broken links on the repo side", broken.len());
-    for link in &broken {
-        println!("  {link}");
-    }
+    print_some(&broken);
     assert!(changed.is_empty() && again.is_empty());
 }

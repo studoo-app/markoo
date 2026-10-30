@@ -13,7 +13,12 @@ const NOTES: &[&str] = &[
     "Projets/Clara/sub/twin.md",
     "Réunions/March 12.md",
 ];
-const ATTACHMENTS: &[&str] = &["attachments/schema.png", "attachments/spec.pdf"];
+const ATTACHMENTS: &[&str] = &[
+    "attachments/schema.png",
+    "attachments/spec.pdf",
+    "Media/a/logo.png",
+    "Media/b/logo.png",
+];
 const FROM: &str = "architecture.md";
 
 fn index() -> NameIndex {
@@ -283,6 +288,134 @@ fn links_setting_keep_leaves_wikilinks() {
     );
 }
 
+// --- Links written from the vault root --------------------------------------------------
+
+#[test]
+fn link_from_the_vault_root_becomes_relative() {
+    let text = "[stack](Projets/Clara/adr/001-stack.md)\n";
+    assert_eq!(
+        to(text),
+        "[stack](./adr/001-stack.md)<!--markoo:[stack](Projets/Clara/adr/001-stack.md)-->\n"
+    );
+}
+
+#[test]
+fn link_from_the_vault_root_comes_back_as_written() {
+    let text = "[stack](Projets/Clara/adr/001-stack.md)\n";
+    assert_eq!(back(&to(text)), text);
+}
+
+#[test]
+fn encoded_link_from_the_vault_root_is_found() {
+    assert_eq!(
+        to("[c](Projets/Clara/Caf%C3%A9%20Notes.md)\n"),
+        "[c](./Café%20Notes.md)<!--markoo:[c](Projets/Clara/Caf%C3%A9%20Notes.md)-->\n"
+    );
+}
+
+#[test]
+fn anchor_of_a_link_from_the_vault_root_follows_github() {
+    assert_eq!(
+        to("[s](Projets/Clara/adr/001-stack.md#Mon%20Titre)\n"),
+        "[s](./adr/001-stack.md#mon-titre)<!--markoo:[s](Projets/Clara/adr/001-stack.md#Mon%20Titre)-->\n"
+    );
+}
+
+#[test]
+fn link_from_the_vault_root_outside_the_pair_becomes_text() {
+    assert_eq!(
+        to("[march](Réunions/March%2012.md)\n"),
+        "march<!--markoo:[march](Réunions/March%2012.md)-->\n"
+    );
+}
+
+#[test]
+fn embedded_note_from_the_vault_root_becomes_a_plain_link() {
+    assert_eq!(
+        to("![stack](Projets/Clara/adr/001-stack.md)\n"),
+        "[stack](./adr/001-stack.md)<!--markoo:![stack](Projets/Clara/adr/001-stack.md)-->\n"
+    );
+}
+
+#[test]
+fn image_from_the_vault_root_goes_to_the_assets_folder() {
+    assert_eq!(
+        to("![](attachments/schema.png)\n"),
+        "![](./assets/schema.png)<!--markoo:![](attachments/schema.png)-->\n"
+    );
+}
+
+#[test]
+fn link_to_a_file_from_the_vault_root_goes_to_the_assets_folder() {
+    assert_eq!(
+        to("[spec](attachments/spec.pdf#page=2)\n"),
+        "[spec](./assets/spec.pdf#page=2)<!--markoo:[spec](attachments/spec.pdf#page=2)-->\n"
+    );
+}
+
+#[test]
+fn linked_file_is_listed_as_an_asset() {
+    let (path, index) = (EntryPath::from_relative(Path::new(FROM)).unwrap(), index());
+    let ctx = ConvertCtx {
+        path: &path,
+        index: &index,
+    };
+    assert_eq!(
+        ObsidianAdapter::default().referenced_assets("[spec](./assets/spec.pdf#page=2)\n", &ctx),
+        vec!["spec.pdf".to_owned()]
+    );
+}
+
+#[test]
+fn image_with_an_ambiguous_name_is_left_alone() {
+    let text = "![logo](Media/a/logo.png)\n";
+    assert_eq!(to(text), text);
+}
+
+#[test]
+fn file_next_to_the_note_wins_over_the_vault_root() {
+    let text = "[twin](sub/twin.md)\n";
+    let (path, index) = (
+        EntryPath::from_relative(Path::new(FROM)).unwrap(),
+        NameIndex::for_tests(
+            &[
+                "Projets/Clara/architecture.md",
+                "Projets/Clara/sub/twin.md",
+                "sub/twin.md",
+            ],
+            &[],
+            "Projets/Clara",
+        ),
+    );
+    let ctx = ConvertCtx {
+        path: &path,
+        index: &index,
+    };
+    assert_eq!(
+        ObsidianAdapter::default().to_canonical(text, &ctx).unwrap(),
+        text
+    );
+}
+
+#[test]
+fn explicitly_relative_link_is_not_looked_up_from_the_root() {
+    let text = "[x](./Réunions/March%2012.md)\n";
+    assert_eq!(to(text), text);
+}
+
+#[test]
+fn unknown_path_is_left_alone() {
+    let text = "[x](Nowhere/note.md)\n";
+    assert_eq!(to(text), text);
+}
+
+#[test]
+fn edited_link_from_the_vault_root_wins_over_the_comment() {
+    let edited =
+        "[renamed](./adr/001-stack.md)<!--markoo:[stack](Projets/Clara/adr/001-stack.md)-->\n";
+    assert_eq!(back(edited), "[[001-stack|renamed]]\n");
+}
+
 // --- Edits on the repo side -----------------------------------------------------------
 
 #[test]
@@ -497,6 +630,11 @@ fn fragment() -> impl Strategy<Value = String> {
         Just("[other](architecture.md)".to_owned()),
         Just("[site](https://example.com)".to_owned()),
         Just("![pic](../../attachments/schema.png)".to_owned()),
+        Just("![pic](attachments/schema.png)".to_owned()),
+        Just("[stack](Projets/Clara/adr/001-stack.md)".to_owned()),
+        Just("[march](Réunions/March%2012.md#Sujet)".to_owned()),
+        Just("![](Projets/Clara/adr/001-stack.md)".to_owned()),
+        Just("[spec](attachments/spec.pdf#page=2)".to_owned()),
         Just("`[[architecture]]`".to_owned()),
         Just("%% [[architecture]] %%".to_owned()),
         Just("plain text".to_owned()),
