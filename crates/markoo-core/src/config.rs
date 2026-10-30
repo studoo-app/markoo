@@ -12,7 +12,7 @@ use serde::Deserialize;
 use toml_edit::{Array, ArrayOfTables, DocumentMut, Item, Table, value};
 
 use crate::fs::{DiskFs, Fs, FsError};
-use crate::kb::{self, KbType};
+use crate::kb::KbType;
 use crate::pair::{Direction, Pair, TargetChanges};
 
 /// Content of a newly created configuration file.
@@ -82,9 +82,35 @@ struct RawPair {
     target_changes: TargetChanges,
     #[serde(default)]
     paused: bool,
-    transform: Option<toml::Value>,
-    kb_options: Option<toml::Value>,
+    transform: Option<RawTransform>,
+    kb_options: Option<toml::Table>,
     hooks: Option<toml::Value>,
+}
+
+/// `[pair.transform]`
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTransform {
+    links: Option<LinksMode>,
+    filenames: Option<String>,
+    assets_dir: Option<String>,
+    frontmatter: Option<FrontmatterMode>,
+    strip_comments: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum LinksMode {
+    Markdown,
+    Keep,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum FrontmatterMode {
+    Keep,
+    Filter,
+    Drop,
 }
 
 #[derive(Debug, Deserialize)]
@@ -102,6 +128,8 @@ pub struct PairEntry {
     pub kb_type_explicit: bool,
     /// Options accepted in the file but not honored yet.
     pub not_implemented: Vec<String>,
+    /// Keys of `[pair.kb_options]` the adapter does not know.
+    pub unknown_options: Vec<String>,
 }
 
 /// A parsed configuration.
@@ -201,8 +229,11 @@ impl Config {
 
 impl PairEntry {
     fn from_raw(raw: RawPair) -> Result<Self, ConfigError> {
+        let kb = expand_home(&raw.kb);
         let kb_type = match raw.kb_type.as_deref() {
-            None | Some("markdown") => KbType::Markdown,
+            None => KbType::detect(&kb),
+            Some("markdown") => KbType::Markdown,
+            Some("obsidian") => KbType::Obsidian,
             Some(other) => {
                 return Err(ConfigError::UnsupportedKbType {
                     pair: raw.name,
@@ -214,16 +245,53 @@ impl PairEntry {
         if raw.conflict.as_deref().is_some_and(|c| c != "ask") {
             not_implemented.push("conflict (conflicts are always put on hold)".to_owned());
         }
-        for (key, table) in [
-            ("transform", &raw.transform),
-            ("kb_options", &raw.kb_options),
-            ("hooks", &raw.hooks),
-        ] {
-            if table.is_some() {
-                not_implemented.push(key.to_owned());
+        if raw.hooks.is_some() {
+            not_implemented.push("hooks".to_owned());
+        }
+        let mut pair = Pair::new(raw.name, kb, expand_home(&raw.repo));
+        if let Some(transform) = raw.transform {
+            if transform
+                .filenames
+                .as_deref()
+                .is_some_and(|f| f != "preserve")
+            {
+                not_implemented.push("transform.filenames".to_owned());
+            }
+            if transform.strip_comments == Some(true) {
+                not_implemented.push("transform.strip_comments".to_owned());
+            }
+            if let Some(links) = transform.links {
+                pair.kb_options.convert_links = links == LinksMode::Markdown;
+            }
+            if let Some(assets_dir) = transform.assets_dir {
+                pair.assets_dir = assets_dir;
+            }
+            match transform.frontmatter {
+                Some(FrontmatterMode::Keep) => pair.kb_options.frontmatter_drop.clear(),
+                Some(FrontmatterMode::Drop) => pair.kb_options.frontmatter_drop_all = true,
+                Some(FrontmatterMode::Filter) | None => {}
             }
         }
-        let mut pair = Pair::new(raw.name, expand_home(&raw.kb), expand_home(&raw.repo));
+        let mut unknown_options = Vec::new();
+        for (key, value) in raw.kb_options.iter().flatten() {
+            match (key.as_str(), value) {
+                ("callouts", toml::Value::String(mode)) => {
+                    pair.kb_options.convert_callouts = mode != "keep";
+                }
+                ("inline_embeds", toml::Value::Boolean(inline)) => {
+                    if *inline {
+                        not_implemented.push("kb_options.inline_embeds".to_owned());
+                    }
+                }
+                ("frontmatter_drop", toml::Value::Array(keys)) => {
+                    pair.kb_options.frontmatter_drop = keys
+                        .iter()
+                        .filter_map(|key| key.as_str().map(str::to_owned))
+                        .collect();
+                }
+                _ => unknown_options.push(key.clone()),
+            }
+        }
         pair.kb_type = kb_type;
         pair.direction = raw.direction;
         pair.target_changes = raw.target_changes;
@@ -236,6 +304,7 @@ impl PairEntry {
             pair,
             kb_type_explicit: raw.kb_type.is_some(),
             not_implemented,
+            unknown_options,
         })
     }
 
@@ -255,14 +324,20 @@ impl PairEntry {
         if nested(&self.pair.kb, &self.pair.repo) {
             error("the kb and repo folders overlap".to_owned());
         }
-        if !self.kb_type_explicit {
-            if let Some(tool) = kb::detect_unsupported(&self.pair.kb) {
-                error(format!(
-                    "this folder is in a {tool} knowledge base, whose adapter is not available \
-                     yet; set kb_type = \"markdown\" to sync it as plain Markdown, without \
-                     converting links"
-                ));
-            }
+        if self.pair.kb_type == KbType::Obsidian
+            && self.pair.kb.is_dir()
+            && KbType::detect(&self.pair.kb) != KbType::Obsidian
+        {
+            error(
+                "kb_type is \"obsidian\" but this folder is not in a vault (no .obsidian folder)"
+                    .to_owned(),
+            );
+        }
+        if crate::entry::EntryPath::from_relative(Path::new(&self.pair.assets_dir)).is_none() {
+            error(format!(
+                "assets_dir must stay inside the repo folder: {}",
+                self.pair.assets_dir
+            ));
         }
 
         let mut warning = |message: String| {
@@ -280,6 +355,9 @@ impl PairEntry {
         }
         if self.pair.repo.is_dir() && !in_git_repository(&self.pair.repo) {
             warning("the repo folder is not inside a Git repository".to_owned());
+        }
+        for option in &self.unknown_options {
+            warning(format!("kb_options.{option}: unknown option, ignored"));
         }
         for option in &self.not_implemented {
             warning(format!("{option}: not implemented yet, ignored"));
@@ -545,7 +623,7 @@ exclude = ["drafts/**"]
 
     #[test]
     fn unavailable_kb_type_is_refused_with_a_hint() {
-        let text = "[[pair]]\nname='a'\nkb='/k'\nkb_type='obsidian'\nrepo='/r'\n";
+        let text = "[[pair]]\nname='a'\nkb='/k'\nkb_type='logseq'\nrepo='/r'\n";
         assert!(matches!(
             Config::parse(text),
             Err(ConfigError::UnsupportedKbType { .. })
@@ -554,10 +632,49 @@ exclude = ["drafts/**"]
 
     #[test]
     fn options_not_implemented_are_reported() {
-        let text = "[[pair]]\nname='a'\nkb='/k'\nrepo='/r'\n[pair.transform]\nlinks='keep'\n";
+        let text = "[[pair]]\nname='a'\nkb='/k'\nrepo='/r'\n[pair.transform]\nfilenames='kebab'\n";
         assert_eq!(
             Config::parse(text).unwrap().pairs[0].not_implemented,
-            vec!["transform".to_owned()]
+            vec!["transform.filenames".to_owned()]
+        );
+    }
+
+    #[test]
+    fn transform_options_apply() {
+        let text = "[[pair]]\nname='a'\nkb='/k'\nrepo='/r'\n[pair.transform]\nlinks='keep'\nassets_dir='img'\nfrontmatter='drop'\n";
+        let pair = &Config::parse(text).unwrap().pairs[0].pair;
+        assert_eq!(
+            (
+                pair.kb_options.convert_links,
+                pair.assets_dir.as_str(),
+                pair.kb_options.frontmatter_drop_all
+            ),
+            (false, "img", true)
+        );
+    }
+
+    #[test]
+    fn typo_in_a_transform_option_is_refused() {
+        let text = "[[pair]]\nname='a'\nkb='/k'\nrepo='/r'\n[pair.transform]\nlink='keep'\n";
+        assert!(matches!(Config::parse(text), Err(ConfigError::Invalid(_))));
+    }
+
+    #[test]
+    fn kb_options_apply() {
+        let text = "[[pair]]\nname='a'\nkb='/k'\nrepo='/r'\n[pair.kb_options]\ncallouts='keep'\nfrontmatter_drop=['x']\n";
+        let options = &Config::parse(text).unwrap().pairs[0].pair.kb_options;
+        assert_eq!(
+            (options.convert_callouts, options.frontmatter_drop.clone()),
+            (false, vec!["x".to_owned()])
+        );
+    }
+
+    #[test]
+    fn unknown_kb_option_is_reported() {
+        let text = "[[pair]]\nname='a'\nkb='/k'\nrepo='/r'\n[pair.kb_options]\nnope=1\n";
+        assert_eq!(
+            Config::parse(text).unwrap().pairs[0].unknown_options,
+            vec!["nope".to_owned()]
         );
     }
 
@@ -615,7 +732,7 @@ exclude = ["drafts/**"]
     }
 
     #[test]
-    fn obsidian_vault_without_kb_type_is_an_error() {
+    fn obsidian_vault_is_detected_from_a_subfolder() {
         let dir = tempfile::tempdir().unwrap();
         folders(dir.path(), &["vault/.obsidian", "vault/notes", "repo"]);
         let text = pair_text(
@@ -623,18 +740,46 @@ exclude = ["drafts/**"]
             &dir.path().join("vault/notes"),
             &dir.path().join("repo"),
         );
-        assert!(!Config::parse(&text).unwrap().validate().is_ok("a"));
+        assert_eq!(
+            Config::parse(&text).unwrap().pairs[0].pair.kb_type,
+            KbType::Obsidian
+        );
     }
 
     #[test]
-    fn obsidian_vault_as_explicit_markdown_is_accepted() {
+    fn obsidian_vault_can_be_forced_to_plain_markdown() {
         let dir = tempfile::tempdir().unwrap();
         folders(dir.path(), &["vault/.obsidian", "repo"]);
         let text = format!(
             "{}kb_type = 'markdown'\n",
             pair_text("a", &dir.path().join("vault"), &dir.path().join("repo"))
         );
-        assert!(Config::parse(&text).unwrap().validate().is_ok("a"));
+        assert_eq!(
+            Config::parse(&text).unwrap().pairs[0].pair.kb_type,
+            KbType::Markdown
+        );
+    }
+
+    #[test]
+    fn obsidian_type_outside_a_vault_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        folders(dir.path(), &["kb", "repo"]);
+        let text = format!(
+            "{}kb_type = 'obsidian'\n",
+            pair_text("a", &dir.path().join("kb"), &dir.path().join("repo"))
+        );
+        assert!(!Config::parse(&text).unwrap().validate().is_ok("a"));
+    }
+
+    #[test]
+    fn assets_dir_cannot_leave_the_repo() {
+        let dir = tempfile::tempdir().unwrap();
+        folders(dir.path(), &["kb", "repo"]);
+        let text = format!(
+            "{}[pair.transform]\nassets_dir = '../outside'\n",
+            pair_text("a", &dir.path().join("kb"), &dir.path().join("repo"))
+        );
+        assert!(!Config::parse(&text).unwrap().validate().is_ok("a"));
     }
 
     #[test]

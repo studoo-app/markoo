@@ -9,8 +9,9 @@ use std::process::Command as Process;
 use anyhow::{Context, Result, bail};
 use markoo_core::config::{Config, ConfigError, ConfigFile, NewPair, PairEntry, expand_home};
 use markoo_core::fs::{DiskFs, Fs};
+use markoo_core::kb::KbType;
 use markoo_core::paths::{Overrides, Paths};
-use markoo_core::plan::{Action, PlannedEntry};
+use markoo_core::plan::{Action, AttachmentAction, PlannedAttachment, PlannedEntry};
 use markoo_core::state::IssueKind;
 use markoo_core::{Direction, Engine, EntryPath, Pair, Report, Resolution, Side, TargetChanges};
 use serde_json::{Value, json};
@@ -162,11 +163,13 @@ impl Ctx {
                             "direction": pair.direction,
                             "paused": pair.paused,
                             "entries": visible.iter().map(|e| entry_json(e)).collect::<Vec<_>>(),
+                            "attachments": planned.plan.attachments,
                             "scan_issues": planned.scan_issues,
                         }));
                     } else {
                         self.pair_header(&pair);
                         self.print_entries(&visible);
+                        self.print_attachments(&planned.plan.attachments);
                         for issue in &planned.scan_issues {
                             self.warn(&format!("{}: {}", issue.path.display(), issue.message));
                         }
@@ -236,6 +239,7 @@ impl Ctx {
                     "dry_run": outcome.report.is_none(),
                     "direction_changed": outcome.direction_changed,
                     "entries": visible.iter().map(|e| entry_json(e)).collect::<Vec<_>>(),
+                    "attachments": outcome.planned.plan.attachments,
                     "report": outcome.report,
                     "scan_issues": outcome.planned.scan_issues,
                 }));
@@ -243,6 +247,7 @@ impl Ctx {
             }
             self.pair_header(&pair);
             self.print_entries(&visible);
+            self.print_attachments(&outcome.planned.plan.attachments);
             for issue in &outcome.planned.scan_issues {
                 self.warn(&format!("{}: {}", issue.path.display(), issue.message));
             }
@@ -465,6 +470,10 @@ impl Ctx {
     fn add_pair(&self, mut new: NewPair) -> Result<()> {
         new.kb = absolute(&new.kb)?;
         new.repo = absolute(&new.repo)?;
+        if new.kb_type.is_none() {
+            // Written down so that the behavior does not change afterwards.
+            new.kb_type = Some(KbType::detect(&expand_home(&new.kb)).id().to_owned());
+        }
         if !self.config_exists()? {
             ConfigFile::create(self.paths.config_file())?;
         }
@@ -529,7 +538,7 @@ impl Ctx {
         let pair = &entry.pair;
         println!("{}", self.style.bold(&pair.name));
         println!("  kb              {}", pair.kb.display());
-        println!("  kb_type         {}", pair.kb_type.adapter_id());
+        println!("  kb_type         {}", pair.kb_type.id());
         println!("  repo            {}", pair.repo.display());
         println!("  direction       {}", direction_value(pair.direction));
         println!(
@@ -635,8 +644,28 @@ impl Ctx {
             self.style.bold(&pair.name),
             pair.kb.display(),
             pair.repo.display(),
-            self.style.dim(&format!("[{}]", pair.kb_type.adapter_id())),
+            self.style.dim(&format!("[{}]", pair.kb_type.id())),
         );
+    }
+
+    fn print_attachments(&self, attachments: &[PlannedAttachment]) {
+        for attachment in attachments {
+            let name = &attachment.name;
+            match &attachment.action {
+                AttachmentAction::Copy { to: Side::Repo, .. } => {
+                    println!("  {} {name}", self.style.green("→"));
+                }
+                AttachmentAction::Copy { to: Side::Kb, .. } => {
+                    println!("  {} {name}", self.style.green("←"));
+                }
+                AttachmentAction::Conflict => println!(
+                    "  {} {name}  {}",
+                    self.style.red("!"),
+                    self.style.red("attachment changed on both sides")
+                ),
+                AttachmentAction::Record { .. } => {}
+            }
+        }
     }
 
     fn print_entries(&self, entries: &[&PlannedEntry]) {
@@ -687,6 +716,11 @@ impl Ctx {
     }
 
     fn print_report(&self, report: &Report) {
+        for name in &report.attachment_conflicts {
+            self.warn(&format!(
+                "attachment {name} changed on both sides; left alone"
+            ));
+        }
         for skipped in &report.skipped {
             self.report_error(&format!("{}: {}", skipped.path, skipped.reason));
         }

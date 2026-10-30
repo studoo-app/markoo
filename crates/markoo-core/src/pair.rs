@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::entry::{EntryPath, Side};
 use crate::fs::TMP_SUFFIX;
-use crate::kb::KbType;
+use crate::kb::{KbOptions, KbType};
 
 /// Patterns ignored on both sides of every pair, whatever the configuration.
 const ALWAYS_EXCLUDED: &[&str] = &["**/.git/**", "**/node_modules/**"];
@@ -68,6 +68,10 @@ pub struct Pair {
     pub exclude: Vec<String>,
     /// A paused pair is skipped by every sync.
     pub paused: bool,
+    /// Folder of the attachments on the repo side, relative to its root.
+    pub assets_dir: String,
+    /// Options of the knowledge base adapter.
+    pub kb_options: KbOptions,
 }
 
 impl Pair {
@@ -83,6 +87,8 @@ impl Pair {
             include: vec!["**/*.md".to_owned()],
             exclude: Vec::new(),
             paused: false,
+            assets_dir: "assets".to_owned(),
+            kb_options: KbOptions::default(),
         }
     }
 

@@ -30,7 +30,9 @@ flowchart LR
     FM --> OUT[Texte cible]
 ```
 
-**Règle d'or**, pour chaque adaptateur comme pour `gfm` : `to_canonical(from_canonical(x)) == x` pour tout texte canonique, et `from_canonical(to_canonical(y)) == y` pour tout fichier de la KB (aller-retour sans perte). Quand une construction ne peut pas être convertie proprement, Markoo la **laisse telle quelle** plutôt que de perdre de l'information.
+**Règle d'or**, pour chaque adaptateur comme pour `gfm` : un fichier de la KB revient à l'octet près, `from_canonical(to_canonical(y)) == y`, et ce que produit `from_canonical` est stable, `to_canonical(from_canonical(x)) == x` pour le texte canonique produit par Markoo. Un texte écrit à la main côté repo peut être normalisé une fois (par exemple `> [!note]` devient `> [!NOTE]`), puis il ne change plus. Quand une construction ne peut pas être convertie proprement, Markoo la **laisse telle quelle** plutôt que de perdre de l'information.
+
+**Une seule règle couvre toutes les conversions.** Chaque construction a un rendu canonique, et chaque rendu a une forme Obsidian *par défaut*. Quand l'original est cette forme par défaut, le texte canonique est le rendu seul, et le repo reste propre : `[[Note]]` ↔ `[Note](./note.md)`. Sinon, l'original est conservé à côté, dans un commentaire invisible : `[Note](./adr/note.md)<!--markoo:[[adr/Note]]-->`. Au retour, un commentaire n'est suivi que si le texte qui le précède est toujours le rendu de ce qu'il contient ; si quelqu'un a modifié ce texte côté repo, sa modification l'emporte et le commentaire disparaît. Ces commentaires restent dans les fichiers du repo : GitHub ne les affiche pas.
 
 Les options **génériques** se règlent dans `[pair.transform]` (`links`, `filenames`, `assets_dir`, `frontmatter`, `strip_comments`) ; les options **propres à un adaptateur** dans `[pair.kb_options]` (voir [Configuration](06-configuration.md)).
 
@@ -46,7 +48,7 @@ flowchart LR
         V3["[[Architecture#Base de données]]"]
         V4["![[schema.png]]"]
         V5["![[Autre note]]"]
-        V6["> [!warning] Attention"]
+        V6["> [!warning]<br/>> Attention"]
     end
     subgraph Repo["Forme canonique / repo (GFM)"]
         R1["[Architecture](./architecture.md)"]
@@ -108,7 +110,8 @@ flowchart TD
 - Le dossier de destination côté repo est configurable (`assets_dir`, par défaut `assets/` à la racine de la paire).
 - Côté vault, une nouvelle image ajoutée dans le repo est copiée dans le dossier de pièces jointes configuré dans Obsidian (lu depuis `.obsidian/app.json`), ou à défaut à côté de la note.
 - `![[image.png|300]]` (taille) devient `<img src="./assets/image.png" width="300">`.
-- `![[Autre note]]` (transclusion de note) : par défaut, un lien plus un commentaire `markoo:embed` ; l'option `inline_embeds = true` (dans `[pair.kb_options]`) insère le contenu entre deux marqueurs.
+- `![[Autre note]]` (transclusion de note) : un lien, avec l'original conservé dans un commentaire. L'option `inline_embeds = true` (dans `[pair.kb_options]`), qui insérerait le contenu entre deux marqueurs, n'est pas encore implémentée.
+- Les pièces jointes sont **copiées, jamais supprimées** : retirer une référence laisse le fichier en place des deux côtés. Une pièce jointe modifiée des deux côtés est signalée et laissée telle quelle.
 
 ## 3. Callouts
 
@@ -137,7 +140,7 @@ flowchart LR
 
 - Par défaut, les clés propres à Obsidian (`cssclasses`, `aliases`, `publish`) sont **retirées** côté repo, et les autres sont conservées. Cette liste par défaut est propre à l'adaptateur et se règle dans `[pair.kb_options]` (`frontmatter_drop`).
 - Une clé retirée côté repo est **restituée** côté vault au retour : elle ne disparaît jamais.
-- La fusion du frontmatter se fait **clé par clé** ; pour les listes (`tags`), on fusionne l'ensemble des valeurs.
+- Le frontmatter est pour l'instant fusionné ligne par ligne, comme le reste du fichier. La fusion **clé par clé**, et par ensemble de valeurs pour les listes (`tags`), est prévue.
 - Option générique `frontmatter = "drop"` (dans `[pair.transform]`) pour un repo qui n'en veut pas du tout.
 
 ## 5. Noms de fichiers
@@ -147,7 +150,7 @@ Obsidian accepte espaces, accents et majuscules (`Décision Stockage.md`) ; beau
 | Mode (`filenames`, option générique de `[pair.transform]`) | Comportement |
 |--------------------|--------------|
 | `preserve` (défaut) | Même nom des deux côtés |
-| `kebab` | `Décision Stockage.md` ↔ `decision-stockage.md` ; la correspondance est mémorisée dans la base |
+| `kebab` (pas encore implémenté) | `Décision Stockage.md` ↔ `decision-stockage.md` ; la correspondance est mémorisée dans la base |
 
 En mode `kebab`, le titre d'origine est conservé (premier titre `#` ou clé `title` du frontmatter), ce qui permet de recréer le bon nom côté vault.
 

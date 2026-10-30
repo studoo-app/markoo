@@ -222,11 +222,11 @@ fn pair_add_refuses_a_repo_inside_the_kb() {
 }
 
 #[test]
-fn pair_add_refuses_an_obsidian_vault_without_explicit_type() {
+fn pair_add_detects_an_obsidian_vault() {
     let env = Env::new();
     std::fs::create_dir_all(env.kb().join(".obsidian")).unwrap();
     let (kb, repo) = (env.kb(), env.repo());
-    let args = [
+    env.ok(&[
         "pair",
         "add",
         "x",
@@ -234,8 +234,29 @@ fn pair_add_refuses_an_obsidian_vault_without_explicit_type() {
         kb.to_str().unwrap(),
         "--repo",
         repo.to_str().unwrap(),
-    ];
-    assert!(env.fails(&args).contains("Obsidian"));
+    ]);
+    assert_eq!(env.json(&["pair", "show", "x"])["kb_type"], "obsidian");
+}
+
+#[test]
+fn detected_type_is_written_to_the_file() {
+    let env = Env::new();
+    std::fs::create_dir_all(env.kb().join(".obsidian")).unwrap();
+    let (kb, repo) = (env.kb(), env.repo());
+    env.ok(&[
+        "pair",
+        "add",
+        "x",
+        "--kb",
+        kb.to_str().unwrap(),
+        "--repo",
+        repo.to_str().unwrap(),
+    ]);
+    assert!(
+        std::fs::read_to_string(env.config())
+            .unwrap()
+            .contains("kb_type = \"obsidian\"")
+    );
 }
 
 #[test]
@@ -692,4 +713,94 @@ mod editor {
 fn paths_reports_the_override() {
     let env = Env::new();
     assert_eq!(env.json(&["paths"])["data"]["source"], "argument");
+}
+
+// --- Obsidian -------------------------------------------------------------------------
+
+fn vault() -> Env {
+    let env = Env::new();
+    std::fs::create_dir_all(env.kb().join(".obsidian")).unwrap();
+    env.ok(&["init"]);
+    let (kb, repo) = (env.kb(), env.repo());
+    env.ok(&[
+        "pair",
+        "add",
+        "clara",
+        "--kb",
+        kb.to_str().unwrap(),
+        "--repo",
+        repo.to_str().unwrap(),
+    ]);
+    env
+}
+
+#[test]
+fn wikilinks_reach_the_repo_as_markdown_links() {
+    let env = vault();
+    env.write(&env.kb(), "a.md", "See [[b]].\n");
+    env.write(&env.kb(), "b.md", "B\n");
+    env.ok(&["sync"]);
+    assert_eq!(
+        env.read(&env.repo(), "a.md").as_deref(),
+        Some("See [b](./b.md).\n")
+    );
+}
+
+#[test]
+fn repo_edit_reaches_the_vault_as_wikilinks() {
+    let env = vault();
+    env.write(&env.kb(), "a.md", "See [[b]].\n");
+    env.write(&env.kb(), "b.md", "B\n");
+    env.ok(&["sync"]);
+    env.write(&env.repo(), "a.md", "Read [b](./b.md).\n");
+    env.ok(&["sync"]);
+    assert_eq!(
+        env.read(&env.kb(), "a.md").as_deref(),
+        Some("Read [[b]].\n")
+    );
+}
+
+#[test]
+fn obsidian_pair_settles_after_a_sync() {
+    let env = vault();
+    env.write(
+        &env.kb(),
+        "a.md",
+        "---\naliases: [x]\n---\n[[b]] ![[pic.png]]\n\n> [!info]\n> Hi\n",
+    );
+    env.write(&env.kb(), "b.md", "B\n");
+    env.write(&env.kb(), "pic.png", "png");
+    env.ok(&["sync"]);
+    assert!(env.ok(&["status"]).contains("Up to date"));
+}
+
+#[test]
+fn attachments_are_copied_to_the_assets_folder() {
+    let env = vault();
+    env.write(&env.kb(), "a.md", "![[pic.png]]\n");
+    env.write(&env.kb(), "pic.png", "png");
+    env.ok(&["sync"]);
+    assert_eq!(
+        env.read(&env.repo(), "assets/pic.png").as_deref(),
+        Some("png")
+    );
+}
+
+#[test]
+fn obsidian_settings_folder_is_never_synced() {
+    let env = vault();
+    env.write(&env.kb(), ".obsidian/notes.md", "secret\n");
+    env.ok(&["sync"]);
+    assert_eq!(env.read(&env.repo(), ".obsidian/notes.md"), None);
+}
+
+#[test]
+fn untouched_vault_file_is_not_rewritten() {
+    let env = vault();
+    let text = "[[adr/b]] [x](b.md)\n%% note %%\n";
+    env.write(&env.kb(), "a.md", text);
+    env.write(&env.kb(), "adr/b.md", "B\n");
+    env.ok(&["sync"]);
+    env.ok(&["sync"]);
+    assert_eq!(env.read(&env.kb(), "a.md").as_deref(), Some(text));
 }

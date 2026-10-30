@@ -30,7 +30,9 @@ flowchart LR
     FM --> OUT[Target text]
 ```
 
-**Golden rule**, for every adapter as well as for `gfm`: `to_canonical(from_canonical(x)) == x` for any canonical text, and `from_canonical(to_canonical(y)) == y` for any KB file (lossless round trip). When a construct can't be converted cleanly, Markoo **leaves it as is** rather than lose information.
+**Golden rule**, for every adapter as well as for `gfm`: a KB file comes back byte for byte, `from_canonical(to_canonical(y)) == y`, and what `from_canonical` produces is stable, `to_canonical(from_canonical(x)) == x` for the canonical text Markoo produces. Text written by hand on the repo side may be normalized once (for example `> [!note]` becomes `> [!NOTE]`), then it no longer changes. When a construct can't be converted cleanly, Markoo **leaves it as is** rather than lose information.
+
+**One rule covers all conversions.** Each construct has a canonical rendering, and each rendering has a *default* Obsidian form. When the original is that default form, the canonical text is the rendering alone, so the repo stays clean: `[[Note]]` ↔ `[Note](./note.md)`. Otherwise the original is kept next to it, in an invisible comment: `[Note](./adr/note.md)<!--markoo:[[adr/Note]]-->`. On the way back, a comment is honored only if the text before it is still the rendering of what it contains; if someone edited that text on the repo side, the edit wins and the comment is dropped. These comments stay in the repo files: GitHub does not display them.
 
 **Generic** options are set in `[pair.transform]` (`links`, `filenames`, `assets_dir`, `frontmatter`, `strip_comments`); **adapter-specific** options go in `[pair.kb_options]` (see [Configuration](06-configuration.md)).
 
@@ -46,7 +48,7 @@ flowchart LR
         V3["[[Architecture#Database]]"]
         V4["![[schema.png]]"]
         V5["![[Other note]]"]
-        V6["> [!warning] Watch out"]
+        V6["> [!warning]<br/>> Watch out"]
     end
     subgraph Repo["Canonical / repo form (GFM)"]
         R1["[Architecture](./architecture.md)"]
@@ -108,7 +110,8 @@ flowchart TD
 - The destination folder on the repo side is configurable (`assets_dir`, `assets/` at the pair root by default).
 - On the vault side, a new image added in the repo is copied to the attachment folder configured in Obsidian (read from `.obsidian/app.json`), or next to the note otherwise.
 - `![[image.png|300]]` (size) becomes `<img src="./assets/image.png" width="300">`.
-- `![[Other note]]` (note transclusion): by default, a link plus a `markoo:embed` comment; the `inline_embeds = true` option (in `[pair.kb_options]`) inserts the content between two markers.
+- `![[Other note]]` (note transclusion): a link, with the original kept in a comment. The `inline_embeds = true` option (in `[pair.kb_options]`), which would insert the content between two markers, is not implemented yet.
+- Attachments are **copied, never deleted**: removing a reference leaves the file in place on both sides. An attachment changed on both sides is reported and left alone.
 
 ## 3. Callouts
 
@@ -137,7 +140,7 @@ flowchart LR
 
 - By default, Obsidian-specific keys (`cssclasses`, `aliases`, `publish`) are **removed** on the repo side, and the others are kept. This default list is adapter-specific and is set in `[pair.kb_options]` (`frontmatter_drop`).
 - A key removed on the repo side is **restored** on the vault side on the way back: it never disappears.
-- Frontmatter is merged **key by key**; for lists (`tags`), the sets of values are merged.
+- Frontmatter is currently merged line by line, like the rest of the file. Merging **key by key**, and the sets of values for lists (`tags`), is planned.
 - Generic option `frontmatter = "drop"` (in `[pair.transform]`) for a repo that doesn't want any frontmatter at all.
 
 ## 5. File names
@@ -147,7 +150,7 @@ Obsidian accepts spaces, accents and capitals (`Café Meeting Notes.md`); many r
 | Mode (`filenames`, generic `[pair.transform]` option) | Behavior |
 |--------------------|----------|
 | `preserve` (default) | Same name on both sides |
-| `kebab` | `Café Meeting Notes.md` ↔ `cafe-meeting-notes.md`; the mapping is stored in the base |
+| `kebab` (not implemented yet) | `Café Meeting Notes.md` ↔ `cafe-meeting-notes.md`; the mapping is stored in the base |
 
 In `kebab` mode, the original title is kept (first `#` heading or the frontmatter `title` key), so the right name can be recreated on the vault side.
 

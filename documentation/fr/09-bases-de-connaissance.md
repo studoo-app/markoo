@@ -27,10 +27,10 @@ flowchart LR
 
 La forme canonique est du **GitHub Flavored Markdown standard avec des liens relatifs**, complété par des commentaires HTML invisibles `<!--markoo:…-->` qui portent ce que GFM ne sait pas représenter (cible d'un wikilink hors de la paire, type d'origine d'un callout, référence de bloc…).
 
-**Invariant** : pour chaque adaptateur, l'aller-retour est sans perte dans les deux sens.
+**Invariant** : pour chaque adaptateur, l'aller-retour est sans perte et stable.
 
-- `to_canonical(from_canonical(x)) == x` pour tout texte canonique `x` ;
-- `from_canonical(to_canonical(y)) == y` pour tout fichier `y` de la KB.
+- `from_canonical(to_canonical(y)) == y` pour tout fichier `y` de la KB ;
+- `to_canonical(from_canonical(x)) == x` pour le texte canonique `x` produit par Markoo ; un texte écrit à la main peut être normalisé une fois, puis ne change plus.
 
 Une construction qui ne peut pas faire l'aller-retour **n'est pas convertie** : elle passe telle quelle des deux côtés. Les détails des conversions sont décrits dans [Transformations](04-transformations.md).
 
@@ -59,7 +59,7 @@ flowchart TB
 
 ### Le trait `KbAdapter`
 
-Esquisse indicative ; les signatures exactes seront fixées au jalon M3.
+Esquisse cible. L'interface actuelle est plus petite : elle couvre le dialecte, les exclusions et les pièces jointes ; la détection et la résolution des noms sont dans le module de l'adaptateur (`markoo-core::kb::obsidian`), et `KbStore` n'existe pas encore.
 
 ```rust
 /// Implémenté par chaque type de base de connaissance (module markoo-core::kb).
@@ -102,7 +102,7 @@ pub trait KbStore: Send + Sync {
 
 ### Dialecte du repo
 
-Le côté repo a lui aussi un dialecte, **`gfm`** en v1 : liens Markdown relatifs, *alerts* GitHub (`> [!NOTE]`), frontmatter YAML. Comme la forme canonique est déjà du GFM, `gfm` se limite à retirer ou restituer les commentaires `markoo` et à appliquer les options génériques de `[pair.transform]` (noms de fichiers, dossier des pièces jointes, filtrage du frontmatter). D'autres dialectes de repo (`gitlab`, `mkdocs`, `docusaurus`) pourraient être choisis par paire après la v1.
+Le côté repo a lui aussi un dialecte, **`gfm`** en v1 : liens Markdown relatifs, *alerts* GitHub (`> [!NOTE]`), frontmatter YAML. Comme la forme canonique est déjà du GFM, `gfm` est l'identité : les commentaires `markoo` restent dans les fichiers du repo, où GitHub ne les affiche pas. Les options génériques de `[pair.transform]` s'appliquent lors de la conversion côté KB. D'autres dialectes de repo (`gitlab`, `mkdocs`, `docusaurus`) pourraient être choisis par paire après la v1.
 
 ## Types de bases de connaissance pris en charge
 
@@ -148,7 +148,7 @@ Adaptateur `obsidian`, **première base de connaissance implémentée** et réf�
 - **Notes** : fichiers `*.md`. Les fichiers `.canvas` ne sont pas convertis.
 - **Exclusions fixes** : `.obsidian/` et `.trash/`, quels que soient les filtres de la paire.
 - **Pièces jointes** : une nouvelle pièce jointe venue du repo est rangée dans le dossier configuré dans Obsidian (clé `attachmentFolderPath` de `.obsidian/app.json`), ou à défaut à côté de la note.
-- **Format des nouveaux liens** : les réglages `useMarkdownLinks` et `newLinkFormat` de `.obsidian/app.json` déterminent la forme produite par `from_canonical` (wikilink ou lien Markdown, chemin le plus court ou relatif).
+- **Format des nouveaux liens** : avec `useMarkdownLinks` dans `.obsidian/app.json`, les liens venant du repo restent des liens Markdown au lieu de devenir des wikilinks. `newLinkFormat` n'est pas encore pris en compte.
 
 ### Dialecte
 

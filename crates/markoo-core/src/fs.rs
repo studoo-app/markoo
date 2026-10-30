@@ -55,6 +55,11 @@ pub trait Fs {
     fn list(&self, root: &Path) -> Result<Vec<PathBuf>, FsError>;
     /// Whether `path` is an existing folder.
     fn is_dir(&self, path: &Path) -> bool;
+    /// Whether `path` is a folder that really exists. Unlike [`Fs::is_dir`], this
+    /// is used to recognize a tool's settings folder.
+    fn has_folder(&self, path: &Path) -> bool {
+        self.is_dir(path)
+    }
     /// Reads a whole file.
     fn read(&self, path: &Path) -> Result<Vec<u8>, FsError>;
     /// Returns the file's metadata, or `None` if it does not exist.
@@ -250,6 +255,10 @@ impl Fs for MemFs {
 
     fn is_dir(&self, path: &Path) -> bool {
         !self.lock().offline.contains(path)
+    }
+
+    fn has_folder(&self, path: &Path) -> bool {
+        self.lock().files.keys().any(|file| file.starts_with(path))
     }
 
     fn read(&self, path: &Path) -> Result<Vec<u8>, FsError> {

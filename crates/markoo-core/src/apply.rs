@@ -12,9 +12,9 @@ use serde::Serialize;
 
 use crate::entry::{ContentHash, EntryPath, Side};
 use crate::fs::{Fs, FsError};
-use crate::kb::{Dialect, DialectError};
+use crate::kb::{ConvertCtx, Dialect, DialectError, NameIndex};
 use crate::pair::Pair;
-use crate::plan::{Action, Plan, PlannedEntry};
+use crate::plan::{Action, AttachmentAction, Plan, PlannedAttachment, PlannedEntry};
 use crate::scan::{ReadError, read_canonical};
 use crate::state::{BaseEntry, IssueKind, PendingIssue, State, StateError};
 
@@ -58,6 +58,8 @@ pub struct Report {
     pub not_in_source: Vec<EntryPath>,
     /// Entries skipped (changed since the scan, I/O error…).
     pub skipped: Vec<Skipped>,
+    /// Attachments changed on both sides, left alone.
+    pub attachment_conflicts: Vec<String>,
 }
 
 /// Why an entry could not be applied.
@@ -81,6 +83,7 @@ pub(crate) struct Applier<'a, F: Fs> {
     pub pair: &'a Pair,
     pub kb_dialect: &'a dyn Dialect,
     pub repo_dialect: &'a dyn Dialect,
+    pub index: &'a NameIndex,
     pub data_dir: &'a Path,
 }
 
@@ -88,7 +91,15 @@ impl<F: Fs> Applier<'_, F> {
     /// Applies a whole plan, then clears the issues it no longer contains:
     /// the user solved those by hand.
     pub fn apply(&self, plan: &Plan) -> Result<Report, StateError> {
-        let report = self.apply_entries(&plan.entries)?;
+        // Attachments first, so that notes referring to them are never ahead.
+        let mut attachments = Report::default();
+        for attachment in &plan.attachments {
+            self.apply_attachment(attachment, &mut attachments)?;
+        }
+        let mut report = self.apply_entries(&plan.entries)?;
+        report.written.extend(attachments.written);
+        report.skipped.extend(attachments.skipped);
+        report.attachment_conflicts = attachments.attachment_conflicts;
         for issue in self.state.pending(&self.pair.name)? {
             let still_pending = plan.entries.iter().any(|entry| {
                 entry.path == issue.path && matches!(entry.action, Action::Pending { .. })
@@ -98,6 +109,66 @@ impl<F: Fs> Applier<'_, F> {
             }
         }
         Ok(report)
+    }
+
+    fn apply_attachment(
+        &self,
+        attachment: &PlannedAttachment,
+        report: &mut Report,
+    ) -> Result<(), StateError> {
+        let name = &attachment.name;
+        let asset = self.index.asset_path(name);
+        let Some(entry) = EntryPath::from_relative(Path::new(&asset)) else {
+            return Ok(());
+        };
+        match &attachment.action {
+            AttachmentAction::Conflict => report.attachment_conflicts.push(name.clone()),
+            AttachmentAction::Record { hash } => {
+                self.state.put_attachment(&self.pair.name, name, hash)?;
+            }
+            AttachmentAction::Copy { to, hash } => {
+                let result = self.copy_attachment(attachment, *to, hash, &entry);
+                match result {
+                    Ok(()) => {
+                        self.state.put_attachment(&self.pair.name, name, hash)?;
+                        report.written.push(FileRef {
+                            side: *to,
+                            path: entry,
+                        });
+                    }
+                    Err(e) => report.skipped.push(Skipped {
+                        path: entry,
+                        reason: e.to_string(),
+                    }),
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn copy_attachment(
+        &self,
+        attachment: &PlannedAttachment,
+        to: Side,
+        hash: &ContentHash,
+        entry: &EntryPath,
+    ) -> Result<(), EntryError> {
+        let (source, target) = match to {
+            Side::Repo => (&attachment.kb_path, &attachment.repo_path),
+            Side::Kb => (&attachment.repo_path, &attachment.kb_path),
+        };
+        let bytes = self.fs.read(source)?;
+        if &ContentHash::of_bytes(&bytes) != hash {
+            return Err(EntryError::ChangedSinceScan);
+        }
+        if self.fs.meta(target)?.is_some() {
+            let previous = self.fs.read(target)?;
+            let run = run_id();
+            self.fs
+                .write_atomic(&self.keep_dir("backups", to, &run, entry), &previous)?;
+        }
+        self.fs.write_atomic(target, &bytes)?;
+        Ok(())
     }
 
     /// Applies some entries, leaving the other pending issues as they are.
@@ -215,7 +286,11 @@ impl<F: Fs> Applier<'_, F> {
 
     fn ensure_unchanged(&self, entry: &PlannedEntry, side: Side) -> Result<(), EntryError> {
         let absolute = entry.path.under(self.pair.root(side));
-        let current = match read_canonical(self.fs, &absolute, self.dialect(side)) {
+        let ctx = ConvertCtx {
+            path: &entry.path,
+            index: self.index,
+        };
+        let current = match read_canonical(self.fs, &absolute, self.dialect(side), &ctx) {
             Ok(content) => content.map(|c| ContentHash::of(&c)),
             Err(ReadError::Fs(e)) => return Err(e.into()),
             Err(ReadError::Invalid(message)) => return Err(EntryError::Unreadable(message)),
@@ -240,7 +315,11 @@ impl<F: Fs> Applier<'_, F> {
             self.fs
                 .write_atomic(&self.keep_dir("backups", side, run, path), &previous)?;
         }
-        let text = self.dialect(side).from_canonical(canonical)?;
+        let ctx = ConvertCtx {
+            path,
+            index: self.index,
+        };
+        let text = self.dialect(side).from_canonical(canonical, &ctx)?;
         self.fs.write_atomic(&absolute, text.as_bytes())?;
         Ok(())
     }

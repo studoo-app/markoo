@@ -5,6 +5,7 @@
 //! pair's direction, then exact renames are detected.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::PathBuf;
 
 use serde::Serialize;
 
@@ -21,12 +22,48 @@ pub struct Plan {
     pub pair: String,
     /// Planned entries, ordered by path. Entries with nothing to do are omitted.
     pub entries: Vec<PlannedEntry>,
+    /// Planned attachments, ordered by name.
+    pub attachments: Vec<PlannedAttachment>,
+}
+
+/// What to do with one attachment. Attachments follow the notes that refer to
+/// them; they are copied, never deleted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PlannedAttachment {
+    /// File name, unique in the repo's assets folder.
+    pub name: String,
+    /// Location in the knowledge base.
+    pub kb_path: PathBuf,
+    /// Location in the repo.
+    pub repo_path: PathBuf,
+    /// The action.
+    pub action: AttachmentAction,
+}
+
+/// An action on one attachment.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum AttachmentAction {
+    /// Copy the file to one side.
+    Copy {
+        /// Side written.
+        to: Side,
+        /// Hash of the source, checked again just before copying.
+        hash: ContentHash,
+    },
+    /// Both sides already agree: only record it.
+    Record {
+        /// Hash shared by both sides.
+        hash: ContentHash,
+    },
+    /// Both sides changed the file: it is reported and left alone.
+    Conflict,
 }
 
 impl Plan {
     /// Whether the sync has nothing to do.
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.entries.is_empty() && self.attachments.is_empty()
     }
 }
 
@@ -192,6 +229,7 @@ pub fn plan(
     Plan {
         pair: pair.name.clone(),
         entries: entries.into_values().collect(),
+        attachments: Vec::new(),
     }
 }
 

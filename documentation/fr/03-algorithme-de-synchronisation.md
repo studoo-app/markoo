@@ -25,7 +25,7 @@ flowchart LR
     RES -->|"gfm.from_canonical()"| R2["Écrit dans le repo"]
 ```
 
-Condition indispensable : la conversion doit être **sans perte**, pour chaque adaptateur comme pour `gfm` : `to_canonical(from_canonical(x)) == x` pour tout texte canonique, et `from_canonical(to_canonical(y)) == y` pour tout fichier de la KB. Une construction qui ne fait pas l'aller-retour est laissée telle quelle. C'est vérifié par des tests de propriété ; voir [Transformations](04-transformations.md).
+Condition indispensable : la conversion doit être **sans perte et stable**, pour chaque adaptateur comme pour `gfm` : `from_canonical(to_canonical(y)) == y` pour tout fichier de la KB, et `to_canonical(from_canonical(x)) == x` pour le texte canonique produit par Markoo. Sinon, un fichier semblerait modifié à chaque synchro. Une construction qui ne peut pas faire l'aller-retour reste telle quelle. C'est vérifié par des tests de propriété ; voir [Transformations](04-transformations.md).
 
 ## Étapes
 

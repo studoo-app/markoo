@@ -59,6 +59,11 @@ impl ContentHash {
         Self(blake3::hash(text.as_bytes()).to_hex().to_string())
     }
 
+    /// Hashes raw bytes (attachments).
+    pub fn of_bytes(bytes: &[u8]) -> Self {
+        Self(blake3::hash(bytes).to_hex().to_string())
+    }
+
     /// Rebuilds a hash read from storage.
     pub(crate) fn from_stored(hex: String) -> Self {
         Self(hex)

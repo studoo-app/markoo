@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use crate::entry::{ContentHash, EntryPath, Side};
 use crate::fs::{FileMeta, Fs, FsError};
-use crate::kb::Dialect;
+use crate::kb::{ConvertCtx, Dialect, NameIndex};
 use crate::pair::Filter;
 use crate::state::BaseEntry;
 
@@ -51,6 +51,7 @@ pub fn scan_side(
     side: Side,
     filter: &Filter,
     dialect: &dyn Dialect,
+    index: &NameIndex,
     bases: &BTreeMap<EntryPath, BaseEntry>,
 ) -> Result<SideScan, FsError> {
     let mut scan = SideScan::default();
@@ -89,7 +90,8 @@ pub fn scan_side(
                 continue;
             }
         }
-        match read_canonical(fs, &absolute, dialect) {
+        let ctx = ConvertCtx { path: &path, index };
+        match read_canonical(fs, &absolute, dialect, &ctx) {
             Ok(Some(content)) => {
                 let hash = ContentHash::of(&content);
                 scan.files.insert(
@@ -129,6 +131,7 @@ pub(crate) fn read_canonical(
     fs: &impl Fs,
     path: &Path,
     dialect: &dyn Dialect,
+    ctx: &ConvertCtx<'_>,
 ) -> Result<Option<String>, ReadError> {
     let bytes = match fs.read(path) {
         Ok(bytes) => bytes,
@@ -138,9 +141,9 @@ pub(crate) fn read_canonical(
     let text =
         String::from_utf8(bytes).map_err(|_| ReadError::Invalid("not valid UTF-8".into()))?;
     let canonical = dialect
-        .to_canonical(&text)
+        .to_canonical(&normalize(&text), ctx)
         .map_err(|e| ReadError::Invalid(e.to_string()))?;
-    Ok(Some(normalize(&canonical)))
+    Ok(Some(canonical))
 }
 
 /// Normalizes line endings so that `\r\n` vs `\n` never counts as a change.
@@ -164,6 +167,7 @@ mod tests {
             Side::Kb,
             &filter,
             &MarkdownAdapter,
+            &NameIndex::default(),
             bases,
         )
         .unwrap()

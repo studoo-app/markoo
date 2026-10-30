@@ -15,7 +15,7 @@ Les outils de base de connaissance sont pris en charge par des **adaptateurs**. 
 > 🇬🇧 [English version](README.md)
 
 > [!WARNING]
-> **Développement en cours.** Le moteur de synchro et la CLI fonctionnent sur de simples dossiers Markdown. La conversion des liens Obsidian, les déclencheurs automatiques et l'application desktop n'existent pas encore : voir la [feuille de route](documentation/fr/07-feuille-de-route.md).
+> **Développement en cours.** Le moteur de synchro, la CLI et l'adaptateur Obsidian fonctionnent, mais n'ont pas encore fait leurs preuves sur de vrais vaults : gardez une sauvegarde de vos notes. Les déclencheurs automatiques et l'application desktop n'existent pas encore : voir la [feuille de route](documentation/fr/07-feuille-de-route.md).
 
 ```mermaid
 flowchart LR
@@ -62,7 +62,7 @@ Détails : [algorithme de synchronisation](documentation/fr/03-algorithme-de-syn
 
 ## Utilisation
 
-Il n'y a pas encore de version publiée : compilez depuis les sources avec `cargo build --release`. `--kb-type obsidian` et `markoo hook` ci-dessous ne sont pas encore disponibles ; en attendant l'adaptateur Obsidian, un vault ne peut être synchronisé que comme du Markdown simple (`--kb-type markdown`), sans conversion des liens.
+Il n'y a pas encore de version publiée : compilez depuis les sources avec `cargo build --release`. `markoo hook` ci-dessous n'est pas encore disponible.
 
 ```bash
 markoo pair add clara --kb ~/Obsidian/Knowledge/Projets/Clara --kb-type obsidian --repo ~/code/clara/docs --direction both

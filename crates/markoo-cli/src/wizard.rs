@@ -4,7 +4,7 @@ use std::io::{BufRead, Write};
 
 use anyhow::{Context, Result, bail};
 use markoo_core::config::{NewPair, expand_home, is_valid_name};
-use markoo_core::kb;
+use markoo_core::kb::{self, KbType};
 
 /// Asks for the settings of a new pair.
 pub fn ask_new_pair(input: &mut impl BufRead, output: &mut impl Write) -> Result<NewPair> {
@@ -13,25 +13,17 @@ pub fn ask_new_pair(input: &mut impl BufRead, output: &mut impl Write) -> Result
             .then_some(())
             .ok_or("use lowercase letters, digits and hyphens")
     })?;
-    let kb = ask_folder(input, output, "Knowledge base folder")?;
-    let mut kb_type = None;
-    if let Some(tool) = kb::detect_unsupported(&expand_home(&kb)) {
-        writeln!(
-            output,
-            "This folder is in a {tool} knowledge base. Its adapter is not available yet: \
-             links would be copied without conversion."
-        )?;
-        let accepted = ask(
-            input,
-            output,
-            "Sync it as plain Markdown anyway? [y/N]",
-            Some("n"),
-        )?;
-        if !accepted.eq_ignore_ascii_case("y") {
-            bail!("cancelled");
+    let known = kb::known_kbs();
+    if !known.is_empty() {
+        writeln!(output, "Knowledge bases found:")?;
+        for folder in &known {
+            writeln!(output, "  {}", folder.display())?;
         }
-        kb_type = Some("markdown".to_owned());
     }
+    let kb = ask_folder(input, output, "Knowledge base folder")?;
+    let detected = KbType::detect(&expand_home(&kb));
+    writeln!(output, "  Type: {}", detected.id())?;
+    let kb_type = Some(detected.id().to_owned());
     let repo = ask_folder(input, output, "Repository folder")?;
     let direction = ask_until(
         input,

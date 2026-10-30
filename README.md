@@ -16,7 +16,7 @@ Knowledge base tools are supported through **adapters**. **Obsidian is the first
 > 🇫🇷 [Version française](README.fr.md)
 
 > [!WARNING]
-> **Early development.** The sync engine and the CLI work on plain Markdown folders. Obsidian link conversion, automatic triggers and the desktop app are not there yet: see the [roadmap](documentation/en/07-roadmap.md).
+> **Early development.** The sync engine, the CLI and the Obsidian adapter work, but they have not been proven on real vaults yet: keep a backup of your notes. Automatic triggers and the desktop app are not there yet: see the [roadmap](documentation/en/07-roadmap.md).
 
 ```mermaid
 flowchart LR
@@ -63,7 +63,7 @@ Details: [sync algorithm](documentation/en/03-sync-algorithm.md).
 
 ## Usage
 
-There is no release yet: build from source with `cargo build --release`. `--kb-type obsidian` and `markoo hook` below are not available yet; until the Obsidian adapter lands, a vault can only be synced as plain Markdown (`--kb-type markdown`), without converting links.
+There is no release yet: build from source with `cargo build --release`. `markoo hook` below is not available yet.
 
 ```bash
 markoo pair add clara --kb ~/Obsidian/Knowledge/Projects/Clara --kb-type obsidian --repo ~/code/clara/docs --direction both

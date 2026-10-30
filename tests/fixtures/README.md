@@ -7,4 +7,4 @@ temporary directory before syncing; never modify them in place.
 |--------|---------|
 | `markdown/kb/` | Plain Markdown KB (`kb_type = "markdown"`, identity dialect) |
 | `obsidian/kb/` | Obsidian vault (`kb_type = "obsidian"`): wikilinks, embed, callout, frontmatter |
-| `repo/docs/` | Repo side in GitHub Flavored Markdown, matching `obsidian/kb/` once converted |
+| `repo/docs/` | Exactly what `obsidian/kb/` becomes on the repo side (golden test) |

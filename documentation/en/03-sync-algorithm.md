@@ -25,7 +25,7 @@ flowchart LR
     RES -->|"gfm.from_canonical()"| R2["Written to the repo"]
 ```
 
-A hard requirement: the conversion must be **lossless**, for every adapter as well as for `gfm`: `to_canonical(from_canonical(x)) == x` for any canonical text, and `from_canonical(to_canonical(y)) == y` for any KB file. A construct that can't round-trip is left untouched. This is checked by property tests; see [Transformations](04-transformations.md).
+A hard requirement: the conversion must be **lossless and stable**, for every adapter as well as for `gfm`: `from_canonical(to_canonical(y)) == y` for any KB file, and `to_canonical(from_canonical(x)) == x` for the canonical text Markoo produces. Otherwise a file would look changed at every sync. A construct that can't round-trip is left untouched. This is checked by property tests; see [Transformations](04-transformations.md).
 
 ## Steps
 

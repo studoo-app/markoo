@@ -17,7 +17,7 @@ The design lives in [`documentation/`](documentation/INDEX.md). **Read it before
 
 ## Current status
 
-**M0 and M1 done, M2 CLI in place**: `init`, `status`, `diff`, `sync`, `conflicts`, `resolve`, `pair`, `paths`, `--json`, on plain Markdown pairs. Not implemented yet: the journal and the pair lock, the `conflict` strategies other than `ask`, `[pair.transform]`, `[pair.kb_options]` and `[pair.hooks]` (accepted in `markoo.toml`, ignored with a warning). The next milestone is **M3** (Obsidian adapter). Don't build ahead of the roadmap without being asked.
+**M0 to M2 done, M3 Obsidian adapter in place** (`markoo-core::kb::obsidian`): wikilinks, embeds, attachments, callouts, frontmatter, detection; not yet validated on a real vault (`MARKOO_CORPUS`, see `crates/markoo-core/tests/obsidian.rs`). Not implemented yet: the journal and the pair lock, the `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, `[pair.hooks]`, merging frontmatter by key (all accepted in `markoo.toml`, ignored with a warning where they are options). The next milestone is **M4** (daemon, interval, API). Don't build ahead of the roadmap without being asked.
 
 ## Repository layout (target)
 
@@ -40,7 +40,7 @@ markoo/
 2. **Plan before applying.** Every sync first builds a serializable `Plan`; dry-run, the app, the API and MCP all display that same plan. Writing only happens in the `applier`.
 3. **Atomic writes.** Write to `*.markoo-tmp`, `fsync`, then `rename`. Re-check the target's state right before writing; if it changed since the scan, skip it and replan later.
 4. **Idempotence.** Re-running a sync with no changes must produce zero writes. Every new case needs a test for this.
-5. **Reversible transformations.** Every adapter must round-trip losslessly: `from_canonical(to_canonical(x)) == x` for every KB file. The canonical form is GitHub Flavored Markdown with relative links. If a construct can't round-trip, leave it untouched (or keep the lost information in a `<!--markoo:…-->` comment).
+5. **Reversible transformations.** Every adapter must round-trip losslessly: `from_canonical(to_canonical(x)) == x` for every KB file, and `to_canonical` must be stable on what `from_canonical` produces, or files look changed at every sync. The canonical form is GitHub Flavored Markdown with relative links. If a construct can't round-trip, leave it untouched (or keep the lost information in a `<!--markoo:…-->` comment).
 6. **Conflicts are never resolved silently.** In `both` mode, overlapping changes wait for the user; in one-way modes with `target_changes = "protect"`, edits to the target become *divergences*.
 7. **KB-specific code lives in its adapter.** The engine (scanner, planner, merge, applier) never mentions Obsidian or any other tool; it only talks to `KbAdapter`.
 8. **One logic, many entry points.** The CLI, daemon, API, MCP and Tauri app are thin layers over `markoo-core`. Don't put sync logic in them.

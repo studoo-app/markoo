@@ -112,6 +112,12 @@ CREATE TABLE IF NOT EXISTS entries (
     repo_mtime  INTEGER,
     PRIMARY KEY (pair, path)
 );
+CREATE TABLE IF NOT EXISTS attachments (
+    pair        TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    hash        TEXT NOT NULL,
+    PRIMARY KEY (pair, name)
+);
 CREATE TABLE IF NOT EXISTS ignored (
     pair        TEXT NOT NULL,
     path        TEXT NOT NULL,
@@ -267,6 +273,37 @@ impl State {
         Ok(issues)
     }
 
+    /// Hash of an attachment at the last sync.
+    pub fn attachment_hash(
+        &self,
+        pair: &str,
+        name: &str,
+    ) -> Result<Option<ContentHash>, StateError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT hash FROM attachments WHERE pair = ?1 AND name = ?2",
+                params![pair, name],
+                |row| row.get(0),
+            )
+            .optional()?
+            .map(ContentHash::from_stored))
+    }
+
+    /// Records the hash of a synced attachment.
+    pub fn put_attachment(
+        &self,
+        pair: &str,
+        name: &str,
+        hash: &ContentHash,
+    ) -> Result<(), StateError> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO attachments (pair, name, hash) VALUES (?1, ?2, ?3)",
+            params![pair, name, hash.as_str()],
+        )?;
+        Ok(())
+    }
+
     /// Excludes an entry from subsequent syncs (the user kept a one-way target).
     pub fn ignore(&self, pair: &str, path: &EntryPath) -> Result<(), StateError> {
         self.conn.execute(
@@ -321,7 +358,13 @@ impl State {
 
     /// Forgets everything known about a pair. User files are not touched.
     pub fn forget_pair(&self, pair: &str) -> Result<(), StateError> {
-        for table in ["entries", "pending", "ignored", "pair_settings"] {
+        for table in [
+            "entries",
+            "pending",
+            "ignored",
+            "pair_settings",
+            "attachments",
+        ] {
             self.conn.execute(
                 &format!("DELETE FROM {table} WHERE pair = ?1"),
                 params![pair],

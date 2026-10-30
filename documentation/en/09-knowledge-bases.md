@@ -27,10 +27,10 @@ flowchart LR
 
 The canonical form is **standard GitHub Flavored Markdown with relative links**, plus invisible HTML comments `<!--markoo:…-->` carrying what GFM cannot represent (target of a wikilink outside the pair, original callout type, block reference…).
 
-**Invariant**: for every adapter, the round trip is lossless in both directions.
+**Invariant**: for every adapter, the round trip is lossless and stable.
 
-- `to_canonical(from_canonical(x)) == x` for any canonical text `x`;
-- `from_canonical(to_canonical(y)) == y` for any KB file `y`.
+- `from_canonical(to_canonical(y)) == y` for any KB file `y`;
+- `to_canonical(from_canonical(x)) == x` for the canonical text `x` Markoo produces; text written by hand may be normalized once, then no longer changes.
 
 A construct that cannot round-trip is **not converted**: it passes through unchanged on both sides. The conversions are detailed in [Transformations](04-transformations.md).
 
@@ -59,7 +59,7 @@ flowchart TB
 
 ### The `KbAdapter` trait
 
-Indicative sketch; exact signatures will be settled in milestone M3.
+Target sketch. The current trait is smaller: it covers the dialect, the exclusions and the attachments; detection and name resolution are in the adapter's module (`markoo-core::kb::obsidian`), and `KbStore` does not exist yet.
 
 ```rust
 /// Implemented by each knowledge base type (module markoo-core::kb).
@@ -102,7 +102,7 @@ pub trait KbStore: Send + Sync {
 
 ### Repo dialect
 
-The repo side has a dialect too, **`gfm`** in v1: relative Markdown links, GitHub *alerts* (`> [!NOTE]`), YAML frontmatter. Since the canonical form is already GFM, `gfm` only strips or restores the `markoo` comments and applies the generic `[pair.transform]` options (file names, attachments folder, frontmatter filtering). Other repo dialects (`gitlab`, `mkdocs`, `docusaurus`) could be chosen per pair after v1.
+The repo side has a dialect too, **`gfm`** in v1: relative Markdown links, GitHub *alerts* (`> [!NOTE]`), YAML frontmatter. Since the canonical form is already GFM, `gfm` is the identity: `markoo` comments stay in the repo files, where GitHub does not display them. The generic `[pair.transform]` options apply when converting the KB side. Other repo dialects (`gitlab`, `mkdocs`, `docusaurus`) could be chosen per pair after v1.
 
 ## Supported knowledge base types
 
@@ -148,7 +148,7 @@ The `obsidian` adapter, **the first knowledge base implemented** and the referen
 - **Notes**: `*.md` files. `.canvas` files are not converted.
 - **Fixed exclusions**: `.obsidian/` and `.trash/`, whatever the pair's filters.
 - **Attachments**: a new attachment coming from the repo is stored in the folder configured in Obsidian (`attachmentFolderPath` key of `.obsidian/app.json`), or next to the note otherwise.
-- **New link format**: the `useMarkdownLinks` and `newLinkFormat` settings in `.obsidian/app.json` decide the form produced by `from_canonical` (wikilink or Markdown link, shortest or relative path).
+- **New link format**: with `useMarkdownLinks` in `.obsidian/app.json`, links coming from the repo stay Markdown links instead of becoming wikilinks. `newLinkFormat` is not taken into account yet.
 
 ### Dialect
 
