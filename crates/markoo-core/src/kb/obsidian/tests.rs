@@ -416,6 +416,152 @@ fn edited_link_from_the_vault_root_wins_over_the_comment() {
     assert_eq!(back(edited), "[[001-stack|renamed]]\n");
 }
 
+// --- Wikilinks to an attachment ----------------------------------------------------------
+
+#[test]
+fn wikilink_to_a_file_points_to_the_assets_folder() {
+    assert_eq!(
+        to("[[spec.pdf]]\n"),
+        "[spec.pdf](./assets/spec.pdf)<!--markoo:[[spec.pdf]]-->\n"
+    );
+}
+
+#[test]
+fn wikilink_to_a_file_comes_back_as_written() {
+    let text = "[[attachments/spec.pdf|The spec]]\n";
+    assert_eq!(back(&to(text)), text);
+}
+
+#[test]
+fn wikilink_to_a_file_keeps_its_alias_and_anchor() {
+    assert_eq!(
+        to("[[attachments/spec.pdf#page=2|Open: spec]]\n"),
+        "[Open: spec](./assets/spec.pdf#page=2)<!--markoo:[[attachments/spec.pdf#page=2|Open: spec]]-->\n"
+    );
+}
+
+#[test]
+fn wikilink_to_a_file_is_listed_as_an_asset() {
+    let (path, index) = (EntryPath::from_relative(Path::new(FROM)).unwrap(), index());
+    let ctx = ConvertCtx {
+        path: &path,
+        index: &index,
+    };
+    let adapter = ObsidianAdapter::default();
+    let canonical = adapter.to_canonical("[[spec.pdf]]\n", &ctx).unwrap();
+    assert_eq!(
+        adapter.referenced_assets(&canonical, &ctx),
+        vec!["spec.pdf".to_owned()]
+    );
+}
+
+#[test]
+fn note_wins_over_a_file_for_a_wikilink() {
+    let (path, index) = (
+        EntryPath::from_relative(Path::new(FROM)).unwrap(),
+        NameIndex::for_tests(
+            &["Projets/Clara/architecture.md", "Projets/Clara/spec.pdf.md"],
+            &["attachments/spec.pdf"],
+            "Projets/Clara",
+        ),
+    );
+    let ctx = ConvertCtx {
+        path: &path,
+        index: &index,
+    };
+    assert_eq!(
+        ObsidianAdapter::default()
+            .to_canonical("[[spec.pdf]]\n", &ctx)
+            .unwrap(),
+        "[spec.pdf](./spec.pdf.md)\n"
+    );
+}
+
+#[test]
+fn shared_attachment_name_is_reported_as_such() {
+    let (path, index) = (EntryPath::from_relative(Path::new(FROM)).unwrap(), index());
+    let ctx = ConvertCtx {
+        path: &path,
+        index: &index,
+    };
+    let text = "![[Media/a/logo.png]]\n";
+    assert_eq!(
+        ObsidianAdapter::default().to_canonical(text, &ctx).unwrap(),
+        text
+    );
+    assert_eq!(
+        index.take_warnings(),
+        vec![(
+            FROM.to_owned(),
+            "several attachments share this name: ![[Media/a/logo.png]]".to_owned()
+        )]
+    );
+}
+
+// --- Wikilinks relative to the note --------------------------------------------------------
+
+#[test]
+fn embed_relative_to_the_note_is_found() {
+    assert_eq!(
+        to("![[../../attachments/schema.png]]\n"),
+        "![schema](./assets/schema.png)<!--markoo:![[../../attachments/schema.png]]-->\n"
+    );
+}
+
+#[test]
+fn embed_relative_to_the_note_comes_back_as_written() {
+    let text = "![[../../attachments/schema.png]]\n";
+    assert_eq!(back(&to(text)), text);
+}
+
+#[test]
+fn wikilink_relative_to_the_note_is_found() {
+    assert_eq!(
+        to("[[./adr/001-stack]]\n"),
+        "[001-stack](./adr/001-stack.md)<!--markoo:[[./adr/001-stack]]-->\n"
+    );
+}
+
+#[test]
+fn relative_wikilink_is_not_matched_by_name_elsewhere() {
+    let text = "![[./schema.png]]\n";
+    assert_eq!(to(text), text);
+}
+
+// --- Accents --------------------------------------------------------------------------------
+
+#[test]
+fn accent_encoded_differently_still_matches_a_note() {
+    assert_eq!(
+        to("[[Cafe\u{301} Notes]]\n"),
+        "[Café Notes](./Café%20Notes.md)<!--markoo:[[Cafe\u{301} Notes]]-->\n"
+    );
+}
+
+#[test]
+fn accent_encoded_differently_still_matches_an_attachment() {
+    let (path, index) = (
+        EntryPath::from_relative(Path::new(FROM)).unwrap(),
+        NameIndex::for_tests(
+            &["Projets/Clara/architecture.md"],
+            &["attachments/re\u{301}sume\u{301}.pdf"],
+            "Projets/Clara",
+        ),
+    );
+    let ctx = ConvertCtx {
+        path: &path,
+        index: &index,
+    };
+    let text = "[[résumé.pdf]]\n";
+    let adapter = ObsidianAdapter::default();
+    let canonical = adapter.to_canonical(text, &ctx).unwrap();
+    assert_eq!(adapter.from_canonical(&canonical, &ctx).unwrap(), text);
+    assert_eq!(
+        adapter.referenced_assets(&canonical, &ctx),
+        vec!["re\u{301}sume\u{301}.pdf".to_owned()]
+    );
+}
+
 // --- Edits on the repo side -----------------------------------------------------------
 
 #[test]
@@ -635,6 +781,12 @@ fn fragment() -> impl Strategy<Value = String> {
         Just("[march](Réunions/March%2012.md#Sujet)".to_owned()),
         Just("![](Projets/Clara/adr/001-stack.md)".to_owned()),
         Just("[spec](attachments/spec.pdf#page=2)".to_owned()),
+        Just("[[spec.pdf]]".to_owned()),
+        Just("[[attachments/spec.pdf#page=2|Open: spec]]".to_owned()),
+        Just("![[../../attachments/schema.png]]".to_owned()),
+        Just("[[./adr/001-stack]]".to_owned()),
+        Just("[[Cafe\u{301} Notes]]".to_owned()),
+        Just("![[Media/a/logo.png]]".to_owned()),
         Just("`[[architecture]]`".to_owned()),
         Just("%% [[architecture]] %%".to_owned()),
         Just("plain text".to_owned()),

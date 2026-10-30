@@ -78,7 +78,7 @@ markoo/
 | `config` | Lit, valide et **modifie** `markoo.toml` en conservant les commentaires | `serde`, `toml`, `toml_edit` |
 | `scanner` | Parcourt un côté, filtre par motifs, calcule les empreintes | `walkdir`, `globset`, `blake3` |
 | `state` | Stocke la **base** (état à la dernière synchro) | `rusqlite` |
-| `kb` | Trait `KbAdapter` et adaptateurs de KB : détection, organisation (notes, pièces jointes, exclusions), dialecte (`to_canonical` / `from_canonical`), résolution des noms. En v1 : `markdown` (identité) et `obsidian` (adaptateur de référence). Voir [Bases de connaissance](09-bases-de-connaissance.md#modèle-dadaptateur) | `pulldown-cmark`, `serde_json` |
+| `kb` | Trait `KbAdapter` et adaptateurs de KB : détection, organisation (notes, pièces jointes, exclusions), dialecte (`to_canonical` / `from_canonical`), résolution des noms. En v1 : `markdown` (identité) et `obsidian` (adaptateur de référence). Voir [Bases de connaissance](09-bases-de-connaissance.md#modèle-dadaptateur) | `pulldown-cmark`, `unicode-normalization`, `serde_json` |
 | `transform` | Applique les options génériques (liens, noms de fichiers, frontmatter, pièces jointes) entre forme canonique et dialecte `gfm` du repo (KB ↔ repo) | `pulldown-cmark`, `serde_yaml` |
 | `planner` | Compare KB / repo / base en forme canonique, produit un **plan** d'actions | — |
 | `merge` | Fusion 3-way ligne à ligne | `diffy` ou `similar` |

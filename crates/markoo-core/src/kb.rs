@@ -7,11 +7,12 @@
 
 pub mod obsidian;
 
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::cell::{OnceCell, RefCell};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use unicode_normalization::UnicodeNormalization;
 
 use crate::entry::EntryPath;
 use crate::fs::{Fs, FsError};
@@ -172,6 +173,46 @@ impl Dialect for Gfm {
     }
 }
 
+/// A file name as links match it: without regard to case, or to the way an
+/// accent is encoded, which depends on the system that created the file.
+fn comparable(name: &str) -> String {
+    name.nfc().collect::<String>().to_lowercase()
+}
+
+/// Files by comparable name. A vault has thousands of files and notes have
+/// thousands of links, so that lookups cannot go through all the files.
+#[derive(Debug, Default)]
+struct NameLookup {
+    /// `(comparable path, path)` by comparable file name, ordered by path.
+    by_name: HashMap<String, Vec<(String, String)>>,
+}
+
+impl NameLookup {
+    fn of(files: &BTreeSet<String>) -> Self {
+        let mut by_name: HashMap<String, Vec<(String, String)>> = HashMap::new();
+        for file in files {
+            let path = comparable(file);
+            let name = path.rsplit('/').next().unwrap_or(&path).to_owned();
+            by_name.entry(name).or_default().push((path, file.clone()));
+        }
+        Self { by_name }
+    }
+
+    /// The files at the comparable path `wanted`, and with `in_any_folder`
+    /// those whose path ends with it, as `(comparable path, path)`.
+    fn matching(&self, wanted: &str, in_any_folder: bool) -> Vec<(&str, &str)> {
+        let name = wanted.rsplit('/').next().unwrap_or(wanted);
+        let suffix = format!("/{wanted}");
+        self.by_name
+            .get(name)
+            .into_iter()
+            .flatten()
+            .filter(|(path, _)| path == wanted || (in_any_folder && path.ends_with(&suffix)))
+            .map(|(path, file)| (path.as_str(), file.as_str()))
+            .collect()
+    }
+}
+
 /// The files of a knowledge base, used to resolve links by name.
 ///
 /// It covers the whole vault, not only the pair, to tell a target outside the
@@ -190,6 +231,8 @@ pub struct NameIndex {
     tracked: BTreeSet<String>,
     /// Assets folder relative to the pair's root.
     assets_dir: String,
+    note_lookup: OnceCell<NameLookup>,
+    attachment_lookup: OnceCell<NameLookup>,
     warnings: RefCell<BTreeMap<String, String>>,
 }
 

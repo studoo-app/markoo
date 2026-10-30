@@ -82,6 +82,8 @@ A wikilink `[[Target]]` refers to a note by its **name**, not its path. Markoo b
 | Target **outside the pair** (elsewhere in the vault) | Plain text + restore comment (see below) |
 | Target **not found** | Left as is, warning in the report |
 
+A path starting with `./` or `../` is resolved from the current note. Names match without regard to case or to the way accents are encoded, since that depends on the system that created the file. A wikilink without `!` to an attachment, when no note has that name, points to the assets folder and the file is copied there. If two attachments share its name, it is left as is, with a warning saying so: the assets folder is flat.
+
 A **Markdown link** written in the vault is read like this: a file next to the note wins, as on GitHub; otherwise the path is looked up from the vault root, which is the form Obsidian writes with `newLinkFormat = "absolute"`. Paths starting with `./` or `../` are never looked up from the root. A link from the root to a note follows the table above, with its original kept in a comment. A link to an attachment, image or not, points to the assets folder and the file is copied there, unless two attachments share its name: the link is then left as is.
 
 ### Information that can't be represented

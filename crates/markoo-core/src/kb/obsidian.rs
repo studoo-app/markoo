@@ -15,7 +15,10 @@ use directories::BaseDirs;
 use pulldown_cmark::{Event, LinkType, Options, Parser, Tag};
 use serde_json::{Value, json};
 
-use super::{ConvertCtx, Dialect, DialectError, KbAdapter, KbOptions, NameIndex, read_optional};
+use super::{
+    ConvertCtx, Dialect, DialectError, KbAdapter, KbOptions, NameIndex, NameLookup, comparable,
+    read_optional,
+};
 use crate::fs::Fs;
 
 const MARKER_OPEN: &str = "<!--markoo:";
@@ -148,9 +151,9 @@ impl KbAdapter for ObsidianAdapter {
             let payload = found.payload;
             if let Some(wiki) = Wikilink::parse(payload)
                 && wiki.embed
-                && ctx.index.find_attachment(wiki.target, ctx).is_some()
+                && let Some(path) = ctx.index.find_attachment(wiki.target, ctx)
             {
-                names.extend(asset_basename(wiki.target).map(str::to_owned));
+                names.extend(asset_basename(&path).map(str::to_owned));
             }
         }
         names.sort();
@@ -193,8 +196,12 @@ impl ObsidianAdapter {
                     continue;
                 };
                 let Some(rendered) = self.render_wikilink(&wiki, ctx) else {
-                    ctx.index
-                        .warn(ctx.path, format!("link target not found: {original}"));
+                    let problem = if ctx.index.find_attachment(wiki.target, ctx).is_some() {
+                        "several attachments share this name"
+                    } else {
+                        "link target not found"
+                    };
+                    ctx.index.warn(ctx.path, format!("{problem}: {original}"));
                     continue;
                 };
                 let replacement = if self.default_form(&rendered, ctx).as_deref() == Some(original)
@@ -332,7 +339,9 @@ impl ObsidianAdapter {
                 None => format!("![{}]({href})", stem(name)),
             });
         }
-        let note = ctx.index.find_note(wiki.target, ctx)?;
+        let Some(note) = ctx.index.find_note(wiki.target, ctx) else {
+            return self.render_attachment_wikilink(wiki, ctx);
+        };
         let text = wiki
             .alias
             .map_or_else(|| stem(&note).to_owned(), str::to_owned);
@@ -346,6 +355,25 @@ impl ObsidianAdapter {
             href.push_str(&github_slug(anchor));
         }
         Some(format!("[{text}]({href})"))
+    }
+
+    /// A link to an attachment, without the `!` of an embed: it opens the file.
+    fn render_attachment_wikilink(
+        &self,
+        wiki: &Wikilink<'_>,
+        ctx: &ConvertCtx<'_>,
+    ) -> Option<String> {
+        let path = ctx.index.find_attachment(wiki.target, ctx)?;
+        let name = asset_basename(&path)?;
+        if !ctx.index.attachment_name_is_unique(name) {
+            return None;
+        }
+        let mut href = encode_href(&relative_to(ctx.path.as_str(), &ctx.index.asset_path(name)));
+        if let Some(anchor) = wiki.anchor {
+            href.push('#');
+            href.push_str(&encode_href(anchor));
+        }
+        Some(format!("[{}]({href})", wiki.alias.unwrap_or(name)))
     }
 
     /// The form a clean canonical link takes in the vault, if it has one.
@@ -827,56 +855,61 @@ fn apply_edits(text: &str, mut edits: Vec<(Range<usize>, String)>) -> String {
 }
 
 impl NameIndex {
-    /// Finds a note like Obsidian does: exact path, then unique name, then the
-    /// one closest to the current file (with a warning).
+    /// Finds a note like Obsidian does: a path relative to the note if written
+    /// so, otherwise exact path, then unique name, then the one closest to the
+    /// current file (with a warning).
     fn find_note(&self, target: &str, ctx: &ConvertCtx<'_>) -> Option<String> {
-        let wanted = target.strip_suffix(".md").unwrap_or(target).to_lowercase();
+        let relative = self.path_from_note(target, ctx);
+        let wanted = comparable(relative.as_deref().unwrap_or(target));
+        let wanted = wanted.strip_suffix(".md").unwrap_or(&wanted);
         let exact = format!("{wanted}.md");
-        let suffix = format!("/{wanted}.md");
-        let candidates: Vec<&String> = self
-            .notes
-            .iter()
-            .filter(|note| {
-                let note = note.to_lowercase();
-                note == exact || note.ends_with(&suffix)
-            })
-            .collect();
-        if let Some(found) = candidates.iter().find(|note| note.to_lowercase() == exact) {
-            return Some((*found).clone());
+        let lookup = self.note_lookup.get_or_init(|| NameLookup::of(&self.notes));
+        let candidates = lookup.matching(&exact, relative.is_none());
+        if let Some((_, found)) = candidates.iter().find(|(name, _)| *name == exact) {
+            return Some((*found).to_owned());
         }
         match candidates.as_slice() {
             [] => None,
-            [only] => Some((*only).clone()),
+            [(_, only)] => Some((*only).to_owned()),
             several => {
                 let from = self.vault_relative(ctx.path.as_str());
                 let closest = several
                     .iter()
-                    .max_by_key(|note| (shared_folders(note, &from), std::cmp::Reverse(note.len())))
-                    .map(|note| (*note).clone());
+                    .max_by_key(|(_, note)| {
+                        (shared_folders(note, &from), std::cmp::Reverse(note.len()))
+                    })
+                    .map(|(_, note)| (*note).to_owned());
                 self.warn(ctx.path, format!("ambiguous link target: {target}"));
                 closest
             }
         }
     }
 
-    /// Finds an attachment by name or path.
-    fn find_attachment(&self, target: &str, _ctx: &ConvertCtx<'_>) -> Option<String> {
-        let wanted = target.to_lowercase();
-        let suffix = format!("/{wanted}");
-        let found = self
-            .attachments
-            .iter()
-            .find(|file| {
-                let file = file.to_lowercase();
-                file == wanted || file.ends_with(&suffix)
-            })
-            .cloned();
+    /// Finds an attachment by name or path, or by a path relative to the note.
+    fn find_attachment(&self, target: &str, ctx: &ConvertCtx<'_>) -> Option<String> {
+        let relative = self.path_from_note(target, ctx);
+        let wanted = comparable(relative.as_deref().unwrap_or(target));
+        let lookup = self
+            .attachment_lookup
+            .get_or_init(|| NameLookup::of(&self.attachments));
+        let found = lookup
+            .matching(&wanted, relative.is_none())
+            .first()
+            .map(|(_, file)| (*file).to_owned());
         found.or_else(|| {
             self.repo_assets
                 .iter()
-                .find(|name| name.to_lowercase() == wanted)
+                .find(|name| comparable(name) == wanted)
                 .cloned()
         })
+    }
+
+    /// The vault path of a wikilink target written relative to the note.
+    fn path_from_note(&self, target: &str, ctx: &ConvertCtx<'_>) -> Option<String> {
+        if !target.starts_with("./") && !target.starts_with("../") {
+            return None;
+        }
+        resolve_relative(&self.vault_relative(ctx.path.as_str()), target)
     }
 
     /// The vault file a link path of the current note points to. A path next

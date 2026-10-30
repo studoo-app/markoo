@@ -32,6 +32,7 @@ tokio = { version = "1.54.1", features = ["macros", "net", "rt-multi-thread", "s
 tokio-stream = { version = "0.1.19", features = ["sync"] }
 toml = "1.1.8"
 toml_edit = "0.25.17"
+unicode-normalization = "0.1.26"
 walkdir = "2.5.0"
 
 [workspace.lints.rust]

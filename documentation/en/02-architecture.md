@@ -78,7 +78,7 @@ markoo/
 | `config` | Reads, validates and **edits** `markoo.toml` while preserving comments | `serde`, `toml`, `toml_edit` |
 | `scanner` | Walks one side, filters by patterns, computes fingerprints | `walkdir`, `globset`, `blake3` |
 | `state` | Stores the **base** (state at the last sync) | `rusqlite` |
-| `kb` | `KbAdapter` trait and KB adapters: detection, layout (notes, attachments, exclusions), dialect (`to_canonical` / `from_canonical`), name resolution. In v1: `markdown` (identity) and `obsidian` (reference adapter). See [Knowledge bases](09-knowledge-bases.md#adapter-model) | `pulldown-cmark`, `serde_json` |
+| `kb` | `KbAdapter` trait and KB adapters: detection, layout (notes, attachments, exclusions), dialect (`to_canonical` / `from_canonical`), name resolution. In v1: `markdown` (identity) and `obsidian` (reference adapter). See [Knowledge bases](09-knowledge-bases.md#adapter-model) | `pulldown-cmark`, `unicode-normalization`, `serde_json` |
 | `transform` | Applies the generic options (links, file names, frontmatter, attachments) between the canonical form and the repo's `gfm` dialect (KB ↔ repo) | `pulldown-cmark`, `serde_yaml` |
 | `planner` | Compares KB / repo / base in canonical form, produces an action **plan** | — |
 | `merge` | Line-by-line 3-way merge | `diffy` or `similar` |

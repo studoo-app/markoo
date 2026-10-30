@@ -440,14 +440,19 @@ fn broken_links(root: &Path) -> Vec<String> {
                 Event::Start(Tag::Link { dest_url, .. } | Tag::Image { dest_url, .. }) => dest_url,
                 _ => continue,
             };
-            if dest.contains("://") || dest.starts_with('#') || dest.starts_with("mailto:") {
+            if dest.contains("://")
+                || dest.starts_with('#')
+                || dest.starts_with("mailto:")
+                || dest.starts_with("data:")
+            {
                 continue;
             }
-            let path = dest
-                .split('#')
-                .next()
-                .unwrap_or_default()
-                .replace("%20", " ");
+            let path = ["%20 ", "%28(", "%29)", "%3F?", "%23#", "%25%"]
+                .iter()
+                .fold(
+                    dest.split('#').next().unwrap_or_default().to_owned(),
+                    |path, code| path.replace(&code[..3], &code[3..]),
+                );
             if !file.parent().unwrap().join(&path).exists() {
                 broken.push(format!("{}: {dest}", relative.display()));
             }
@@ -512,16 +517,18 @@ fn real_vault_round_trip() {
         planned.plan.entries.len(),
         planned.plan.attachments.len()
     );
-    let (unresolved, other_issues): (Vec<_>, Vec<_>) = planned
+    let mut kinds: BTreeMap<&str, usize> = BTreeMap::new();
+    for issue in &planned.scan_issues {
+        let kind = issue.message.split(':').next().unwrap_or_default();
+        *kinds.entry(kind).or_default() += 1;
+    }
+    println!("{kinds:?}");
+    let other_issues: Vec<String> = planned
         .scan_issues
         .iter()
-        .partition(|issue| issue.message.starts_with("link target not found"));
-    let other_issues: Vec<String> = other_issues
-        .iter()
+        .filter(|issue| !issue.message.starts_with("link target not found"))
         .map(|issue| format!("{}: {}", issue.path.display(), issue.message))
         .collect();
-    println!("{} links without a target in the vault", unresolved.len());
-    println!("{} other scan issues", other_issues.len());
     print_some(&other_issues);
     let report = engine.apply(&pair, &planned.plan).unwrap();
     println!(
