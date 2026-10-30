@@ -86,6 +86,13 @@ markoo/
   - the FR and EN versions of each changed file have the same number of headings, Mermaid blocks and table rows.
 - If code behaviour diverges from the design docs, update the docs (both languages) in the same change, or ask.
 
+## Skills
+
+Project skills live in `.agents/skills/` (linked from `.claude/skills/` and `.vibe/skills/`, pinned in `skills-lock.json`): `rust-best-practices`, `tauri-v2`, `semver`, `semver-changelog`.
+
+- **This file wins over any skill.** Skills give generic advice; when one conflicts with the invariants or conventions above, follow AGENTS.md.
+- Known conflict: `tauri-v2` recommends Tauri's path APIs (`app.path()`). For Markoo's config and state, always use `markoo-core::paths` instead (invariant 10). Tauri's path APIs are fine only for Tauri-owned files (WebView cache, window state).
+
 ## Git
 
 - Commit messages, PR titles and PR descriptions are **always in English**, whatever the language of the conversation or of the docs being changed.
