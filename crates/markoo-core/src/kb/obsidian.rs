@@ -153,7 +153,7 @@ impl KbAdapter for ObsidianAdapter {
                 && wiki.embed
                 && let Some(path) = ctx.index.find_attachment(wiki.target, ctx)
             {
-                names.extend(asset_basename(&path).map(str::to_owned));
+                names.extend(ctx.index.asset_name_of(&path));
             }
         }
         names.sort();
@@ -196,12 +196,8 @@ impl ObsidianAdapter {
                     continue;
                 };
                 let Some(rendered) = self.render_wikilink(&wiki, ctx) else {
-                    let problem = if ctx.index.find_attachment(wiki.target, ctx).is_some() {
-                        "several attachments share this name"
-                    } else {
-                        "link target not found"
-                    };
-                    ctx.index.warn(ctx.path, format!("{problem}: {original}"));
+                    ctx.index
+                        .warn(ctx.path, format!("link target not found: {original}"));
                     continue;
                 };
                 let replacement = if self.default_form(&rendered, ctx).as_deref() == Some(original)
@@ -287,13 +283,13 @@ impl ObsidianAdapter {
             return link.source.clone();
         };
         if ctx.index.attachments.contains(&found.path) {
-            let Some(name) = asset_basename(&found.path)
-                .filter(|name| ctx.index.attachment_name_is_unique(name))
-            else {
+            let Some(name) = ctx.index.asset_name_of(&found.path) else {
                 return link.source.clone();
             };
-            let mut href =
-                encode_href(&relative_to(ctx.path.as_str(), &ctx.index.asset_path(name)));
+            let mut href = encode_href(&relative_to(
+                ctx.path.as_str(),
+                &ctx.index.asset_path(&name),
+            ));
             if let Some(fragment) = fragment {
                 href.push('#');
                 href.push_str(fragment);
@@ -326,17 +322,17 @@ impl ObsidianAdapter {
         if wiki.embed
             && let Some(path) = ctx.index.find_attachment(wiki.target, ctx)
         {
-            let name = asset_basename(&path)?;
-            if !ctx.index.attachment_name_is_unique(name) {
-                return None;
-            }
-            let href = encode_href(&relative_to(ctx.path.as_str(), &ctx.index.asset_path(name)));
+            let name = ctx.index.asset_name_of(&path)?;
+            let href = encode_href(&relative_to(
+                ctx.path.as_str(),
+                &ctx.index.asset_path(&name),
+            ));
             return Some(match wiki.alias {
                 Some(size) if !size.is_empty() && size.chars().all(|c| c.is_ascii_digit()) => {
                     format!("<img src=\"{href}\" width=\"{size}\">")
                 }
                 Some(alt) => format!("![{alt}]({href})"),
-                None => format!("![{}]({href})", stem(name)),
+                None => format!("![{}]({href})", stem(&path)),
             });
         }
         let Some(note) = ctx.index.find_note(wiki.target, ctx) else {
@@ -364,16 +360,20 @@ impl ObsidianAdapter {
         ctx: &ConvertCtx<'_>,
     ) -> Option<String> {
         let path = ctx.index.find_attachment(wiki.target, ctx)?;
-        let name = asset_basename(&path)?;
-        if !ctx.index.attachment_name_is_unique(name) {
-            return None;
-        }
-        let mut href = encode_href(&relative_to(ctx.path.as_str(), &ctx.index.asset_path(name)));
+        let name = ctx.index.asset_name_of(&path)?;
+        let mut href = encode_href(&relative_to(
+            ctx.path.as_str(),
+            &ctx.index.asset_path(&name),
+        ));
         if let Some(anchor) = wiki.anchor {
             href.push('#');
             href.push_str(&encode_href(anchor));
         }
-        Some(format!("[{}]({href})", wiki.alias.unwrap_or(name)))
+        let text = wiki
+            .alias
+            .or_else(|| asset_basename(&path))
+            .unwrap_or(&name);
+        Some(format!("[{text}]({href})"))
     }
 
     /// The form a clean canonical link takes in the vault, if it has one.
@@ -391,10 +391,12 @@ impl ObsidianAdapter {
         }
         let form = if link.is_image {
             let name = asset_name_of_href(&link.href, ctx)?;
-            if link.text == stem(&name) {
-                format!("![[{name}]]")
+            // A renamed attachment is only known under its path in the vault.
+            let target = ctx.index.renamed_asset_path(&name).unwrap_or(&name);
+            if link.text == stem(target) {
+                format!("![[{target}]]")
             } else {
-                format!("![[{name}|{}]]", link.text)
+                format!("![[{target}|{}]]", link.text)
             }
         } else {
             let inside = resolve_relative(ctx.path.as_str(), &decode_href(&link.href))?;
@@ -650,6 +652,8 @@ impl<'a> Wikilink<'a> {
             Some((target, anchor)) => (target, Some(anchor)),
             None => (link, None),
         };
+        // The spaces stay in the original text, kept in a comment.
+        let target = target.trim();
         if target.is_empty() {
             return None;
         }
@@ -865,43 +869,55 @@ impl NameIndex {
         let exact = format!("{wanted}.md");
         let lookup = self.note_lookup.get_or_init(|| NameLookup::of(&self.notes));
         let candidates = lookup.matching(&exact, relative.is_none());
-        if let Some((_, found)) = candidates.iter().find(|(name, _)| *name == exact) {
+        self.best_match(&candidates, &exact, target, ctx)
+    }
+
+    /// Finds an attachment the same way as a note.
+    fn find_attachment(&self, target: &str, ctx: &ConvertCtx<'_>) -> Option<String> {
+        let relative = self.path_from_note(target, ctx);
+        let wanted = comparable(relative.as_deref().unwrap_or(target));
+        let candidates = self
+            .attachment_lookup()
+            .matching(&wanted, relative.is_none());
+        self.best_match(&candidates, &wanted, target, ctx)
+            .or_else(|| {
+                self.repo_assets
+                    .iter()
+                    .find(|name| comparable(name) == wanted)
+                    .cloned()
+            })
+    }
+
+    fn best_match(
+        &self,
+        candidates: &[(&str, &str)],
+        exact: &str,
+        target: &str,
+        ctx: &ConvertCtx<'_>,
+    ) -> Option<String> {
+        if let Some((_, found)) = candidates.iter().find(|(path, _)| *path == exact) {
             return Some((*found).to_owned());
         }
-        match candidates.as_slice() {
+        match candidates {
             [] => None,
             [(_, only)] => Some((*only).to_owned()),
             several => {
                 let from = self.vault_relative(ctx.path.as_str());
                 let closest = several
                     .iter()
-                    .max_by_key(|(_, note)| {
-                        (shared_folders(note, &from), std::cmp::Reverse(note.len()))
+                    .max_by_key(|(_, file)| {
+                        (shared_folders(file, &from), std::cmp::Reverse(file.len()))
                     })
-                    .map(|(_, note)| (*note).to_owned());
+                    .map(|(_, file)| (*file).to_owned());
                 self.warn(ctx.path, format!("ambiguous link target: {target}"));
                 closest
             }
         }
     }
 
-    /// Finds an attachment by name or path, or by a path relative to the note.
-    fn find_attachment(&self, target: &str, ctx: &ConvertCtx<'_>) -> Option<String> {
-        let relative = self.path_from_note(target, ctx);
-        let wanted = comparable(relative.as_deref().unwrap_or(target));
-        let lookup = self
-            .attachment_lookup
-            .get_or_init(|| NameLookup::of(&self.attachments));
-        let found = lookup
-            .matching(&wanted, relative.is_none())
-            .first()
-            .map(|(_, file)| (*file).to_owned());
-        found.or_else(|| {
-            self.repo_assets
-                .iter()
-                .find(|name| comparable(name) == wanted)
-                .cloned()
-        })
+    fn attachment_lookup(&self) -> &NameLookup {
+        self.attachment_lookup
+            .get_or_init(|| NameLookup::of(&self.attachments))
     }
 
     /// The vault path of a wikilink target written relative to the note.
@@ -938,14 +954,6 @@ impl NameIndex {
             })
     }
 
-    fn attachment_name_is_unique(&self, name: &str) -> bool {
-        self.attachments
-            .iter()
-            .filter(|file| asset_basename(file) == Some(name))
-            .count()
-            <= 1
-    }
-
     fn note_name_is_unique(&self, name: &str) -> bool {
         self.notes.iter().filter(|note| stem(note) == name).count() == 1
     }
@@ -961,12 +969,57 @@ impl NameIndex {
         format!("{}/{name}", self.assets_dir)
     }
 
+    /// The name of an attachment in the repo's assets folder. That folder is
+    /// flat, so attachments sharing a name there are told apart by their path
+    /// in the vault, which keeps the name stable from one sync to the next.
+    fn asset_name_of(&self, vault_path: &str) -> Option<String> {
+        let name = asset_basename(vault_path)?;
+        Some(if self.attachment_lookup().is_shared(name) {
+            shared_asset_name(vault_path, name)
+        } else {
+            name.to_owned()
+        })
+    }
+
+    /// Where an attachment renamed in the assets folder is in the vault.
+    fn renamed_asset_path(&self, asset: &str) -> Option<&str> {
+        self.renamed_assets
+            .get_or_init(|| {
+                self.attachments
+                    .iter()
+                    .filter_map(|file| {
+                        let name = asset_basename(file)?;
+                        self.attachment_lookup()
+                            .is_shared(name)
+                            .then(|| (shared_asset_name(file, name), file.clone()))
+                    })
+                    .collect()
+            })
+            .get(asset)
+            .map(String::as_str)
+    }
+
     /// Where an attachment is in the vault, relative to the vault root.
     pub(crate) fn attachment_in_vault(&self, name: &str) -> Option<String> {
-        self.attachments
-            .iter()
-            .find(|file| asset_basename(file) == Some(name))
-            .cloned()
+        self.renamed_asset_path(name)
+            .map(str::to_owned)
+            .or_else(|| {
+                self.attachments
+                    .iter()
+                    .find(|file| asset_basename(file) == Some(name))
+                    .cloned()
+            })
+    }
+}
+
+/// `name` with a short hash of its path. Eight digits are plenty, since they
+/// only have to differ between files of the same name.
+fn shared_asset_name(vault_path: &str, name: &str) -> String {
+    let hash = blake3::hash(comparable(vault_path).as_bytes()).to_hex();
+    let short = &hash.as_str()[..8];
+    match name.rsplit_once('.') {
+        Some((stem, extension)) if !stem.is_empty() => format!("{stem}-{short}.{extension}"),
+        _ => format!("{name}-{short}"),
     }
 }
 

@@ -82,9 +82,9 @@ A wikilink `[[Target]]` refers to a note by its **name**, not its path. Markoo b
 | Target **outside the pair** (elsewhere in the vault) | Plain text + restore comment (see below) |
 | Target **not found** | Left as is, warning in the report |
 
-A path starting with `./` or `../` is resolved from the current note. Names match without regard to case or to the way accents are encoded, since that depends on the system that created the file. A wikilink without `!` to an attachment, when no note has that name, points to the assets folder and the file is copied there. If two attachments share its name, it is left as is, with a warning saying so: the assets folder is flat.
+A path starting with `./` or `../` is resolved from the current note. Names match without regard to case or to the way accents are encoded, since that depends on the system that created the file. A wikilink without `!` to an attachment, when no note has that name, points to the assets folder and the file is copied there.
 
-A **Markdown link** written in the vault is read like this: a file next to the note wins, as on GitHub; otherwise the path is looked up from the vault root, which is the form Obsidian writes with `newLinkFormat = "absolute"`. Paths starting with `./` or `../` are never looked up from the root. A link from the root to a note follows the table above, with its original kept in a comment. A link to an attachment, image or not, points to the assets folder and the file is copied there, unless two attachments share its name: the link is then left as is.
+A **Markdown link** written in the vault is read like this: a file next to the note wins, as on GitHub; otherwise the path is looked up from the vault root, which is the form Obsidian writes with `newLinkFormat = "absolute"`. Paths starting with `./` or `../` are never looked up from the root. A link from the root to a note follows the table above, with its original kept in a comment. A link to an attachment, image or not, points to the assets folder and the file is copied there.
 
 ### Information that can't be represented
 
@@ -115,6 +115,7 @@ flowchart TD
 - On the vault side, a new image added in the repo is copied to the attachment folder configured in Obsidian (read from `.obsidian/app.json`), or next to the note otherwise.
 - `![[image.png|300]]` (size) becomes `<img src="./assets/image.png" width="300">`.
 - `![[Other note]]` (note transclusion): a link, with the original kept in a comment. The `inline_embeds = true` option (in `[pair.kb_options]`), which would insert the content between two markers, is not implemented yet.
+- The assets folder is flat: attachments sharing a file name, whatever the case, each get a name followed by a short hash of their path in the vault (`favicon-1a2b3c4d.png`). This name stays the same from one sync to the next, and the vault keeps its own names. If a file is moved, or if another file later takes its name, it gets a new name and the old copy stays in the repo.
 - Attachments are **copied, never deleted**: removing a reference leaves the file in place on both sides. An attachment changed on both sides is reported and left alone.
 
 ## 3. Callouts

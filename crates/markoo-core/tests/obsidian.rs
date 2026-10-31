@@ -461,6 +461,103 @@ fn broken_links(root: &Path) -> Vec<String> {
     broken
 }
 
+/// A vault with two different images of the same name, synced once.
+fn shared_names() -> Golden {
+    let dir = tempfile::tempdir().unwrap();
+    let (kb, repo) = (dir.path().join("kb"), dir.path().join("repo"));
+    DiskFs
+        .write_atomic(&kb.join("a/pic.png"), b"first image")
+        .unwrap();
+    DiskFs
+        .write_atomic(&kb.join("b/pic.png"), b"second image")
+        .unwrap();
+    DiskFs
+        .write_atomic(&kb.join("note.md"), b"![[a/pic.png]]\n\n![[b/pic.png]]\n")
+        .unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    let paths = Paths::resolve(&Overrides {
+        config_file: Some(dir.path().join("c.toml")),
+        data_dir: Some(dir.path().join("data")),
+    })
+    .unwrap();
+    let engine = Engine::open(DiskFs, &paths).unwrap();
+    let mut pair = Pair::new("shared", kb, repo);
+    pair.kb_type = KbType::Obsidian;
+    engine.sync(&pair).unwrap();
+    Golden {
+        _dir: dir,
+        engine,
+        pair,
+    }
+}
+
+fn asset_with(g: &Golden, content: &[u8]) -> PathBuf {
+    let assets = g.pair.repo.join("assets");
+    DiskFs
+        .list(&assets)
+        .unwrap()
+        .into_iter()
+        .map(|file| assets.join(file))
+        .find(|file| DiskFs.read(file).unwrap() == content)
+        .unwrap()
+}
+
+#[test]
+fn shared_names_are_both_copied() {
+    let g = shared_names();
+    assert_ne!(
+        asset_with(&g, b"first image"),
+        asset_with(&g, b"second image")
+    );
+}
+
+#[test]
+fn shared_names_leave_no_broken_link() {
+    assert_eq!(
+        broken_links(&shared_names().pair.repo),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn shared_names_settle() {
+    let g = shared_names();
+    assert!(g.engine.plan(&g.pair).unwrap().plan.is_empty());
+}
+
+#[test]
+fn shared_names_leave_the_vault_untouched() {
+    let g = shared_names();
+    assert_eq!(
+        DiskFs.read(&g.pair.kb.join("note.md")).unwrap(),
+        b"![[a/pic.png]]\n\n![[b/pic.png]]\n"
+    );
+}
+
+#[test]
+fn edited_renamed_asset_goes_back_to_its_own_file() {
+    let g = shared_names();
+    let asset = asset_with(&g, b"second image");
+    DiskFs.write_atomic(&asset, b"edited image").unwrap();
+    g.engine.sync(&g.pair).unwrap();
+    assert_eq!(
+        DiskFs.read(&g.pair.kb.join("b/pic.png")).unwrap(),
+        b"edited image"
+    );
+}
+
+#[test]
+fn edited_renamed_asset_leaves_the_other_file_alone() {
+    let g = shared_names();
+    let asset = asset_with(&g, b"second image");
+    DiskFs.write_atomic(&asset, b"edited image").unwrap();
+    g.engine.sync(&g.pair).unwrap();
+    assert_eq!(
+        DiskFs.read(&g.pair.kb.join("a/pic.png")).unwrap(),
+        b"first image"
+    );
+}
+
 /// The hash of every file of a folder.
 fn fingerprints(root: &Path) -> BTreeMap<PathBuf, blake3::Hash> {
     DiskFs

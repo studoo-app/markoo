@@ -367,12 +367,6 @@ fn linked_file_is_listed_as_an_asset() {
 }
 
 #[test]
-fn image_with_an_ambiguous_name_is_left_alone() {
-    let text = "![logo](Media/a/logo.png)\n";
-    assert_eq!(to(text), text);
-}
-
-#[test]
 fn file_next_to_the_note_wins_over_the_vault_root() {
     let text = "[twin](sub/twin.md)\n";
     let (path, index) = (
@@ -477,27 +471,6 @@ fn note_wins_over_a_file_for_a_wikilink() {
     );
 }
 
-#[test]
-fn shared_attachment_name_is_reported_as_such() {
-    let (path, index) = (EntryPath::from_relative(Path::new(FROM)).unwrap(), index());
-    let ctx = ConvertCtx {
-        path: &path,
-        index: &index,
-    };
-    let text = "![[Media/a/logo.png]]\n";
-    assert_eq!(
-        ObsidianAdapter::default().to_canonical(text, &ctx).unwrap(),
-        text
-    );
-    assert_eq!(
-        index.take_warnings(),
-        vec![(
-            FROM.to_owned(),
-            "several attachments share this name: ![[Media/a/logo.png]]".to_owned()
-        )]
-    );
-}
-
 // --- Wikilinks relative to the note --------------------------------------------------------
 
 #[test]
@@ -525,6 +498,143 @@ fn wikilink_relative_to_the_note_is_found() {
 #[test]
 fn relative_wikilink_is_not_matched_by_name_elsewhere() {
     let text = "![[./schema.png]]\n";
+    assert_eq!(to(text), text);
+}
+
+// --- Attachments sharing a name --------------------------------------------------------------
+
+fn logo_in(folder: &str) -> String {
+    shared_asset_name(&format!("Media/{folder}/logo.png"), "logo.png")
+}
+
+#[test]
+fn shared_name_gets_a_stable_name_in_the_assets_folder() {
+    assert_eq!(logo_in("a"), "logo-cc181ae5.png");
+}
+
+#[test]
+fn files_sharing_a_name_get_different_names() {
+    assert_ne!(logo_in("a"), logo_in("b"));
+}
+
+#[test]
+fn name_without_an_extension_keeps_its_hash_at_the_end() {
+    assert!(shared_asset_name("a/.gitignore", ".gitignore").starts_with(".gitignore-"));
+}
+
+#[test]
+fn embed_of_a_shared_name_points_to_its_own_asset() {
+    let name = logo_in("b");
+    assert_eq!(
+        to("![[Media/b/logo.png]]\n"),
+        format!("![logo](./assets/{name})\n")
+    );
+}
+
+#[test]
+fn embed_of_a_shared_name_comes_back_as_written() {
+    let text = "![[Media/b/logo.png]]\n";
+    assert_eq!(back(&to(text)), text);
+}
+
+#[test]
+fn markdown_image_of_a_shared_name_points_to_its_own_asset() {
+    let name = logo_in("a");
+    assert_eq!(
+        to("![x](Media/a/logo.png)\n"),
+        format!("![x](./assets/{name})<!--markoo:![x](Media/a/logo.png)-->\n")
+    );
+}
+
+#[test]
+fn wikilink_to_a_shared_name_shows_the_original_name() {
+    let name = logo_in("a");
+    assert_eq!(
+        to("[[Media/a/logo.png]]\n"),
+        format!("[logo.png](./assets/{name})<!--markoo:[[Media/a/logo.png]]-->\n")
+    );
+}
+
+#[test]
+fn bare_shared_name_picks_the_closest_file_and_warns() {
+    let (path, index) = (
+        EntryPath::from_relative(Path::new("Media/b/note.md")).unwrap(),
+        NameIndex::for_tests(
+            &["Media/b/note.md"],
+            &["Media/a/logo.png", "Media/b/logo.png"],
+            "",
+        ),
+    );
+    let ctx = ConvertCtx {
+        path: &path,
+        index: &index,
+    };
+    let canonical = ObsidianAdapter::default()
+        .to_canonical("![[logo.png]]\n", &ctx)
+        .unwrap();
+    assert_eq!(
+        canonical,
+        format!(
+            "![logo](../../assets/{})<!--markoo:![[logo.png]]-->\n",
+            logo_in("b")
+        )
+    );
+    assert_eq!(
+        index.take_warnings(),
+        vec![(
+            "Media/b/note.md".to_owned(),
+            "ambiguous link target: logo.png".to_owned()
+        )]
+    );
+}
+
+#[test]
+fn renamed_asset_is_listed_and_found_in_the_vault() {
+    let (path, index) = (EntryPath::from_relative(Path::new(FROM)).unwrap(), index());
+    let ctx = ConvertCtx {
+        path: &path,
+        index: &index,
+    };
+    let name = logo_in("a");
+    let canonical = format!("![x](./assets/{name})\n");
+    assert_eq!(
+        ObsidianAdapter::default().referenced_assets(&canonical, &ctx),
+        vec![name.clone()]
+    );
+    assert_eq!(
+        index.attachment_in_vault(&name).as_deref(),
+        Some("Media/a/logo.png")
+    );
+}
+
+#[test]
+fn clean_link_to_a_renamed_asset_goes_back_to_its_path_in_the_vault() {
+    let name = logo_in("a");
+    assert_eq!(
+        back(&format!("![logo](./assets/{name})\n")),
+        "![[Media/a/logo.png]]\n"
+    );
+}
+
+// --- Spaces in targets -----------------------------------------------------------------------
+
+#[test]
+fn spaces_around_a_target_are_ignored() {
+    assert_eq!(
+        to("[[001-stack  |stack]]\n"),
+        "[stack](./adr/001-stack.md)<!--markoo:[[001-stack  |stack]]-->\n"
+    );
+}
+
+#[test]
+fn target_with_spaces_comes_back_as_written() {
+    let text = "[[ 001-stack ]]\n";
+    assert_eq!(back(&to(text)), text);
+}
+
+#[test]
+fn target_made_of_spaces_is_left_alone() {
+    let text = "[[  ]]\n";
     assert_eq!(to(text), text);
 }
 
@@ -787,6 +897,10 @@ fn fragment() -> impl Strategy<Value = String> {
         Just("[[./adr/001-stack]]".to_owned()),
         Just("[[Cafe\u{301} Notes]]".to_owned()),
         Just("![[Media/a/logo.png]]".to_owned()),
+        Just("![[logo.png|300]]".to_owned()),
+        Just("[[Media/b/logo.png|Open: logo]]".to_owned()),
+        Just("![x](Media/a/logo.png)".to_owned()),
+        Just("[[001-stack  |stack]]".to_owned()),
         Just("`[[architecture]]`".to_owned()),
         Just("%% [[architecture]] %%".to_owned()),
         Just("plain text".to_owned()),

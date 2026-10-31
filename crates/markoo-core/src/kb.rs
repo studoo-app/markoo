@@ -198,6 +198,13 @@ impl NameLookup {
         Self { by_name }
     }
 
+    /// Whether several files have this name.
+    fn is_shared(&self, name: &str) -> bool {
+        self.by_name
+            .get(&comparable(name))
+            .is_some_and(|files| files.len() > 1)
+    }
+
     /// The files at the comparable path `wanted`, and with `in_any_folder`
     /// those whose path ends with it, as `(comparable path, path)`.
     fn matching(&self, wanted: &str, in_any_folder: bool) -> Vec<(&str, &str)> {
@@ -233,6 +240,8 @@ pub struct NameIndex {
     assets_dir: String,
     note_lookup: OnceCell<NameLookup>,
     attachment_lookup: OnceCell<NameLookup>,
+    /// Vault path of the attachments renamed in the assets folder, by new name.
+    renamed_assets: OnceCell<HashMap<String, String>>,
     warnings: RefCell<BTreeMap<String, String>>,
 }
 

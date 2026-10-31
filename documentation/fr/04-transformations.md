@@ -82,9 +82,9 @@ Un wikilink `[[Cible]]` désigne une note par son **nom**, pas par son chemin. M
 | Cible **hors de la paire** (ailleurs dans le vault) | Texte simple + commentaire de restauration (voir plus bas) |
 | Cible **introuvable** | Laissé tel quel, avertissement dans le rapport |
 
-Un chemin commençant par `./` ou `../` se résout depuis la note courante. Les noms se comparent sans tenir compte de la casse ni de l'encodage des accents, qui dépend du système ayant créé le fichier. Un wikilink sans `!` vers une pièce jointe, quand aucune note ne porte ce nom, pointe vers le dossier des pièces jointes et le fichier y est copié. Si deux pièces jointes portent le même nom, il reste tel quel, avec un avertissement qui le précise : le dossier des pièces jointes est à plat.
+Un chemin commençant par `./` ou `../` se résout depuis la note courante. Les noms se comparent sans tenir compte de la casse ni de l'encodage des accents, qui dépend du système ayant créé le fichier. Un wikilink sans `!` vers une pièce jointe, quand aucune note ne porte ce nom, pointe vers le dossier des pièces jointes et le fichier y est copié.
 
-Un **lien Markdown** écrit dans le vault se lit ainsi : un fichier à côté de la note a la priorité, comme sur GitHub ; sinon le chemin est cherché depuis la racine du vault, la forme qu'Obsidian écrit avec `newLinkFormat = "absolute"`. Les chemins commençant par `./` ou `../` ne sont jamais cherchés depuis la racine. Un lien vers une note écrit depuis la racine suit le tableau ci-dessus, et sa forme d'origine est gardée dans un commentaire. Un lien vers une pièce jointe, image ou non, pointe vers le dossier des pièces jointes et le fichier y est copié, sauf si deux pièces jointes portent le même nom : le lien reste alors tel quel.
+Un **lien Markdown** écrit dans le vault se lit ainsi : un fichier à côté de la note a la priorité, comme sur GitHub ; sinon le chemin est cherché depuis la racine du vault, la forme qu'Obsidian écrit avec `newLinkFormat = "absolute"`. Les chemins commençant par `./` ou `../` ne sont jamais cherchés depuis la racine. Un lien vers une note écrit depuis la racine suit le tableau ci-dessus, et sa forme d'origine est gardée dans un commentaire. Un lien vers une pièce jointe, image ou non, pointe vers le dossier des pièces jointes et le fichier y est copié.
 
 ### Information non représentable
 
@@ -115,6 +115,7 @@ flowchart TD
 - Côté vault, une nouvelle image ajoutée dans le repo est copiée dans le dossier de pièces jointes configuré dans Obsidian (lu depuis `.obsidian/app.json`), ou à défaut à côté de la note.
 - `![[image.png|300]]` (taille) devient `<img src="./assets/image.png" width="300">`.
 - `![[Autre note]]` (transclusion de note) : un lien, avec l'original conservé dans un commentaire. L'option `inline_embeds = true` (dans `[pair.kb_options]`), qui insérerait le contenu entre deux marqueurs, n'est pas encore implémentée.
+- Le dossier des pièces jointes est à plat : des pièces jointes portant le même nom de fichier, quelle que soit la casse, reçoivent chacune un nom suivi d'un court hash de leur chemin dans le vault (`favicon-1a2b3c4d.png`). Ce nom reste le même d'une synchro à l'autre, et le vault garde ses propres noms. Si un fichier est déplacé, ou si un autre fichier prend plus tard son nom, il reçoit un nouveau nom et l'ancienne copie reste dans le dépôt.
 - Les pièces jointes sont **copiées, jamais supprimées** : retirer une référence laisse le fichier en place des deux côtés. Une pièce jointe modifiée des deux côtés est signalée et laissée telle quelle.
 
 ## 3. Callouts
