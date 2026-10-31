@@ -1,7 +1,7 @@
 [package]
 name = "markoo-app"
 description = "Desktop app of Markoo"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 edition = "2024"
 rust-version = "1.89"
 license = "Apache-2.0"
