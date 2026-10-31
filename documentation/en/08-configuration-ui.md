@@ -166,7 +166,7 @@ flowchart LR
 - **Step 1**: first the **KB type** is chosen (auto-detected when possible), then the folder. Known KBs are suggested by the adapter: the Obsidian one reads the app's `obsidian.json` file (`~/Library/Application Support/obsidian/` on macOS, `~/.config/obsidian/` on Linux, `%APPDATA%\obsidian\` on Windows); other adapters may suggest nothing and just offer a folder picker. A folder can always be picked by hand.
 - **Step 2**: the picker checks that the folder is inside a Git repository and shows the current branch.
 - **Step 3**: the three direction cards, with bidirectional mode preselected.
-- **Step 6, first sync of a new pair**: if both folders already contain files, the preview highlights files present on both sides with different content (case 5 of the [classification](03-sync-algorithm.md#classification)) so the user can deal with them before starting.
+- **Step 6, first sync of a new pair**: if both folders already contain files, the preview highlights files present on both sides with different content (case 5 of the [classification](03-sync-algorithm.md#classification)) so the user can deal with them before starting. It also counts the files going to each side, and warns about those going to the KB that Git does not track in the repo: they may have nothing to do with the repository.
 
 ## Saving a change
 

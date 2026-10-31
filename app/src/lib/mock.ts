@@ -61,9 +61,26 @@ export function installMock(): void {
       case "list_pairs":
         return pairs;
       case "pair_status":
+        return { ...plan, pair: params.pair ?? "new" };
       case "preview_new_pair":
       case "preview_pair_settings":
-        return { ...plan, pair: params.pair ?? "new" };
+        return {
+          ...plan,
+          pair: params.pair ?? "new",
+          summary: {
+            to_kb: 98,
+            to_repo: 1,
+            git: true,
+            untracked_to_kb: 75,
+            untracked_examples: [
+              "00-administration/charte-nommage.md",
+              "01-infrastructure/INDEX.md",
+              "02-services/INDEX.md",
+              "Obsidian/INDEX.md",
+              "README.md",
+            ],
+          },
+        };
       case "pair_diff":
         return { diffs: [{ path: "glossary.md", patch: "@@ -1 +1 @@\n-old line\n+new line\n" }] };
       case "list_conflicts":

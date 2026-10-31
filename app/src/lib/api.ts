@@ -91,6 +91,14 @@ export interface Plan {
   entries: PlanEntry[];
   attachments: PlanAttachment[];
   scan_issues: { path: string; message: string }[];
+  /** Only in a preview of settings. */
+  summary?: {
+    to_kb: number;
+    to_repo: number;
+    git: boolean;
+    untracked_to_kb: number;
+    untracked_examples: string[];
+  };
 }
 
 export interface Conflict {

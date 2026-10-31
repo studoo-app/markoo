@@ -406,3 +406,88 @@ fn the_history_of_an_unknown_pair_is_an_error() {
     let env = Env::new().with_saved_pair();
     assert!(service::history(&env.paths, "nobody", 10).is_err());
 }
+
+/// A pair whose repo is a real Git folder with `kept.md` committed.
+fn env_in_git() -> Env {
+    let env = Env::new();
+    std::fs::remove_dir_all(env.repo().join(".git")).unwrap();
+    std::fs::write(env.repo().join("kept.md"), "kept\n").unwrap();
+    for args in [
+        vec!["init", "-q"],
+        vec!["add", "."],
+        vec![
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-qm",
+            "first",
+        ],
+    ] {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(env.repo())
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+    env
+}
+
+#[test]
+fn a_preview_counts_where_files_go() {
+    let env = env_in_git();
+    std::fs::write(env.kb().join("note.md"), "from the kb\n").unwrap();
+    let plan = service::preview_new_pair(&env.paths, &env.new_pair()).unwrap();
+    assert_eq!(plan["summary"]["to_kb"], 1);
+    assert_eq!(plan["summary"]["to_repo"], 1);
+    assert_eq!(plan["summary"]["git"], true);
+}
+
+#[test]
+fn a_preview_does_not_flag_files_tracked_by_git() {
+    let env = env_in_git();
+    let plan = service::preview_new_pair(&env.paths, &env.new_pair()).unwrap();
+    assert_eq!(plan["summary"]["untracked_to_kb"], 0);
+}
+
+#[test]
+fn a_preview_flags_files_going_to_the_kb_outside_of_git() {
+    let env = env_in_git();
+    std::fs::create_dir_all(env.repo().join("from-elsewhere")).unwrap();
+    std::fs::write(env.repo().join("from-elsewhere/stray.md"), "stray\n").unwrap();
+    let plan = service::preview_new_pair(&env.paths, &env.new_pair()).unwrap();
+    assert_eq!(plan["summary"]["to_kb"], 2);
+    assert_eq!(plan["summary"]["untracked_to_kb"], 1);
+    assert_eq!(
+        plan["summary"]["untracked_examples"],
+        json!(["from-elsewhere/stray.md"])
+    );
+}
+
+#[test]
+fn a_preview_flags_a_file_with_an_accent() {
+    let env = env_in_git();
+    std::fs::write(env.repo().join("r\u{e9}seau.md"), "stray\n").unwrap();
+    let plan = service::preview_new_pair(&env.paths, &env.new_pair()).unwrap();
+    assert_eq!(plan["summary"]["untracked_to_kb"], 1);
+}
+
+#[test]
+fn a_preview_flags_an_ignored_file() {
+    let env = env_in_git();
+    std::fs::write(env.repo().join(".git/info/exclude"), "ignored.md\n").unwrap();
+    std::fs::write(env.repo().join("ignored.md"), "ignored\n").unwrap();
+    let plan = service::preview_new_pair(&env.paths, &env.new_pair()).unwrap();
+    assert_eq!(plan["summary"]["untracked_to_kb"], 1);
+}
+
+#[test]
+fn a_preview_outside_of_git_flags_nothing() {
+    let env = Env::new();
+    std::fs::write(env.repo().join("note.md"), "x\n").unwrap();
+    let plan = service::preview_new_pair(&env.paths, &env.new_pair()).unwrap();
+    assert_eq!(plan["summary"]["git"], false);
+    assert_eq!(plan["summary"]["untracked_to_kb"], 0);
+}

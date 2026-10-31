@@ -11,6 +11,31 @@
   );
 </script>
 
+{#if plan.summary}
+  {@const summary = plan.summary}
+  <p class="totals">
+    <strong>{summary.to_kb}</strong> file(s) to the KB ·
+    <strong>{summary.to_repo}</strong> to the repo
+  </p>
+  {#if summary.untracked_to_kb > 0}
+    <div class="untracked" role="alert">
+      <strong>
+        {summary.untracked_to_kb} of the files going to the KB are not tracked by Git in the repo.
+      </strong>
+      They may have nothing to do with this repository, if an earlier sync left them there for
+      example. Check them before going on.
+      <ul>
+        {#each summary.untracked_examples as path}
+          <li class="path">{path}</li>
+        {/each}
+      </ul>
+      {#if summary.untracked_to_kb > summary.untracked_examples.length}
+        <p class="more">… and {summary.untracked_to_kb - summary.untracked_examples.length} more.</p>
+      {/if}
+    </div>
+  {/if}
+{/if}
+
 {#if plan.entries.length === 0 && plan.attachments.length === 0}
   <p class="muted">Nothing to do: both sides agree.</p>
 {:else}
@@ -48,6 +73,27 @@
 {/if}
 
 <style>
+  .totals {
+    margin: 0 0 8px;
+  }
+  .untracked {
+    border: 1px solid var(--warn);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+  .untracked ul {
+    margin-top: 6px;
+    font-size: 12px;
+  }
+  .untracked li {
+    display: block;
+    padding: 1px 0;
+  }
+  .more {
+    margin: 2px 0 0;
+    font-size: 12px;
+  }
   ul {
     list-style: none;
     margin: 0;

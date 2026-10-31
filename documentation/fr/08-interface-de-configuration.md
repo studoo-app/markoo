@@ -166,7 +166,7 @@ flowchart LR
 - **Étape 1** : on choisit d'abord le **type de KB** (détecté automatiquement quand c'est possible), puis le dossier. Les KB connues sont proposées par l'adaptateur : celui d'Obsidian lit le fichier `obsidian.json` de l'application (sous macOS `~/Library/Application Support/obsidian/`, sous Linux `~/.config/obsidian/`, sous Windows `%APPDATA%\obsidian\`) ; d'autres adaptateurs ne proposent rien et se contentent d'un sélecteur de dossier. On peut toujours choisir un dossier à la main.
 - **Étape 2** : le sélecteur vérifie que le dossier est dans un dépôt Git et affiche la branche courante.
 - **Étape 3** : les trois cartes de sens, avec le mode bidirectionnel présélectionné.
-- **Étape 6, première synchro d'une nouvelle paire** : si les deux dossiers contiennent déjà des fichiers, l'aperçu met en évidence les fichiers présents des deux côtés avec un contenu différent (cas 5 de la [classification](03-algorithme-de-synchronisation.md#classification)) pour que l'utilisateur les traite avant de lancer.
+- **Étape 6, première synchro d'une nouvelle paire** : si les deux dossiers contiennent déjà des fichiers, l'aperçu met en évidence les fichiers présents des deux côtés avec un contenu différent (cas 5 de la [classification](03-algorithme-de-synchronisation.md#classification)) pour que l'utilisateur les traite avant de lancer. Il compte aussi les fichiers envoyés de chaque côté, et signale ceux qui partent vers la KB sans être suivis par Git dans le dépôt : ils peuvent n'avoir aucun rapport avec lui.
 
 ## Enregistrement d'une modification
 

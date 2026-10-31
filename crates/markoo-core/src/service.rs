@@ -3,11 +3,13 @@
 //! They only translate between their protocol and these functions, so that
 //! both show the same data and apply the same checks.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::Serialize;
 use serde_json::{Map, Value, json};
+use unicode_normalization::UnicodeNormalization;
 
 use crate::apply::Report;
 use crate::config::{Config, ConfigError, NewPair, PairEntry, Problem, expand_home};
@@ -271,7 +273,7 @@ pub fn preview_new_pair(paths: &Paths, new: &NewPair) -> Result<Value, Error> {
     check_folder("kb", &new.kb)?;
     check_folder("repo", &new.repo)?;
     let pair = manage::preview_new_pair(paths, new)?;
-    plan_view(&open_engine(paths)?, &pair)
+    preview_view(paths, &pair)
 }
 
 /// The plan of a pair with changed settings, which are not saved.
@@ -282,7 +284,58 @@ pub fn preview_config(
 ) -> Result<Value, Error> {
     let changes = setting_changes(settings)?;
     let pair = manage::preview_set_pair(paths, name, &changes)?;
-    plan_view(&open_engine(paths)?, &pair)
+    preview_view(paths, &pair)
+}
+
+/// How many examples a preview gives of the files that are not tracked by Git.
+const UNTRACKED_EXAMPLES: usize = 5;
+
+/// The plan, with what a user should look at before accepting it: where files
+/// go, and how many of those sent to the KB are not in Git. Such files may have
+/// nothing to do with the repository, left there by an earlier sync for example.
+fn preview_view(paths: &Paths, pair: &Pair) -> Result<Value, Error> {
+    let mut view = plan_view(&open_engine(paths)?, pair)?;
+    let copies_to = |side: Side| -> Vec<String> {
+        let side = json!(side);
+        view["entries"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|entry| entry["kind"] == "copy" && entry["side"] == side)
+            .filter_map(|entry| entry["path"].as_str().map(str::to_owned))
+            .collect()
+    };
+    let to_kb = copies_to(Side::Kb);
+    let to_repo = copies_to(Side::Repo).len();
+    // Git and the file system may not encode accents the same way.
+    let comparable = |text: &str| text.nfc().collect::<String>();
+    let untracked = hooks::untracked_files(&pair.repo)
+        .map_err(hook_error)?
+        .map(|files| {
+            files
+                .iter()
+                .map(|file| comparable(file))
+                .collect::<BTreeSet<_>>()
+        });
+    let untracked_to_kb: Option<Vec<&String>> = untracked.as_ref().map(|untracked| {
+        to_kb
+            .iter()
+            .filter(|path| untracked.contains(&comparable(path)))
+            .collect()
+    });
+    let summary = json!({
+        "to_kb": to_kb.len(),
+        "to_repo": to_repo,
+        "git": untracked.is_some(),
+        "untracked_to_kb": untracked_to_kb.as_ref().map_or(0, Vec::len),
+        "untracked_examples": untracked_to_kb
+            .iter()
+            .flatten()
+            .take(UNTRACKED_EXAMPLES)
+            .collect::<Vec<_>>(),
+    });
+    view["summary"] = summary;
+    Ok(view)
 }
 
 /// Most files listed by a filter preview, which also gives their real number.

@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import {
     api,
+    arrow,
     errorText,
     kbLabel,
     type Direction,
@@ -221,7 +222,7 @@
     </div>
   {:else if preview}
     <h2>{name}</h2>
-    <p class="muted path">{kb} → {repo}</p>
+    <p class="muted path">{kb} {arrow(direction)} {repo}</p>
     {#if conflicts > 0}
       <p class="warn">
         {conflicts} file(s) exist on both sides with different content. They will wait for your decision.

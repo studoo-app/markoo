@@ -155,6 +155,18 @@ impl GitRepo {
     }
 }
 
+/// Files under a folder that Git does not track (ignored ones included),
+/// relative to it. `None` outside of a repository.
+pub fn untracked_files(folder: &Path) -> Result<Option<Vec<String>>, HookError> {
+    let listed = git(folder, &["ls-files", "--others", "-z"])?;
+    Ok(listed.map(|text| {
+        text.split('\0')
+            .filter(|file| !file.is_empty())
+            .map(str::to_owned)
+            .collect()
+    }))
+}
+
 /// Runs `git`, returning its output or `None` if it answered with a failure.
 fn git(folder: &Path, args: &[&str]) -> Result<Option<String>, HookError> {
     let output = Command::new("git")
