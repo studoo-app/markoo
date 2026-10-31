@@ -16,7 +16,7 @@ L'app est signée et notarisée par Apple : elle s'ouvre donc normalement. Elle 
 
 ### Ligne de commande seule
 
-Téléchargez l'archive de votre système sur la même page et placez `markoo` dans votre `PATH`. Elle tourne sur macOS, Linux et Windows. **Sur macOS, seule la copie incluse dans l'app est signée :** si le système bloque une copie téléchargée à part, utilisez celle de l'app ou retirez la marque de quarantaine :
+Téléchargez l'archive de votre système sur la même page et placez `markoo` dans votre `PATH`. Elle tourne sur macOS, Linux et Windows. Sur macOS, elle est aussi signée et notarisée, mais un Mac doit pouvoir joindre Apple à son premier lancement pour le vérifier. Si le système la bloque, hors ligne par exemple, utilisez la copie incluse dans l'app ou retirez la marque de quarantaine :
 
 ```bash
 xattr -d com.apple.quarantine ./markoo

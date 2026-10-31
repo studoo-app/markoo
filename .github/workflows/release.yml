@@ -34,6 +34,42 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - run: cargo build --release --locked -p markoo-cli --target ${{ matrix.target }}
+      # The app gets this from Tauri; a command downloaded on its own needs it too.
+      # Apple cannot staple a ticket to a bare binary, so a Mac checks it online.
+      - name: Sign and notarize, if the Apple secrets exist
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "::warning::No Apple certificate: the command is not signed nor notarized."
+            exit 0
+          fi
+          binary="target/${{ matrix.target }}/release/markoo"
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password=$(uuidgen)
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          codesign --force --options runtime --timestamp --keychain "$keychain" --sign "$APPLE_SIGNING_IDENTITY" "$binary"
+          codesign --verify --strict --verbose=2 "$binary"
+          ditto -c -k --keepParent "$binary" "$RUNNER_TEMP/markoo.zip"
+          status=$(xcrun notarytool submit "$RUNNER_TEMP/markoo.zip" --wait --output-format json \
+            --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin)["status"])')
+          echo "Notarization: $status"
+          test "$status" = "Accepted"
+          security delete-keychain "$keychain"
       - name: Package
         shell: bash
         run: |

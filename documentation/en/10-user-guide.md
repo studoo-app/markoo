@@ -16,7 +16,7 @@ The app is signed and notarized by Apple, so it opens normally. It includes the 
 
 ### Command line only
 
-Download the archive for your system from the same page and put `markoo` somewhere in your `PATH`. It runs on macOS, Linux and Windows. **On macOS, only the copy inside the app is signed:** if the system blocks one downloaded on its own, use the app's copy or remove the quarantine mark:
+Download the archive for your system from the same page and put `markoo` somewhere in your `PATH`. It runs on macOS, Linux and Windows. On macOS it is signed and notarized too, but a Mac has to reach Apple the first time it runs it, to check. If the system blocks it, offline for example, use the copy inside the app or remove the quarantine mark:
 
 ```bash
 xattr -d com.apple.quarantine ./markoo

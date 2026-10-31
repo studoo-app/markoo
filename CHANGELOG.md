@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The command line archives for macOS are now signed and notarized too. A Mac has to reach Apple the first time it runs one, since a bare binary cannot carry its ticket.
+
 ## [1.0.0-rc.2] - 2026-10-31
 
 ### Changed
