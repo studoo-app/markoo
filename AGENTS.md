@@ -17,7 +17,7 @@ The design lives in [`documentation/`](documentation/INDEX.md). **Read it before
 
 ## Current status
 
-**M0 to M2, M4 to M6 done** (`markoo-daemon`: job queue, scheduler, HTTP API, `launchd` service, tried on a real `launchd`), **M3 Obsidian adapter in place** (`markoo-core::kb::obsidian`): wikilinks, embeds, attachments, callouts, frontmatter, detection; validation on real vaults under way (`MARKOO_CORPUS`, see `crates/markoo-core/tests/obsidian.rs`). Not implemented yet: the journal, `schedule.pause_on_battery`, the `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, merging frontmatter by key (all accepted in `markoo.toml`, ignored with a warning where they are options). The next milestone is **M7** (Tauri app). Don't build ahead of the roadmap without being asked.
+**M0 to M2, M4 to M6 done** (`markoo-daemon`: job queue, scheduler, HTTP API, `launchd` service, tried on a real `launchd`), **M3 Obsidian adapter in place** (`markoo-core::kb::obsidian`): wikilinks, embeds, attachments, callouts, frontmatter, detection; validation on real vaults under way (`MARKOO_CORPUS`, see `crates/markoo-core/tests/obsidian.rs`). Not implemented yet: the journal, `schedule.pause_on_battery`, the `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, merging frontmatter by key (all accepted in `markoo.toml`, ignored with a warning where they are options). **M7 in progress** (`app/`, Svelte 5 and Tauri 2, its own lock file outside the Cargo workspace): menu bar, pairs, changes, conflict view, wizard and General tab; filters, transformations, triggers, global settings and the journal come next. Don't build ahead of the roadmap without being asked.
 
 ## Repository layout (target)
 
@@ -66,6 +66,7 @@ markoo/
   cargo test --workspace
   ```
 
+- For the app: `npm run check` in `app/`, then `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and `cargo test` in `app/src-tauri/`.
 - Errors: `thiserror` in library crates, `anyhow` only in binaries.
 - No `unwrap()` / `expect()` outside tests, except for invariants that are truly impossible to break (explain why in a comment).
 - Tests:

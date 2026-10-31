@@ -4,6 +4,8 @@
 
 Markoo doit pouvoir se configurer **sans éditer de fichier à la main** : créer une paire, choisir la **base de connaissance (KB)** et son type, le dossier du repo, le **sens de synchronisation**, les filtres, les transformations et les déclencheurs.
 
+> **État** : cette page décrit la cible. Ce qui existe aujourd'hui est listé dans la [feuille de route](07-feuille-de-route.md#m7--app-tauri). L'assistant de création a quatre étapes pour l'instant, sans filtres ni déclencheurs ; la page d'une paire ajoute un onglet **Changements**, qui liste le plan.
+
 ## Principes
 
 1. **`markoo.toml` reste la source de vérité.** L'interface ne fait qu'éditer ce fichier. Elle utilise `toml_edit`, ce qui **conserve les commentaires et la mise en forme** de l'utilisateur. Une modification faite à la main dans le fichier apparaît dans l'interface, et inversement.

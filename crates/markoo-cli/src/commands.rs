@@ -411,11 +411,7 @@ impl Ctx {
         // The draft is our own temporary file, not a user file.
         let _ = std::fs::remove_file(&file);
         let edited = edited?;
-        // `=======` alone is not checked: it is also a valid Markdown heading underline.
-        if ["<<<<<<<", ">>>>>>>"]
-            .iter()
-            .any(|marker| edited.lines().any(|line| line.starts_with(marker)))
-        {
+        if markoo_core::merge::has_markers(&edited) {
             bail!("conflict markers are still there; nothing was changed");
         }
         if edited.trim().is_empty() {

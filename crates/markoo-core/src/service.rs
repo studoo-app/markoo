@@ -3,16 +3,18 @@
 //! They only translate between their protocol and these functions, so that
 //! both show the same data and apply the same checks.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 use crate::apply::Report;
-use crate::config::{Config, ConfigError, PairEntry, Problem};
+use crate::config::{Config, ConfigError, NewPair, PairEntry, Problem, expand_home};
 use crate::engine::issue_id;
 use crate::fs::DiskFs;
+use crate::hooks::GitRepo;
+use crate::kb::KbType;
 use crate::paths::Paths;
 use crate::plan::{Action, Plan};
 use crate::{Engine, EntryPath, Error, Pair, Resolution, Side, manage};
@@ -206,12 +208,8 @@ pub fn warnings_view(warnings: &[Problem]) -> Vec<&str> {
         .collect()
 }
 
-/// Changes settings of a pair; the answer includes a preview of the new plan.
-pub fn update_config(
-    paths: &Paths,
-    name: &str,
-    settings: &Map<String, Value>,
-) -> Result<Value, Error> {
+/// Checks settings received from a client and puts them in text form.
+fn setting_changes(settings: &Map<String, Value>) -> Result<Vec<(String, String)>, Error> {
     let mut changes = Vec::with_capacity(settings.len());
     for (key, value) in settings {
         // The state is stored under the name: renaming would lose the base.
@@ -224,6 +222,16 @@ pub fn update_config(
         }
         changes.push((key.clone(), text));
     }
+    Ok(changes)
+}
+
+/// Changes settings of a pair; the answer includes a preview of the new plan.
+pub fn update_config(
+    paths: &Paths,
+    name: &str,
+    settings: &Map<String, Value>,
+) -> Result<Value, Error> {
+    let changes = setting_changes(settings)?;
     let warnings = {
         let _edit = config_edit();
         manage::set_pair(paths, name, &changes)?
@@ -237,6 +245,57 @@ pub fn update_config(
         "plan": preview.as_ref().ok(),
         "plan_error": preview.as_ref().err().map(ToString::to_string),
     }))
+}
+
+/// The plan of a new pair, which is not saved.
+pub fn preview_new_pair(paths: &Paths, new: &NewPair) -> Result<Value, Error> {
+    check_folder("kb", &new.kb)?;
+    check_folder("repo", &new.repo)?;
+    let pair = manage::preview_new_pair(paths, new)?;
+    plan_view(&open_engine(paths)?, &pair)
+}
+
+/// The plan of a pair with changed settings, which are not saved.
+pub fn preview_config(
+    paths: &Paths,
+    name: &str,
+    settings: &Map<String, Value>,
+) -> Result<Value, Error> {
+    let changes = setting_changes(settings)?;
+    let pair = manage::preview_set_pair(paths, name, &changes)?;
+    plan_view(&open_engine(paths)?, &pair)
+}
+
+/// What a folder would be as a knowledge base.
+pub fn inspect_kb(path: &str) -> Value {
+    let folder = expand_home(path);
+    json!({
+        "exists": folder.is_dir(),
+        "kb_type": KbType::detect(&folder).id(),
+    })
+}
+
+/// Whether a folder can be the repo side, and where it stands in Git.
+pub fn inspect_repo(path: &str) -> Value {
+    let folder = expand_home(path);
+    let repo = GitRepo::open(&folder).ok();
+    json!({
+        "exists": folder.is_dir(),
+        "git": repo.is_some(),
+        "top_level": repo.as_ref().map(|repo| &repo.top_level),
+        "branch": repo.as_ref().and_then(|repo| repo.branch.as_ref()),
+    })
+}
+
+/// Folders known to the knowledge base tools, suggested for a new pair.
+pub fn known_kbs() -> Vec<PathBuf> {
+    crate::kb::known_kbs()
+}
+
+/// Text to edit by hand to settle an issue, with conflict markers.
+pub fn conflict_draft(paths: &Paths, id: &str) -> Result<String, Error> {
+    let (pair, path) = find_issue(paths, id)?;
+    open_engine(paths)?.conflict_draft(&pair, &path)
 }
 
 /// Pending conflicts and divergences, of one pair or of all of them, with the

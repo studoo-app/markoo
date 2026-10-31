@@ -145,7 +145,9 @@ Declares the MCP tools and wires them to the engine through `service`. The daemo
 - **Main window**: list of pairs, pending changes, history.
 - **Conflict view**: three columns (KB · base · repo) and an editable result.
 - **Configuration**: pair creation wizard, direction choice (→ · ⇄ · ←), filters with preview, transformations, triggers. Details in [Configuration UI](08-configuration-ui.md).
-- The front end talks to the Rust core through **Tauri commands** and receives events via `emit`.
+- The front end (Svelte 5, Vite) talks to the Rust core through **Tauri commands** and receives events via `emit`.
+- It embeds the daemon, unless one is already running on the data folder, and stays in the menu bar when its window is closed.
+- It has its own lock file and target folder, outside the Cargo workspace: it needs system libraries (WebKitGTK on Linux) that the rest of Markoo does not.
 
 ## Sync flow
 

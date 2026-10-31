@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tokio::sync::broadcast;
@@ -29,6 +29,8 @@ pub enum Trigger {
     Api,
     /// A request from an MCP client.
     Mcp,
+    /// A request from the desktop app.
+    App,
 }
 
 /// Progress of a job.
@@ -44,6 +46,9 @@ pub enum JobStatus {
     /// Finished with an error.
     Failed,
 }
+
+/// How often a caller checks on the job it is waiting for.
+const JOB_POLL: Duration = Duration::from_millis(50);
 
 /// What a finished job did.
 pub use markoo_core::service::SyncOutcome as JobOutcome;
@@ -308,6 +313,22 @@ impl Queue {
     /// A job by identifier.
     pub fn job(&self, id: &str) -> Option<Job> {
         self.lock().jobs.get(&parse_job_id(id)?).cloned()
+    }
+
+    /// Waits for a job to finish and returns what it did.
+    pub async fn finished(&self, id: &str) -> Result<JobOutcome, String> {
+        loop {
+            let job = self.job(id).ok_or("the sync was forgotten")?;
+            match (job.status, job.outcome) {
+                (JobStatus::Done, Some(outcome)) => return Ok(outcome),
+                (JobStatus::Done | JobStatus::Failed, _) => {
+                    return Err(job.error.unwrap_or_else(|| "the sync failed".to_owned()));
+                }
+                (JobStatus::Queued | JobStatus::Running, _) => {
+                    tokio::time::sleep(JOB_POLL).await;
+                }
+            }
+        }
     }
 
     /// Pairs with a job running or waiting.

@@ -2,7 +2,7 @@
 
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use axum::body::Bytes;
 use axum::extract::{Path, Query, Request, State};
@@ -22,11 +22,8 @@ use serde_json::{Value, json};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 
-use crate::queue::{Event, JobStatus, Queue, Trigger};
+use crate::queue::{Event, Queue, Trigger};
 use crate::token;
-
-/// How often an MCP request checks on the sync it is waiting for.
-const JOB_POLL: Duration = Duration::from_millis(50);
 
 /// Ends the open MCP sessions.
 pub(crate) type McpStop = Box<dyn FnOnce() + Send>;
@@ -125,18 +122,7 @@ impl Syncer for QueueSyncer {
         let queue = self.0.clone();
         Box::pin(async move {
             let id = queue.submit(&pair, dry_run, Trigger::Mcp);
-            loop {
-                let job = queue.job(&id).ok_or("the sync was forgotten")?;
-                match (job.status, job.outcome) {
-                    (JobStatus::Done, Some(outcome)) => return Ok(outcome),
-                    (JobStatus::Done | JobStatus::Failed, _) => {
-                        return Err(job.error.unwrap_or_else(|| "the sync failed".to_owned()));
-                    }
-                    (JobStatus::Queued | JobStatus::Running, _) => {
-                        tokio::time::sleep(JOB_POLL).await;
-                    }
-                }
-            }
+            queue.finished(&id).await
         })
     }
 }

@@ -145,7 +145,9 @@ Déclare les outils MCP et les relie au moteur via `service`. Le daemon l'héber
 - **Fenêtre principale** : liste des paires, des changements en attente, historique.
 - **Vue de conflit** : trois colonnes (KB · base · repo) et résultat éditable.
 - **Configuration** : assistant de création de paire, choix du sens (→ · ⇄ · ←), filtres avec aperçu, transformations, déclencheurs. Détail dans [Interface de configuration](08-interface-de-configuration.md).
-- Le front communique avec le cœur Rust via les **commandes Tauri** et reçoit les événements via `emit`.
+- Le front (Svelte 5, Vite) communique avec le cœur Rust via les **commandes Tauri** et reçoit les événements via `emit`.
+- L'app embarque le daemon, sauf s'il en tourne déjà un sur le dossier de données, et reste dans la barre de menus quand sa fenêtre est fermée.
+- Elle a son propre fichier de verrouillage et son propre dossier `target`, hors du workspace Cargo : elle a besoin de bibliothèques système (WebKitGTK sous Linux) dont le reste de Markoo se passe.
 
 ## Flux d'une synchronisation
 

@@ -11,6 +11,13 @@ pub fn three_way(base: &str, kb: &str, repo: &str) -> Option<String> {
     diffy::merge(base, kb, repo).ok()
 }
 
+/// Whether a text still has conflict markers. `=======` alone is not checked:
+/// it is also a valid Markdown heading underline.
+pub fn has_markers(text: &str) -> bool {
+    text.lines()
+        .any(|line| line.starts_with("<<<<<<<") || line.starts_with(">>>>>>>"))
+}
+
 /// Merges like [`three_way`] but always returns text: conflicting blocks are
 /// surrounded by `<<<<<<<` / `=======` / `>>>>>>>` markers, for manual editing.
 pub fn with_markers(base: &str, kb: &str, repo: &str) -> String {

@@ -1,6 +1,9 @@
 [workspace]
 resolver = "3"
 members = ["crates/markoo-core", "crates/markoo-cli", "crates/markoo-daemon", "crates/markoo-mcp"]
+# The app has its own lock file and target folder: it needs system libraries
+# (WebKitGTK on Linux) that the rest of Markoo does not.
+exclude = ["app/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"

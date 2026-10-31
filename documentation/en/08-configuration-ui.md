@@ -4,6 +4,8 @@
 
 Markoo must be configurable **without editing a file by hand**: creating a pair, picking the **knowledge base (KB)** and its type, the repo folder, the **sync direction**, filters, transformations and triggers.
 
+> **Status**: this page describes the target. What exists today is listed in the [roadmap](07-roadmap.md#m7--tauri-app). The creation wizard has four steps for now, without filters and triggers; the pair page adds a **Changes** tab, which lists the plan.
+
 ## Principles
 
 1. **`markoo.toml` remains the source of truth.** The UI only edits that file. It uses `toml_edit`, which **preserves the user's comments and formatting**. A change made by hand in the file shows up in the UI, and vice versa.

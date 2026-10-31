@@ -7,11 +7,10 @@ use crate::engine::Engine;
 use crate::fs::{DiskFs, Fs};
 use crate::kb::KbType;
 use crate::paths::Paths;
-use crate::{Direction, Error};
+use crate::{Direction, Error, Pair};
 
-/// Adds a pair and returns the warnings about it. Its folders must already be
-/// absolute (or start with `~`); only the caller knows what a relative one means.
-pub fn add_pair(paths: &Paths, new: &NewPair) -> Result<Vec<Problem>, Error> {
+/// The configuration file with a new pair, not saved yet.
+fn with_new_pair(paths: &Paths, new: &NewPair) -> Result<(ConfigFile, String), Error> {
     let mut new = new.clone();
     if new.kb_type.is_none() {
         // Written down so that the behavior does not change afterwards.
@@ -23,7 +22,21 @@ pub fn add_pair(paths: &Paths, new: &NewPair) -> Result<Vec<Problem>, Error> {
     }
     let mut file = ConfigFile::open(config_file)?;
     file.add_pair(&new)?;
-    Ok(save_if_valid(&file, &new.name)?)
+    Ok((file, new.name))
+}
+
+/// Adds a pair and returns the warnings about it. Its folders must already be
+/// absolute (or start with `~`); only the caller knows what a relative one means.
+pub fn add_pair(paths: &Paths, new: &NewPair) -> Result<Vec<Problem>, Error> {
+    let (file, name) = with_new_pair(paths, new)?;
+    Ok(save_if_valid(&file, &name)?)
+}
+
+/// The pair `add_pair` would create, checked but not saved: a daemon syncs a
+/// pair as soon as it appears in the file, so the preview must come first.
+pub fn preview_new_pair(paths: &Paths, new: &NewPair) -> Result<Pair, Error> {
+    let (file, name) = with_new_pair(paths, new)?;
+    Ok(checked_pair(&file, &name)?)
 }
 
 /// Changes settings of a pair, all at once, and returns the warnings about it.
@@ -33,6 +46,26 @@ pub fn set_pair(
     name: &str,
     changes: &[(String, String)],
 ) -> Result<Vec<Problem>, Error> {
+    let file = with_changes(paths, name, changes)?;
+    Ok(save_if_valid(&file, name)?)
+}
+
+/// The pair `set_pair` would leave, checked but not saved.
+pub fn preview_set_pair(
+    paths: &Paths,
+    name: &str,
+    changes: &[(String, String)],
+) -> Result<Pair, Error> {
+    let file = with_changes(paths, name, changes)?;
+    Ok(checked_pair(&file, name)?)
+}
+
+/// The configuration file with changes to a pair, not saved yet.
+fn with_changes(
+    paths: &Paths,
+    name: &str,
+    changes: &[(String, String)],
+) -> Result<ConfigFile, Error> {
     let config = Config::load(paths.config_file())?;
     let current = &config.pair(name)?.pair;
     let mut file = ConfigFile::open(paths.config_file())?;
@@ -50,7 +83,7 @@ pub fn set_pair(
             });
         }
     }
-    Ok(save_if_valid(&file, name)?)
+    Ok(file)
 }
 
 /// Removes a pair and forgets its state. Its files are not touched.
@@ -64,9 +97,9 @@ pub fn remove_pair(paths: &Paths, name: &str) -> Result<(), Error> {
     engine.forget_pair(name)
 }
 
-/// Saves only if the file parses and this pair passes validation.
-fn save_if_valid(file: &ConfigFile, name: &str) -> Result<Vec<Problem>, ConfigError> {
-    let validation = file.preview()?.validate();
+/// Whether this pair of the edited file passes validation; returns its warnings.
+fn validated(config: &Config, name: &str) -> Result<Vec<Problem>, ConfigError> {
+    let validation = config.validate();
     let errors: Vec<String> = validation
         .errors
         .into_iter()
@@ -79,12 +112,25 @@ fn save_if_valid(file: &ConfigFile, name: &str) -> Result<Vec<Problem>, ConfigEr
             message: errors.join("; "),
         });
     }
-    file.save()?;
     Ok(validation
         .warnings
         .into_iter()
         .filter(|problem| problem.pair == name)
         .collect())
+}
+
+/// Saves only if the file parses and this pair passes validation.
+fn save_if_valid(file: &ConfigFile, name: &str) -> Result<Vec<Problem>, ConfigError> {
+    let warnings = validated(&file.preview()?, name)?;
+    file.save()?;
+    Ok(warnings)
+}
+
+/// A pair of the edited file, if it passes validation.
+fn checked_pair(file: &ConfigFile, name: &str) -> Result<Pair, ConfigError> {
+    let config = file.preview()?;
+    validated(&config, name)?;
+    Ok(config.pair(name)?.pair.clone())
 }
 
 /// Whether a folder given through a remote interface can be written to the
