@@ -1043,6 +1043,36 @@ fn hook_uninstall_removes_a_hook_markoo_created() {
 }
 
 #[test]
+fn pair_remove_reports_the_hooks_left_behind() {
+    let env = env_with_git();
+    env.ok(&["hook", "install", "--pair", "clara"]);
+    let output = env.run(&["pair", "remove", "clara"]);
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("post-merge still calls this pair"),
+        "{stderr}"
+    );
+    assert!(hook_text(&env, "post-merge").is_some());
+}
+
+#[test]
+fn pair_remove_is_silent_once_the_hooks_are_gone() {
+    let env = env_with_git();
+    env.ok(&["hook", "install", "--pair", "clara"]);
+    env.ok(&["hook", "uninstall", "--pair", "clara"]);
+    let output = env.run(&["pair", "remove", "clara"]);
+    assert!(String::from_utf8_lossy(&output.stderr).is_empty());
+}
+
+#[test]
+fn pair_remove_works_without_a_repository() {
+    let env = Env::with_pair();
+    std::fs::remove_dir_all(env.path("repo")).unwrap();
+    env.ok(&["pair", "remove", "clara"]);
+}
+
+#[test]
 fn hook_install_gives_lefthook_a_snippet() {
     let env = env_with_git();
     env.write(&env.path("repo"), "lefthook.yml", "pre-commit:\n");

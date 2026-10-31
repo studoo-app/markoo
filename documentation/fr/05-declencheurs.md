@@ -67,6 +67,7 @@ sequenceDiagram
 
 - Le hook **n'échoue jamais** à cause de Markoo et ne fait jamais attendre Git : il tourne en arrière-plan, et les erreurs sont journalisées dans `<data>/hooks.log`. `pre-commit` fait exception : il attend, et refuse le commit tant qu'un conflit est en attente (`git commit --no-verify` le contourne) ; une panne de Markoo lui-même laisse passer le commit.
 - Les hooks existants sont respectés : Markoo s'ajoute à la fin, entre deux marqueurs `# >>> markoo clara` / `# <<< markoo clara` qui nomment la paire, après en avoir gardé une copie dans `<data>/backups/`. La désinstallation ne retire que ce bloc ; un hook resté vide part dans `<data>/trash/`.
+- `markoo pair remove` laisse les hooks en place et nomme les fichiers qui appellent encore la paire : lancez `markoo hook uninstall` avant, car il ne connaît plus la paire ensuite.
 - Markoo ne touche pas à un hook et affiche les lignes à ajouter à la main quand elles ne pourraient pas s'exécuter après lui ou que l'écriture l'abîmerait : pas un script shell, fin par `exit` ou `exec`, non exécutable (Git l'ignore), lien symbolique.
 - Les gestionnaires `husky` et `lefthook`, ainsi que tout autre `core.hooksPath`, sont détectés et un extrait de configuration est proposé à la place : ces fichiers peuvent être versionnés ou partagés, donc l'extrait a besoin de `markoo` dans le `PATH` et ne fait rien sans lui.
 - Les branches peuvent être filtrées (`branches = ["main"]` dans `[pair.hooks]`) pour ne synchroniser que la branche principale. Une paire en pause ne fait rien.

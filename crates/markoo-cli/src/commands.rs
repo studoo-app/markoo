@@ -568,15 +568,37 @@ impl Ctx {
     }
 
     fn pair_remove(&self, name: &str) -> Result<()> {
+        let hooks_left = self.hooks_left(name);
         manage::remove_pair(&self.paths, name)?;
         if self.json {
-            return self.print_json(&json!({"removed": name}));
+            return self.print_json(&json!({"removed": name, "hooks_left": hooks_left}));
         }
         println!(
             "{} Pair \"{name}\" removed. Its files were not touched.",
             self.style.green("✓")
         );
+        for file in &hooks_left {
+            self.warn(&format!(
+                "{} still calls this pair: delete its lines, between the two \"markoo {name}\" markers",
+                file.display()
+            ));
+        }
         Ok(())
+    }
+
+    /// Hook files still calling a pair. Once it is gone, `hook uninstall` no
+    /// longer knows where they are. A repository out of reach has nothing to
+    /// report: this must not prevent removing the pair.
+    fn hooks_left(&self, name: &str) -> Vec<PathBuf> {
+        let Ok(config) = self.config() else {
+            return Vec::new();
+        };
+        let Ok(entry) = config.pair(name) else {
+            return Vec::new();
+        };
+        GitRepo::open(&entry.pair.repo)
+            .and_then(|repo| hooks::files_with_block(&DiskFs, &repo, name))
+            .unwrap_or_default()
     }
 
     pub fn daemon(&self, action: Option<DaemonCommand>) -> Result<()> {

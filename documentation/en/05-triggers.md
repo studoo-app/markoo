@@ -67,6 +67,7 @@ sequenceDiagram
 
 - The hook **never fails** because of Markoo and never makes Git wait: it runs in the background, and errors are logged in `<data>/hooks.log`. `pre-commit` is the exception: it waits, and refuses the commit while a conflict is pending (`git commit --no-verify` skips it); a failure of Markoo itself lets the commit through.
 - Existing hooks are preserved: Markoo appends itself at the end, between two `# >>> markoo clara` / `# <<< markoo clara` markers naming the pair, after keeping a copy in `<data>/backups/`. Uninstalling removes only that block; a hook left empty goes to `<data>/trash/`.
+- `markoo pair remove` leaves hooks in place and names the files still calling the pair: run `markoo hook uninstall` first, since it no longer knows the pair afterwards.
 - Markoo leaves a hook alone and prints the lines to add by hand when it could not run after it or would damage it: not a shell script, ending with `exit` or `exec`, not executable (Git ignores it), a symbolic link.
 - The `husky` and `lefthook` managers, and any other `core.hooksPath`, are detected, and a configuration snippet is suggested instead: those files may be versioned or shared, so the snippet needs `markoo` in the `PATH` and does nothing without it.
 - Branches can be filtered (`branches = ["main"]` in `[pair.hooks]`) to sync only the main branch. A paused pair does nothing.

@@ -587,6 +587,29 @@ fn remove_from_file<F: Fs>(
     Ok(Some(HookStatus::Removed))
 }
 
+/// Hook files holding a block of a pair, whatever the settings say now.
+pub fn files_with_block<F: Fs>(
+    fs: &F,
+    repo: &GitRepo,
+    pair: &str,
+) -> Result<Vec<PathBuf>, HookError> {
+    let mut files = Vec::new();
+    for hook in HookName::ALL {
+        let path = repo.hooks_dir.join(hook.as_str());
+        let Some(bytes) = read_hook(fs, &path)? else {
+            continue;
+        };
+        let (start, _) = markers(pair);
+        if String::from_utf8_lossy(&bytes)
+            .lines()
+            .any(|line| line.trim_end() == start)
+        {
+            files.push(path);
+        }
+    }
+    Ok(files)
+}
+
 /// Whether a hook that just fired should act, given its arguments.
 pub fn should_act<F: Fs>(
     fs: &F,

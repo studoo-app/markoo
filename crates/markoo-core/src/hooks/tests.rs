@@ -288,6 +288,23 @@ fn uninstall_without_hooks_changes_nothing() {
     assert!(changes.is_empty());
 }
 
+#[test]
+fn hook_files_of_a_pair_are_found() {
+    let fs = MemFs::default();
+    install(&fs, &repo(), &target(), &settings(&[HookName::PostMerge])).unwrap();
+    assert_eq!(
+        files_with_block(&fs, &repo(), "clara").unwrap(),
+        [repo().hooks_dir.join("post-merge")]
+    );
+}
+
+#[test]
+fn hook_files_of_another_pair_are_not_found() {
+    let fs = MemFs::default();
+    install(&fs, &repo(), &target(), &settings(&[HookName::PostMerge])).unwrap();
+    assert!(files_with_block(&fs, &repo(), "markoo").unwrap().is_empty());
+}
+
 // Hook managers
 
 #[test]
