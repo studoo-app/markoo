@@ -42,7 +42,7 @@ L'écriture de configuration par un agent IA est désactivée par défaut : chan
 
 ```mermaid
 flowchart TD
-    MB["Barre de menus<br/>✅ / 🔄 / ⚠️"] -->|Ouvrir Markoo| HOME
+    MB["Barre de menus<br/>🟢 / 🔵 / 🟠"] -->|Ouvrir Markoo| HOME
     MB -->|Synchroniser maintenant| SYNC((sync))
     HOME["Accueil<br/>liste des paires"] -->|+ Nouvelle paire| WIZ["Assistant de création<br/>(6 étapes)"]
     HOME -->|clic sur une paire| PAIR["Détail de la paire"]

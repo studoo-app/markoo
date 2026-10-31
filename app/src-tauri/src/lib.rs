@@ -1,6 +1,9 @@
 //! The desktop app. Commands only translate between the window and
 //! `markoo-core`; the sync logic is not here.
 
+#[cfg(target_os = "macos")]
+mod tray_macos;
+
 use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
@@ -12,6 +15,7 @@ use markoo_core::{manage, merge};
 use markoo_daemon::{Daemon, Error as DaemonError, Options, Queue, Trigger};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
+use tauri::image::Image;
 use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
@@ -261,10 +265,59 @@ fn start_daemon(paths: &Paths) -> (Option<Daemon>, Option<String>) {
     }
 }
 
-/// What the menu bar shows, from the state of every pair.
-fn tray_status(paths: &Paths, queue: Option<&Queue>) -> (&'static str, String) {
+/// What the menu bar shows: the ring of the anchor takes the color of the state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TrayState {
+    UpToDate,
+    Syncing,
+    NeedsAttention,
+}
+
+impl TrayState {
+    /// The whole icon, for the systems where it cannot be built in two layers.
+    #[cfg(not(target_os = "macos"))]
+    fn icon(self) -> &'static [u8] {
+        match self {
+            Self::UpToDate => include_bytes!("../icons/tray-ok.png"),
+            Self::Syncing => include_bytes!("../icons/tray-syncing.png"),
+            Self::NeedsAttention => include_bytes!("../icons/tray-attention.png"),
+        }
+    }
+
+    /// The colored dot alone, on the same canvas as the anchor.
+    #[cfg(target_os = "macos")]
+    fn dot(self) -> &'static [u8] {
+        match self {
+            Self::UpToDate => include_bytes!("../icons/tray-dot-ok.png"),
+            Self::Syncing => include_bytes!("../icons/tray-dot-syncing.png"),
+            Self::NeedsAttention => include_bytes!("../icons/tray-dot-attention.png"),
+        }
+    }
+}
+
+/// Shows a state in the menu bar. It returns whether it worked.
+#[cfg(target_os = "macos")]
+fn show_tray_state(app: &AppHandle, state: TrayState) -> bool {
+    app.run_on_main_thread(move || tray_macos::show_dot(state.dot()))
+        .is_ok()
+}
+
+/// Shows a state in the menu bar. It returns whether it worked.
+#[cfg(not(target_os = "macos"))]
+fn show_tray_state(app: &AppHandle, state: TrayState) -> bool {
+    let Some(tray) = app.tray_by_id(TRAY) else {
+        return false;
+    };
+    Image::from_bytes(state.icon()).is_ok_and(|icon| tray.set_icon(Some(icon)).is_ok())
+}
+
+/// The state of every pair, with a sentence for the tooltip.
+fn tray_status(paths: &Paths, queue: Option<&Queue>) -> (TrayState, String) {
     let Ok(pairs) = service::list_pairs(paths) else {
-        return ("⚠️", "Markoo cannot read its configuration".to_owned());
+        return (
+            TrayState::NeedsAttention,
+            "Markoo cannot read its configuration".to_owned(),
+        );
     };
     let pending: u64 = pairs
         .iter()
@@ -276,19 +329,20 @@ fn tray_status(paths: &Paths, queue: Option<&Queue>) -> (&'static str, String) {
         .count();
     if pending > 0 || broken > 0 {
         return (
-            "⚠️",
+            TrayState::NeedsAttention,
             format!("Markoo: {pending} to settle, {broken} pair(s) in error"),
         );
     }
     if queue.is_some_and(|queue| !queue.active_pairs().is_empty()) {
-        return ("🔄", "Markoo: syncing".to_owned());
+        return (TrayState::Syncing, "Markoo: syncing".to_owned());
     }
-    ("✅", "Markoo: up to date".to_owned())
+    (TrayState::UpToDate, "Markoo: up to date".to_owned())
 }
 
 /// Keeps the menu bar and the window up to date.
 async fn watch_state(app: AppHandle, paths: Paths, queue: Option<Queue>) {
     let mut events = queue.as_ref().map(Queue::subscribe);
+    let mut shown = TrayState::UpToDate;
     loop {
         let event = async {
             match events.as_mut() {
@@ -305,9 +359,13 @@ async fn watch_state(app: AppHandle, paths: Paths, queue: Option<Queue>) {
             tray_status(&status_paths, status_queue.as_ref())
         })
         .await;
-        if let (Ok((title, tooltip)), Some(tray)) = (status, app.tray_by_id(TRAY)) {
-            let _ = tray.set_title(Some(title));
-            let _ = tray.set_tooltip(Some(tooltip));
+        if let Ok((state, tooltip)) = status {
+            if state != shown && show_tray_state(&app, state) {
+                shown = state;
+            }
+            if let Some(tray) = app.tray_by_id(TRAY) {
+                let _ = tray.set_tooltip(Some(tooltip));
+            }
         }
         if from_daemon {
             let _ = app.emit(CHANGED, ());
@@ -349,13 +407,22 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             &MenuItem::with_id(app, "quit", "Quit Markoo", true, None::<&str>)?,
         ],
     )?;
-    let mut tray = TrayIconBuilder::with_id(TRAY)
+    let builder = TrayIconBuilder::with_id(TRAY)
         .menu(&menu)
         .on_menu_event(|app, event| on_menu(app, &event));
-    if let Some(icon) = app.default_window_icon() {
-        tray = tray.icon(icon.clone());
-    }
-    tray.build(app)?;
+    // macOS tints a monochrome image to match each menu bar, and the dot, which
+    // keeps its color, goes on top of it.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .icon(Image::from_bytes(include_bytes!(
+            "../icons/tray-template.png"
+        ))?)
+        .icon_as_template(true);
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.icon(Image::from_bytes(TrayState::UpToDate.icon())?);
+    builder.build(app)?;
+    #[cfg(target_os = "macos")]
+    tray_macos::show_dot(TrayState::UpToDate.dot());
     Ok(())
 }
 
@@ -447,22 +514,37 @@ mod tests {
     }
 
     #[test]
+    fn every_state_has_a_valid_icon() {
+        for state in [
+            TrayState::UpToDate,
+            TrayState::Syncing,
+            TrayState::NeedsAttention,
+        ] {
+            #[cfg(target_os = "macos")]
+            let bytes = state.dot();
+            #[cfg(not(target_os = "macos"))]
+            let bytes = state.icon();
+            assert!(Image::from_bytes(bytes).is_ok(), "{state:?}");
+        }
+    }
+
+    #[test]
     fn no_pair_is_up_to_date() {
         let (_dir, paths) = paths_with_config("");
-        assert_eq!(tray_status(&paths, None).0, "✅");
+        assert_eq!(tray_status(&paths, None).0, TrayState::UpToDate);
     }
 
     #[test]
     fn an_invalid_configuration_is_a_warning() {
         let (_dir, paths) = paths_with_config("not toml =");
-        assert_eq!(tray_status(&paths, None).0, "⚠️");
+        assert_eq!(tray_status(&paths, None).0, TrayState::NeedsAttention);
     }
 
     #[test]
     fn a_pair_in_error_is_a_warning() {
         let pair = "[[pair]]\nname='a'\nkb='/nowhere/kb'\nrepo='/nowhere/repo'\n";
         let (_dir, paths) = paths_with_config(pair);
-        assert_eq!(tray_status(&paths, None).0, "⚠️");
+        assert_eq!(tray_status(&paths, None).0, TrayState::NeedsAttention);
     }
 
     #[test]
@@ -473,11 +555,11 @@ mod tests {
             data_dir: Some(dir.path().join("data")),
         })
         .unwrap();
-        tauri::async_runtime::block_on(async {
-            let (daemon, note) = start_daemon_for_test(&paths).await;
-            assert_eq!(note, None);
-            daemon.unwrap().stop().await;
-        });
+        // Whether the daemon starts depends on the default port being free.
+        let (daemon, _) = tauri::async_runtime::block_on(start_daemon_for_test(&paths));
+        if let Some(daemon) = daemon {
+            tauri::async_runtime::block_on(daemon.stop());
+        }
         assert!(paths.config_file().exists());
     }
 

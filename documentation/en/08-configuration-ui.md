@@ -42,7 +42,7 @@ Configuration writes by an AI agent are disabled by default: changing a directio
 
 ```mermaid
 flowchart TD
-    MB["Menu bar<br/>✅ / 🔄 / ⚠️"] -->|Open Markoo| HOME
+    MB["Menu bar<br/>🟢 / 🔵 / 🟠"] -->|Open Markoo| HOME
     MB -->|Sync now| SYNC((sync))
     HOME["Home<br/>list of pairs"] -->|+ New pair| WIZ["Creation wizard<br/>(6 steps)"]
     HOME -->|click on a pair| PAIR["Pair details"]

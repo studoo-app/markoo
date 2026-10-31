@@ -141,7 +141,7 @@ Declares the MCP tools and wires them to the engine through `service`. The daemo
 
 ### `app/` — Tauri 2
 
-- **Menu bar**: status (✅ up to date, 🔄 syncing, ⚠️ conflicts), "Sync now".
+- **Menu bar**: the two arrows of the anchor, which follow the color of each menu bar, under a dot showing the state (🟢 up to date, 🔵 syncing, 🟠 conflicts or errors); "Sync now".
 - **Main window**: list of pairs, pending changes, history.
 - **Conflict view**: three columns (KB · base · repo) and an editable result.
 - **Configuration**: pair creation wizard, direction choice (→ · ⇄ · ←), filters with preview, transformations, triggers. Details in [Configuration UI](08-configuration-ui.md).

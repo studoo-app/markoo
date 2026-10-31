@@ -141,7 +141,7 @@ Déclare les outils MCP et les relie au moteur via `service`. Le daemon l'héber
 
 ### `app/` — Tauri 2
 
-- **Barre de menus** : état (✅ à jour, 🔄 en cours, ⚠️ conflits), « Synchroniser maintenant ».
+- **Barre de menus** : les deux flèches de l'ancre, qui suivent la couleur de chaque barre de menus, sous un rond qui montre l'état (🟢 à jour, 🔵 synchro en cours, 🟠 conflits ou erreurs), « Synchroniser maintenant ».
 - **Fenêtre principale** : liste des paires, des changements en attente, historique.
 - **Vue de conflit** : trois colonnes (KB · base · repo) et résultat éditable.
 - **Configuration** : assistant de création de paire, choix du sens (→ · ⇄ · ←), filtres avec aperçu, transformations, déclencheurs. Détail dans [Interface de configuration](08-interface-de-configuration.md).
