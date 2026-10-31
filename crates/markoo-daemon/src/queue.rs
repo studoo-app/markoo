@@ -8,7 +8,6 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 
 use serde::Serialize;
-use serde_json::Value;
 use tokio::sync::broadcast;
 
 /// Finished jobs kept for `GET /jobs/{id}`.
@@ -28,6 +27,8 @@ pub enum Trigger {
     Config,
     /// A request to the API.
     Api,
+    /// A request from an MCP client.
+    Mcp,
 }
 
 /// Progress of a job.
@@ -45,25 +46,7 @@ pub enum JobStatus {
 }
 
 /// What a finished job did.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct JobOutcome {
-    /// Type of the pair's knowledge base.
-    pub kb_type: String,
-    /// The direction changed, so the job only computed its plan.
-    pub direction_changed: bool,
-    /// Counts of what was done.
-    pub summary: Value,
-    /// Issues waiting for the user.
-    pub conflicts: Vec<Value>,
-    /// Details of what was applied, `null` for a dry run.
-    pub report: Value,
-}
-
-impl JobOutcome {
-    fn conflict_count(&self) -> usize {
-        self.conflicts.len()
-    }
-}
+pub use markoo_core::service::SyncOutcome as JobOutcome;
 
 /// A sync requested from the daemon.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -355,6 +338,7 @@ impl Queue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
     use std::sync::Condvar;
     use std::time::Duration;
 

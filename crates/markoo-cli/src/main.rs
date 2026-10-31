@@ -101,6 +101,8 @@ enum Command {
     /// Manage the token of the local API.
     #[command(subcommand)]
     Token(TokenCommand),
+    /// Run the MCP server on stdin and stdout, for a client that spawns it.
+    Mcp,
     /// Manage the Git hooks of a pair.
     #[command(subcommand)]
     Hook(HookCommand),
@@ -251,6 +253,7 @@ fn run(cli: Cli) -> Result<bool> {
         Command::Daemon { action } => ctx.daemon(action)?,
         Command::Token(TokenCommand::Rotate) => ctx.token_rotate()?,
         Command::Hook(command) => ctx.hook(command)?,
+        Command::Mcp => ctx.mcp()?,
     }
     Ok(ctx.succeeded())
 }

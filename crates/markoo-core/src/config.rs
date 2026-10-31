@@ -129,6 +129,15 @@ struct RawConfig {
     pair: Vec<RawPair>,
     schedule: Option<RawSchedule>,
     api: Option<RawApi>,
+    mcp: Option<RawMcp>,
+}
+
+/// `[mcp]`
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawMcp {
+    http: Option<bool>,
+    allow_config_write: Option<bool>,
 }
 
 /// `[schedule]`
@@ -230,8 +239,28 @@ pub struct Config {
     pub schedule: Schedule,
     /// The daemon's local HTTP API.
     pub api: Api,
+    /// The MCP server.
+    pub mcp: Mcp,
     /// General options accepted in the file but not honored yet.
     pub not_implemented: Vec<String>,
+}
+
+/// The MCP server (`[mcp]`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mcp {
+    /// Whether the daemon also serves `/mcp` on its API.
+    pub http: bool,
+    /// Whether an agent may change the configuration.
+    pub allow_config_write: bool,
+}
+
+impl Default for Mcp {
+    fn default() -> Self {
+        Self {
+            http: true,
+            allow_config_write: false,
+        }
+    }
 }
 
 /// A problem found while validating a pair.
@@ -299,10 +328,16 @@ impl Config {
             api.enabled = raw.enabled.unwrap_or(api.enabled);
             api.port = raw.port.unwrap_or(api.port);
         }
+        let mut mcp = Mcp::default();
+        if let Some(raw) = raw.mcp {
+            mcp.http = raw.http.unwrap_or(mcp.http);
+            mcp.allow_config_write = raw.allow_config_write.unwrap_or(mcp.allow_config_write);
+        }
         Ok(Self {
             pairs,
             schedule,
             api,
+            mcp,
             not_implemented,
         })
     }
@@ -674,6 +709,26 @@ fn in_git_repository(folder: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn mcp_defaults_to_http_without_config_writes() {
+        let config = Config::parse("").unwrap();
+        assert!(config.mcp.http && !config.mcp.allow_config_write);
+    }
+
+    #[test]
+    fn mcp_settings_are_read() {
+        let config = Config::parse("[mcp]\nhttp=false\nallow_config_write=true\n").unwrap();
+        assert!(!config.mcp.http && config.mcp.allow_config_write);
+    }
+
+    #[test]
+    fn an_unknown_mcp_setting_is_refused() {
+        assert!(matches!(
+            Config::parse("[mcp]\nhtp=false\n"),
+            Err(ConfigError::Invalid(_))
+        ));
+    }
+
     #[test]
     fn hooks_are_read_from_the_pair() {
         let text = "[[pair]]\nname='a'\nkb='/k'\nrepo='/r'\n[pair.hooks]\ninstall=['post-commit']\nbranches=['main']\n";

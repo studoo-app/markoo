@@ -1282,3 +1282,53 @@ mod real_hooks {
         );
     }
 }
+
+#[test]
+fn mcp_answers_on_stdio_and_writes_only_the_protocol() {
+    use std::io::{BufRead, Write};
+
+    let env = Env::with_pair();
+    env.write(&env.kb(), "note.md", "hello\n");
+    let mut child = env
+        .command(&["mcp"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let running = Running(child);
+    let mut lines = std::io::BufReader::new(stdout).lines();
+    let mut ask = |message: Value, answers: bool| -> Option<Value> {
+        writeln!(stdin, "{message}").unwrap();
+        answers.then(|| serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap())
+    };
+    let init = ask(
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            },
+        }),
+        true,
+    )
+    .unwrap();
+    assert_eq!(init["result"]["serverInfo"]["name"], "markoo");
+    ask(
+        serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        false,
+    );
+    let answer = ask(
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+            "params": {"name": "sync_run", "arguments": {"pair": "clara"}},
+        }),
+        true,
+    )
+    .unwrap();
+    assert_eq!(answer["result"]["isError"], false);
+    assert_eq!(env.read(&env.repo(), "note.md").unwrap(), "hello\n");
+    drop(running);
+}

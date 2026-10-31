@@ -105,11 +105,14 @@ impl Daemon {
                 port: config.api.port,
                 source,
             })?);
-            let app = api::router(paths.clone(), queue.clone());
+            let (app, end_mcp) = api::router(paths.clone(), queue.clone(), config.mcp.http);
             let mut stopped = stopped.clone();
             tasks.push(tokio::spawn(async move {
                 let shutdown = async move {
                     let _ = stopped.changed().await;
+                    if let Some(end_mcp) = end_mcp {
+                        end_mcp();
+                    }
                 };
                 if let Err(error) = axum::serve(listener, app)
                     .with_graceful_shutdown(shutdown)

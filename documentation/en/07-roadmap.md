@@ -73,6 +73,8 @@ gantt
 - Tools and resources described in [Triggers](05-triggers.md#4-mcp-server), over stdio and HTTP.
 - Testing with Claude Code.
 
+**Status**: done, tried with Claude Code over stdio and HTTP on a sample pair. Other MCP clients have not been tried.
+
 ### M7 — Tauri app
 - Menu bar, list of pairs, pending changes, history.
 - Three-column conflict view with an editor.

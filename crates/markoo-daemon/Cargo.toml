@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 markoo-core.workspace = true
+markoo-mcp.workspace = true
 axum.workspace = true
 getrandom.workspace = true
 serde.workspace = true

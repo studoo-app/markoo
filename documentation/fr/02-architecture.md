@@ -83,6 +83,7 @@ markoo/
 | `planner` | Compare KB / repo / base en forme canonique, produit un **plan** d'actions | — |
 | `merge` | Fusion 3-way ligne à ligne | `diffy` ou `similar` |
 | `applier` | Exécute le plan : écritures atomiques, journal, sauvegardes | `tempfile` |
+| `service` | Ce que demandent les interfaces distantes (API HTTP, MCP), sous forme de vues JSON, pour qu'elles appliquent les mêmes contrôles | `serde_json` |
 | `events` | Émet des événements (progression, conflits) vers les interfaces | `tokio::sync::broadcast` |
 
 Le côté repo a lui aussi un dialecte : **`gfm`** (GitHub Flavored Markdown) en v1, choisissable par paire plus tard (`gitlab`, `mkdocs`, `docusaurus` sont des idées post-v1). La comparaison et la fusion se font toujours en forme canonique ; chaque côté est relu avec son `to_canonical` et réécrit avec son `from_canonical`.
@@ -136,7 +137,7 @@ Processus longue durée, embarqué dans l'app Tauri ou lancé seul (`launchd` su
 
 ### `markoo-mcp`
 
-Déclare les outils MCP et les relie au moteur. Voir [Déclencheurs](05-declencheurs.md#4-serveur-mcp).
+Déclare les outils MCP et les relie au moteur via `service`. Le daemon l'héberge en HTTP, et `markoo mcp` en stdio. Voir [Déclencheurs](05-declencheurs.md#4-serveur-mcp).
 
 ### `app/` — Tauri 2
 

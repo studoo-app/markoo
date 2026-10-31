@@ -89,7 +89,7 @@ Served by `axum`, on `127.0.0.1` only (default port `4848`). Authentication uses
 | `GET` | `/pairs/{pair}/config` | pair configuration |
 | `PATCH` | `/pairs/{pair}/config` | update the pair (direction, filters…); returns the plan preview |
 | `DELETE` | `/pairs/{pair}` | delete the pair (files are left untouched) |
-| `GET` | `/conflicts` | pending conflicts and divergences |
+| `GET` | `/conflicts` | pending conflicts and divergences, with the KB, base and repo versions |
 | `POST` | `/conflicts/{id}/resolve` | `{"keep": "kb" \| "repo" \| "both"}`, `{"content": "…"}` or `{"push_to_source": true}` |
 | `GET` | `/events` | SSE stream: `job-started`, `job-finished`, `new-conflicts`, `config-reloaded`, `shutdown` |
 
@@ -120,8 +120,8 @@ Sample job (`GET /jobs/{id}`):
 
 Markoo exposes a **Model Context Protocol** server (`rmcp` crate), usable from Claude Code, Claude Desktop or any MCP client.
 
-- **stdio**: `markoo mcp` (the client spawns the process).
-- **HTTP**: `http://127.0.0.1:4848/mcp` while the daemon is running.
+- **stdio**: `markoo mcp` (the client spawns the process). Syncs run in that process: while the daemon is syncing the same pair, the tool answers that it is busy.
+- **HTTP**: `http://127.0.0.1:4848/mcp` while the daemon is running, unless `mcp.http = false`. Syncs go through the daemon's queue, and the API token is required like on every route; other hosts than loopback ones are refused.
 
 ```json
 {
@@ -140,7 +140,7 @@ Markoo exposes a **Model Context Protocol** server (`rmcp` crate), usable from C
 | `sync_diff` | `pair`, `path` | Unified diff of one file (KB ↔ repo, in canonical form) |
 | `sync_run` | `pair?`, `dry_run?` | Starts a sync, returns the report |
 | `list_conflicts` | `pair?` | Pending conflicts, with all three versions |
-| `resolve_conflict` | `id`, `keep?` \| `content?` | Resolves a conflict or a divergence |
+| `resolve_conflict` | `id`, `keep?` \| `content?` \| `push_to_source?` | Resolves a conflict or a divergence |
 | `get_pair_config` | `pair` | Pair configuration (KB type, direction, filters…) |
 | `update_pair_config` | `pair`, `changes` | Updates the pair; **disabled** unless `mcp.allow_config_write = true` |
 
@@ -171,7 +171,7 @@ sequenceDiagram
     C->>U: summary of the changes
 ```
 
-> **Safeguard**: the tools that write (`sync_run`, `resolve_conflict`) are annotated as *destructive* in MCP, which lets the client ask the user for confirmation.
+> **Safeguard**: the tools that write (`sync_run`, `resolve_conflict`, `update_pair_config`) are annotated as *destructive* in MCP, which lets the client ask the user for confirmation.
 
 ## Shared security
 

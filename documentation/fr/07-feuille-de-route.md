@@ -73,6 +73,8 @@ gantt
 - Outils et ressources décrits dans [Déclencheurs](05-declencheurs.md#4-serveur-mcp), en stdio et en HTTP.
 - Test avec Claude Code.
 
+**État** : terminé, essayé avec Claude Code en stdio et en HTTP sur une paire d'exemple. Les autres clients MCP n'ont pas été essayés.
+
 ### M7 — App Tauri
 - Barre de menus, liste des paires, changements en attente, historique.
 - Vue de conflit en trois colonnes avec éditeur.

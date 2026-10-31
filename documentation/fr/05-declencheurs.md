@@ -89,7 +89,7 @@ Servie par `axum`, uniquement sur `127.0.0.1` (port par défaut `4848`). L'authe
 | `GET` | `/pairs/{pair}/config` | configuration de la paire |
 | `PATCH` | `/pairs/{pair}/config` | modifie la paire (sens, filtres…) ; renvoie l'aperçu du plan |
 | `DELETE` | `/pairs/{pair}` | supprime la paire (les fichiers ne sont pas touchés) |
-| `GET` | `/conflicts` | conflits et divergences en attente |
+| `GET` | `/conflicts` | conflits et divergences en attente, avec les versions KB, base et repo |
 | `POST` | `/conflicts/{id}/resolve` | `{"keep": "kb" \| "repo" \| "both"}`, `{"content": "…"}` ou `{"push_to_source": true}` |
 | `GET` | `/events` | flux SSE : `job-started`, `job-finished`, `new-conflicts`, `config-reloaded`, `shutdown` |
 
@@ -120,8 +120,8 @@ Exemple de job (`GET /jobs/{id}`) :
 
 Markoo expose un serveur **Model Context Protocol** (crate `rmcp`), utilisable par Claude Code, Claude Desktop ou tout client MCP.
 
-- **stdio** : `markoo mcp` (le client lance le processus).
-- **HTTP** : `http://127.0.0.1:4848/mcp` quand le daemon tourne.
+- **stdio** : `markoo mcp` (le client lance le processus). Les synchros tournent dans ce processus : si le daemon synchronise la même paire, l'outil répond qu'elle est occupée.
+- **HTTP** : `http://127.0.0.1:4848/mcp` quand le daemon tourne, sauf avec `mcp.http = false`. Les synchros passent par la file du daemon, et le jeton de l'API est exigé comme sur toutes les routes ; seuls les hôtes de la boucle locale sont acceptés.
 
 ```json
 {
@@ -140,7 +140,7 @@ Markoo expose un serveur **Model Context Protocol** (crate `rmcp`), utilisable p
 | `sync_diff` | `pair`, `path` | Diff unifié d'un fichier (KB ↔ repo, en forme canonique) |
 | `sync_run` | `pair?`, `dry_run?` | Lance une synchro, renvoie le rapport |
 | `list_conflicts` | `pair?` | Conflits en attente, avec les trois versions |
-| `resolve_conflict` | `id`, `keep?` \| `content?` | Résout un conflit ou une divergence |
+| `resolve_conflict` | `id`, `keep?` \| `content?` \| `push_to_source?` | Résout un conflit ou une divergence |
 | `get_pair_config` | `pair` | Configuration de la paire (type de KB, sens, filtres…) |
 | `update_pair_config` | `pair`, `changes` | Modifie la paire ; **désactivé** sauf si `mcp.allow_config_write = true` |
 
@@ -171,7 +171,7 @@ sequenceDiagram
     C->>U: résumé des changements
 ```
 
-> **Garde-fou** : les outils qui écrivent (`sync_run`, `resolve_conflict`) sont annotés comme *destructifs* dans MCP, ce qui permet au client de demander confirmation à l'utilisateur.
+> **Garde-fou** : les outils qui écrivent (`sync_run`, `resolve_conflict`, `update_pair_config`) sont annotés comme *destructifs* dans MCP, ce qui permet au client de demander confirmation à l'utilisateur.
 
 ## Sécurité commune
 

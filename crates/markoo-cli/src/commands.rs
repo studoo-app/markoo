@@ -774,6 +774,11 @@ impl Ctx {
         }
     }
 
+    pub fn mcp(&self) -> Result<()> {
+        markoo_mcp::run_stdio(self.paths.clone())?;
+        Ok(())
+    }
+
     pub fn token_rotate(&self) -> Result<()> {
         markoo_daemon::token::rotate(self.paths.data_dir())?;
         let file = markoo_daemon::token::path(self.paths.data_dir());

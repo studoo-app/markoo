@@ -357,6 +357,11 @@ impl<F: Fs> Engine<F> {
         Ok(self.state.pending(&pair.name)?.len())
     }
 
+    /// The version of each entry at the last sync.
+    pub fn bases(&self, pair: &Pair) -> Result<BTreeMap<EntryPath, BaseEntry>, Error> {
+        Ok(self.state.bases(&pair.name)?)
+    }
+
     /// Text to edit by hand to settle an issue, with conflict markers.
     pub fn conflict_draft(&self, pair: &Pair, path: &EntryPath) -> Result<String, Error> {
         let (_, issue) = self.pending_entry(pair, path)?;

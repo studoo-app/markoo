@@ -1,0 +1,23 @@
+[package]
+name = "markoo-mcp"
+description = "MCP server for Markoo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+markoo-core.workspace = true
+rmcp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+rmcp = { workspace = true, features = ["client"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

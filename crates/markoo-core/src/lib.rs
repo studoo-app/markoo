@@ -16,6 +16,7 @@ pub mod pair;
 pub mod paths;
 pub mod plan;
 pub mod scan;
+pub mod service;
 pub mod state;
 
 use std::path::PathBuf;
@@ -50,6 +51,15 @@ pub enum Error {
         /// The folder.
         path: PathBuf,
     },
+    /// The pair is paused.
+    #[error("pair \"{0}\" is paused")]
+    Paused(String),
+    /// No pending conflict or divergence has this identifier.
+    #[error("no conflict or divergence {0}")]
+    UnknownIssue(String),
+    /// What a remote client asked for makes no sense.
+    #[error("{0}")]
+    InvalidRequest(String),
     /// Another sync of this pair is running, here or in another process.
     #[error("pair \"{0}\" is busy: another sync is running")]
     Busy(String),

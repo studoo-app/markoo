@@ -741,3 +741,86 @@ fn no_daemon_counts_as_unavailable() {
         markoo_daemon::client::SyncRequest::Unavailable
     );
 }
+
+const MCP_INITIALIZE: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}"#;
+
+/// Sends one MCP request; returns the status and the raw answer.
+async fn mcp_post(addr: std::net::SocketAddr, token: Option<&str>, host: &str) -> (u16, String) {
+    let mut stream = TcpStream::connect(addr).await.unwrap();
+    let auth = token.map_or(String::new(), |token| {
+        format!("Authorization: Bearer {token}\r\n")
+    });
+    let request = format!(
+        "POST /mcp HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n{auth}\
+         Accept: application/json, text/event-stream\r\nContent-Type: application/json\r\n\
+         Content-Length: {}\r\n\r\n{MCP_INITIALIZE}",
+        MCP_INITIALIZE.len()
+    );
+    stream.write_all(request.as_bytes()).await.unwrap();
+    // A session answers as a stream that stays open: the first bytes are enough.
+    let mut buffer = vec![0; 8192];
+    let mut response = String::new();
+    while !response.contains("serverInfo") {
+        let read = tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buffer))
+            .await
+            .unwrap()
+            .unwrap();
+        if read == 0 {
+            break;
+        }
+        response.push_str(&String::from_utf8_lossy(&buffer[..read]));
+    }
+    let status = response.split_whitespace().nth(1).unwrap().parse().unwrap();
+    (status, response)
+}
+
+#[tokio::test]
+async fn mcp_answers_over_http_with_the_token() {
+    let env = Env::new();
+    let client = env.start().await;
+    let (status, response) = mcp_post(client.addr, Some(&client.token), "localhost").await;
+    assert_eq!(status, 200, "{response}");
+    assert!(response.contains("\"name\":\"markoo\""), "{response}");
+}
+
+#[tokio::test]
+async fn mcp_over_http_needs_the_token() {
+    let env = Env::new();
+    let client = env.start().await;
+    assert_eq!(mcp_post(client.addr, None, "localhost").await.0, 401);
+}
+
+#[tokio::test]
+async fn mcp_over_http_refuses_another_host() {
+    let env = Env::new();
+    let client = env.start().await;
+    let status = mcp_post(client.addr, Some(&client.token), "evil.example")
+        .await
+        .0;
+    assert_eq!(status, 403);
+}
+
+#[tokio::test]
+async fn mcp_over_http_can_be_turned_off() {
+    let env = Env::with_settings(&format!("{QUIET}[mcp]\nhttp = false\n"));
+    let client = env.start().await;
+    assert_eq!(
+        mcp_post(client.addr, Some(&client.token), "localhost")
+            .await
+            .0,
+        404
+    );
+}
+
+#[tokio::test]
+async fn the_daemon_stops_with_an_mcp_session_open() {
+    let env = Env::new();
+    let mut client = env.start().await;
+    let addr = client.addr;
+    let token = client.token.clone();
+    mcp_post(addr, Some(&token), "localhost").await;
+    let daemon = client.daemon.take().unwrap();
+    tokio::time::timeout(Duration::from_secs(10), daemon.stop())
+        .await
+        .unwrap();
+}
