@@ -9,12 +9,14 @@
     type TargetChanges,
   } from "../lib/api";
   import DirectionCards from "../lib/DirectionCards.svelte";
+  import FilterEditor from "../lib/FilterEditor.svelte";
   import Picker from "../lib/Picker.svelte";
   import PlanList from "../lib/PlanList.svelte";
 
   let { oncancel, ondone }: { oncancel: () => void; ondone: (pair: string) => void } = $props();
 
-  const steps = ["Knowledge base", "Repo", "Direction", "Summary"];
+  const steps = ["Knowledge base", "Repo", "Direction", "Filters", "Triggers", "Summary"];
+  const hookChoices = ["post-merge", "post-checkout", "post-commit", "pre-commit"];
 
   let step = $state(0);
   let known = $state<string[]>([]);
@@ -27,6 +29,10 @@
   let targetChanges = $state<TargetChanges>("protect");
   let name = $state("");
   let nameEdited = $state(false);
+  let include = $state(["**/*.md"]);
+  let exclude = $state<string[]>([]);
+  let hooks = $state<string[]>([]);
+  let branches = $state("");
   let preview = $state<Plan | null>(null);
   let error = $state<string | null>(null);
   let busy = $state(false);
@@ -75,7 +81,21 @@
     repo: repo.trim(),
     direction,
     target_changes: direction === "both" ? null : targetChanges,
+    settings: pairSettings(),
   });
+
+  function pairSettings(): [string, string][] {
+    const settings: [string, string][] = [
+      ["include", include.join(",")],
+      ["exclude", exclude.join(",")],
+    ];
+    if (hooks.length > 0) settings.push(["hooks.install", hooks.join(",")]);
+    if (branches.trim()) settings.push(["hooks.branches", branches]);
+    return settings;
+  }
+
+  /** What the filters would do, computed by the same code as a sync. */
+  const loadFilters = () => api.previewNewPairFilters(newPair);
 
   const canContinue = $derived(
     step === 0
@@ -89,11 +109,11 @@
 
   async function next() {
     error = null;
-    if (step === 2) {
+    if (step === 4) {
       busy = true;
       try {
         preview = await api.previewNewPair(newPair);
-        step = 3;
+        step = 5;
       } catch (failure) {
         error = errorText(failure);
       } finally {
@@ -114,7 +134,8 @@
       busy = false;
       return;
     }
-    // The pair exists from here on: a failed first sync is shown on its page.
+    // The pair exists from here on: what fails now is shown on its page.
+    if (hooks.length > 0) await api.installHooks(name).catch(() => {});
     api.syncPair(name).catch(() => {});
     ondone(name);
   }
@@ -182,6 +203,22 @@
     <p class="muted">Markoo never commits or pushes: what it writes here stays for you to review.</p>
   {:else if step === 2}
     <DirectionCards bind:direction bind:targetChanges />
+  {:else if step === 3}
+    <FilterEditor bind:include bind:exclude load={loadFilters} />
+  {:else if step === 4}
+    <div class="field">
+      <span class="heading">Git hooks (optional)</span>
+      {#each hookChoices as hook}
+        <label class="choice">
+          <input type="checkbox" bind:group={hooks} value={hook} /> {hook}
+        </label>
+      {/each}
+      <p class="muted hint">The interval is set for every pair in Settings.</p>
+    </div>
+    <div class="field">
+      <label for="branches">Branches covered, separated by commas (all if empty)</label>
+      <input id="branches" type="text" bind:value={branches} spellcheck="false" />
+    </div>
   {:else if preview}
     <h2>{name}</h2>
     <p class="muted path">{kb} → {repo}</p>
@@ -204,9 +241,9 @@
     {#if step > 0}
       <button type="button" onclick={() => { step--; error = null; }}>Back</button>
     {/if}
-    {#if step < 3}
+    {#if step < 5}
       <button class="primary" type="button" disabled={!canContinue || busy} onclick={next}>
-        {step === 2 ? "Preview" : "Continue"}
+        {step === 4 ? "Preview" : "Continue"}
       </button>
     {:else}
       <button class="primary" type="button" disabled={busy} onclick={create}>Create and sync</button>
@@ -242,5 +279,9 @@
   }
   .wrap {
     flex-wrap: wrap;
+  }
+  .choice {
+    font-weight: 400;
+    margin-bottom: 2px;
   }
 </style>

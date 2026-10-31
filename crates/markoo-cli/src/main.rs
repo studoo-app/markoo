@@ -190,7 +190,7 @@ enum PairCommand {
     Set {
         /// Name of the pair.
         name: String,
-        /// direction, target_changes, kb, repo, kb_type, include, exclude, paused.
+        /// direction, target_changes, kb, repo, kb_type, include, exclude, paused, transform.{links,assets_dir,frontmatter}, kb_options.{callouts,frontmatter_drop}, hooks.{install,branches}.
         key: String,
         /// New value; lists are comma-separated.
         value: String,

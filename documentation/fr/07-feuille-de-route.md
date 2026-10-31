@@ -80,7 +80,7 @@ gantt
 - Vue de conflit en trois colonnes avec éditeur.
 - [Interface de configuration](08-interface-de-configuration.md) : assistant de création, choix du sens, filtres avec aperçu, transformations, déclencheurs.
 
-**État** : en cours, par étapes. Fait : barre de menus, liste des paires, changements en attente avec leurs diffs, vue des conflits en trois colonnes avec une zone de texte, assistant de création (sans ses étapes filtres et déclencheurs), onglet Général avec aperçu, le tout sur macOS. Ensuite : filtres avec aperçu, transformations, déclencheurs et réglages globaux ; puis le journal et l'onglet Historique, qui en a besoin.
+**État** : en cours, par étapes. Fait, sur macOS : barre de menus, liste des paires, changements en attente avec leurs diffs, vue des conflits en trois colonnes avec une zone de texte, assistant de création, onglets Général, Filtres, Transformations et Déclencheurs, réglages globaux. Ensuite : le journal et l'onglet Historique, qui en a besoin.
 
 ### M8 — v1.0
 - Binaires signés (macOS notarisé), formule Homebrew, documentation utilisateur.

@@ -16,6 +16,45 @@ export interface PairView {
   pending: number;
   errors: string[];
   active: boolean;
+  assets_dir: string;
+  links: "markdown" | "keep";
+  frontmatter: "keep" | "filter" | "drop";
+  frontmatter_drop: string[];
+  callouts: "github" | "keep";
+  hooks: { install: string[]; branches: string[] };
+}
+
+export interface FilterPreview {
+  tracked_count: number;
+  excluded_count: number;
+  tracked: string[];
+  excluded: string[];
+}
+
+export interface TransformSample {
+  path: string;
+  before: string;
+  after: string;
+}
+
+export interface HooksState {
+  git: boolean;
+  installed: string[];
+  manager: string | null;
+}
+
+export type HookChange = { hook: string } & (
+  | { status: "created" | "added" | "updated" | "unchanged" | "removed" }
+  | { status: "manual"; reason: string; snippet: string }
+);
+
+export interface GlobalSettings {
+  interval: string;
+  on_startup: boolean;
+  api_enabled: boolean;
+  api_port: number;
+  mcp_http: boolean;
+  mcp_allow_config_write: boolean;
 }
 
 export interface PlanEntry {
@@ -63,6 +102,7 @@ export interface NewPair {
   repo: string;
   direction: Direction;
   target_changes: TargetChanges | null;
+  settings: [string, string][];
 }
 
 export interface AppInfo {
@@ -100,6 +140,18 @@ export const api = {
       pushToSource: how.pushToSource ?? false,
     }),
   syncPair: (pair: string) => invoke("sync_pair", { pair }),
+  previewFilters: (pair: string, settings: Settings) =>
+    invoke<FilterPreview>("preview_filters", { pair, settings }),
+  previewNewPairFilters: (fresh: NewPair) =>
+    invoke<FilterPreview>("preview_new_pair_filters", { new: fresh }),
+  previewTransform: (pair: string, settings: Settings) =>
+    invoke<TransformSample | null>("preview_transform", { pair, settings }),
+  globalSettings: () => invoke<GlobalSettings>("global_settings"),
+  updateGlobalSettings: (settings: Settings) =>
+    invoke<void>("update_global_settings", { settings }),
+  hooksState: (pair: string) => invoke<HooksState>("hooks_state", { pair }),
+  installHooks: (pair: string) => invoke<HookChange[]>("install_hooks", { pair }),
+  uninstallHooks: (pair: string) => invoke<HookChange[]>("uninstall_hooks", { pair }),
   inspectKb: (path: string) => invoke<{ exists: boolean; kb_type: string }>("inspect_kb", { path }),
   inspectRepo: (path: string) =>
     invoke<{ exists: boolean; git: boolean; branch: string | null; top_level: string | null }>(

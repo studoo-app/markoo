@@ -44,6 +44,7 @@ impl Env {
             repo: self.repo().display().to_string(),
             direction: None,
             target_changes: None,
+            settings: Vec::new(),
         }
     }
 
@@ -174,4 +175,157 @@ fn a_conflict_draft_has_the_markers() {
         draft.contains("from the kb") && draft.contains("from the repo"),
         "{draft}"
     );
+}
+
+#[test]
+fn settings_of_a_new_pair_are_written_with_it() {
+    let env = Env::new();
+    let mut new = env.new_pair();
+    new.settings = vec![("exclude".to_owned(), "drafts/**".to_owned())];
+    markoo_core::manage::add_pair(&env.paths, &new).unwrap();
+    let config = service::pair_config(&env.paths, "clara").unwrap();
+    assert_eq!(config["exclude"][0], "drafts/**");
+}
+
+#[test]
+fn a_filter_preview_separates_tracked_and_excluded_files() {
+    let env = Env::new().with_saved_pair();
+    std::fs::create_dir_all(env.kb().join("drafts")).unwrap();
+    std::fs::write(env.kb().join("note.md"), "a\n").unwrap();
+    std::fs::write(env.kb().join("drafts/idea.md"), "b\n").unwrap();
+    std::fs::write(env.kb().join("image.png"), "c").unwrap();
+    let view = service::preview_filters(
+        &env.paths,
+        "clara",
+        &settings(&json!({"exclude": ["drafts/**"]})),
+    )
+    .unwrap();
+    assert_eq!(view["tracked"], json!(["note.md"]));
+    assert_eq!(view["excluded"], json!(["drafts/idea.md"]));
+}
+
+#[test]
+fn a_filter_preview_leaves_out_what_is_always_ignored() {
+    let env = Env::new().with_saved_pair();
+    std::fs::write(env.repo().join(".git/config.md"), "x\n").unwrap();
+    let view = service::preview_filters(&env.paths, "clara", &Map::new()).unwrap();
+    assert_eq!(view["excluded_count"], 0);
+    assert_eq!(view["tracked_count"], 0);
+}
+
+#[test]
+fn a_filter_preview_saves_nothing() {
+    let env = Env::new().with_saved_pair();
+    let before = env.config_text();
+    service::preview_filters(
+        &env.paths,
+        "clara",
+        &settings(&json!({"exclude": ["x/**"]})),
+    )
+    .unwrap();
+    assert_eq!(env.config_text(), before);
+}
+
+#[test]
+fn an_invalid_pattern_is_an_error() {
+    let env = Env::new().with_saved_pair();
+    let result =
+        service::preview_filters(&env.paths, "clara", &settings(&json!({"include": ["a{b"]})));
+    assert!(result.is_err());
+}
+
+/// A vault with a note whose wikilink the conversion changes.
+fn vault() -> Env {
+    let env = Env::new();
+    std::fs::create_dir_all(env.kb().join(".obsidian")).unwrap();
+    std::fs::write(env.kb().join("a-plain.md"), "plain\n").unwrap();
+    std::fs::write(env.kb().join("b-link.md"), "see [[a-plain]]\n").unwrap();
+    env.with_saved_pair()
+}
+
+#[test]
+fn a_sample_prefers_a_note_that_changes() {
+    let env = vault();
+    let sample = service::preview_transform(&env.paths, "clara", &Map::new()).unwrap();
+    assert_eq!(sample["path"], "b-link.md");
+    assert_eq!(sample["before"], "see [[a-plain]]\n");
+    assert!(
+        sample["after"].as_str().unwrap().contains("(./a-plain.md)"),
+        "{sample}"
+    );
+}
+
+#[test]
+fn a_sample_follows_the_settings_being_edited() {
+    let env = vault();
+    let sample = service::preview_transform(
+        &env.paths,
+        "clara",
+        &settings(&json!({"transform.links": "keep"})),
+    )
+    .unwrap();
+    // Nothing changes any more, so the first note is the sample.
+    assert_eq!(sample["path"], "a-plain.md");
+    assert_eq!(sample["before"], sample["after"]);
+}
+
+#[test]
+fn a_pair_without_notes_has_no_sample() {
+    let env = Env::new().with_saved_pair();
+    let sample = service::preview_transform(&env.paths, "clara", &Map::new()).unwrap();
+    assert!(sample.is_null());
+}
+
+#[test]
+fn the_view_of_a_pair_gives_its_options() {
+    let env = Env::new().with_saved_pair();
+    let view = service::pair_config(&env.paths, "clara").unwrap();
+    assert_eq!(view["links"], "markdown");
+    assert_eq!(view["frontmatter"], "filter");
+    assert_eq!(view["hooks"]["install"][0], "post-merge");
+}
+
+#[test]
+fn global_settings_can_be_read_and_changed() {
+    let env = Env::new().with_saved_pair();
+    service::update_global_settings(
+        &env.paths,
+        &settings(&json!({"schedule.interval": "off", "api.port": "5000"})),
+    )
+    .unwrap();
+    let view = service::global_settings(&env.paths).unwrap();
+    assert_eq!(view["interval"], "off");
+    assert_eq!(view["api_port"], 5000);
+}
+
+#[test]
+fn an_invalid_interval_saves_nothing() {
+    let env = Env::new().with_saved_pair();
+    let before = env.config_text();
+    let result = service::update_global_settings(
+        &env.paths,
+        &settings(&json!({"schedule.interval": "soon"})),
+    );
+    assert!(result.is_err());
+    assert_eq!(env.config_text(), before);
+}
+
+#[test]
+fn hooks_are_reported_once_installed() {
+    let env = Env::new();
+    std::fs::remove_dir_all(env.repo().join(".git")).unwrap();
+    let git = std::process::Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(env.repo())
+        .status()
+        .unwrap();
+    assert!(git.success());
+    let env = env.with_saved_pair();
+    let program = std::path::Path::new("/bin/markoo");
+    service::install_hooks(&env.paths, "clara", program).unwrap();
+    let state = service::hooks_state(&env.paths, "clara").unwrap();
+    assert_eq!(state["installed"], json!(["post-merge"]));
+    service::uninstall_hooks(&env.paths, "clara", program).unwrap();
+    let state = service::hooks_state(&env.paths, "clara").unwrap();
+    assert_eq!(state["installed"], json!([]));
 }

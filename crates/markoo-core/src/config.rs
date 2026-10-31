@@ -537,6 +537,9 @@ pub struct NewPair {
     pub direction: Option<String>,
     /// `markoo.toml` value of `target_changes`.
     pub target_changes: Option<String>,
+    /// Other settings, as for [`ConfigFile::set`]: written with the pair, since
+    /// a daemon syncs it as soon as it appears in the file.
+    pub settings: Vec<(String, String)>,
 }
 
 /// The configuration file, open for editing.
@@ -611,6 +614,23 @@ impl ConfigFile {
     pub fn set(&mut self, name: &str, key: &str, new_value: &str) -> Result<(), ConfigError> {
         let key = key.replace('-', "_");
         let table = self.pair_table(name)?;
+        if let Some((section, option)) = key.split_once('.') {
+            let new_item = match (section, option) {
+                ("transform", "links" | "assets_dir" | "frontmatter")
+                | ("kb_options", "callouts") => value(new_value),
+                ("kb_options", "frontmatter_drop") | ("hooks", "install" | "branches") => {
+                    value(comma_separated(new_value))
+                }
+                _ => return Err(ConfigError::UnknownKey(key)),
+            };
+            let section = table
+                .entry(section)
+                .or_insert_with(toml_edit::table)
+                .as_table_mut()
+                .ok_or_else(|| ConfigError::Invalid(format!("{section} must be a table")))?;
+            section[option] = new_item;
+            return Ok(());
+        }
         match key.as_str() {
             "direction" | "target_changes" | "kb" | "repo" | "kb_type" | "conflict" | "name" => {
                 table[key.as_str()] = value(new_value);
@@ -622,15 +642,34 @@ impl ConfigFile {
                 table["paused"] = value(paused);
             }
             "include" | "exclude" => {
-                let patterns: Array = new_value
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|pattern| !pattern.is_empty())
-                    .collect();
-                table[key.as_str()] = value(patterns);
+                table[key.as_str()] = value(comma_separated(new_value));
             }
             _ => return Err(ConfigError::UnknownKey(key)),
         }
+        Ok(())
+    }
+
+    /// Changes a setting that applies to every pair (`schedule.interval`,
+    /// `schedule.on_startup`, `api.enabled`, `api.port`, `mcp.http`,
+    /// `mcp.allow_config_write`).
+    pub fn set_global(&mut self, key: &str, new_value: &str) -> Result<(), ConfigError> {
+        let invalid = || ConfigError::Invalid(format!("invalid value for {key}: {new_value}"));
+        let new_item = match key {
+            "schedule.interval" => value(new_value),
+            "schedule.on_startup" | "api.enabled" | "mcp.http" | "mcp.allow_config_write" => {
+                value(new_value.parse::<bool>().map_err(|_| invalid())?)
+            }
+            "api.port" => value(i64::from(new_value.parse::<u16>().map_err(|_| invalid())?)),
+            _ => return Err(ConfigError::UnknownKey(key.to_owned())),
+        };
+        let (section, option) = key.split_once('.').ok_or_else(invalid)?;
+        let section = self
+            .doc
+            .entry(section)
+            .or_insert_with(toml_edit::table)
+            .as_table_mut()
+            .ok_or_else(invalid)?;
+        section[option] = new_item;
         Ok(())
     }
 
@@ -675,6 +714,13 @@ impl ConfigFile {
     }
 }
 
+fn comma_separated(text: &str) -> Array {
+    text.split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .collect()
+}
+
 fn read_existing(path: &Path) -> Result<Vec<u8>, ConfigError> {
     match DiskFs.read(path) {
         Ok(bytes) => Ok(bytes),
@@ -709,6 +755,77 @@ fn in_git_repository(folder: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    fn pair_file() -> (tempfile::TempDir, ConfigFile) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("markoo.toml");
+        std::fs::write(
+            &path,
+            "# mine\n[schedule]\ninterval = \"5m\" # often\n\n[[pair]]\nname = \"a\"\nkb = \"/k\"\nrepo = \"/r\"\n",
+        )
+        .unwrap();
+        let file = ConfigFile::open(&path).unwrap();
+        (dir, file)
+    }
+
+    #[test]
+    fn options_of_a_pair_can_be_set() {
+        let (_dir, mut file) = pair_file();
+        file.set("a", "transform.links", "keep").unwrap();
+        file.set("a", "transform.assets_dir", "img").unwrap();
+        file.set("a", "kb_options.callouts", "keep").unwrap();
+        file.set("a", "kb_options.frontmatter_drop", "x, y")
+            .unwrap();
+        file.set("a", "hooks.install", "post-commit").unwrap();
+        file.set("a", "hooks.branches", "main").unwrap();
+        let config = file.preview().unwrap();
+        let pair = &config.pair("a").unwrap().pair;
+        assert!(!pair.kb_options.convert_links);
+        assert_eq!(pair.assets_dir, "img");
+        assert!(!pair.kb_options.convert_callouts);
+        assert_eq!(pair.kb_options.frontmatter_drop, ["x", "y"]);
+        assert_eq!(pair.hooks.install, [crate::hooks::HookName::PostCommit]);
+        assert_eq!(pair.hooks.branches, ["main"]);
+    }
+
+    #[test]
+    fn an_unknown_option_of_a_pair_is_refused() {
+        let (_dir, mut file) = pair_file();
+        assert!(matches!(
+            file.set("a", "transform.nope", "x"),
+            Err(ConfigError::UnknownKey(_))
+        ));
+    }
+
+    #[test]
+    fn a_global_setting_keeps_the_comments() {
+        let (_dir, mut file) = pair_file();
+        file.set_global("schedule.on_startup", "false").unwrap();
+        let text = file.doc.to_string();
+        assert!(
+            text.contains("# mine") && text.contains("# often"),
+            "{text}"
+        );
+        assert!(!file.preview().unwrap().schedule.on_startup);
+    }
+
+    #[test]
+    fn global_settings_create_their_section() {
+        let (_dir, mut file) = pair_file();
+        file.set_global("api.port", "5000").unwrap();
+        file.set_global("mcp.allow_config_write", "true").unwrap();
+        let config = file.preview().unwrap();
+        assert_eq!(config.api.port, 5000);
+        assert!(config.mcp.allow_config_write);
+        assert_eq!(config.pairs.len(), 1);
+    }
+
+    #[test]
+    fn an_invalid_global_setting_is_refused() {
+        let (_dir, mut file) = pair_file();
+        assert!(file.set_global("api.port", "99999").is_err());
+        assert!(file.set_global("api.other", "1").is_err());
+    }
+
     #[test]
     fn mcp_defaults_to_http_without_config_writes() {
         let config = Config::parse("").unwrap();

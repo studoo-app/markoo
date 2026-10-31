@@ -4,7 +4,7 @@
 
 Markoo doit pouvoir se configurer **sans éditer de fichier à la main** : créer une paire, choisir la **base de connaissance (KB)** et son type, le dossier du repo, le **sens de synchronisation**, les filtres, les transformations et les déclencheurs.
 
-> **État** : cette page décrit la cible. Ce qui existe aujourd'hui est listé dans la [feuille de route](07-feuille-de-route.md#m7--app-tauri). L'assistant de création a quatre étapes pour l'instant, sans filtres ni déclencheurs ; la page d'une paire ajoute un onglet **Changements**, qui liste le plan.
+> **État** : cette page décrit la cible. Ce qui existe aujourd'hui est listé dans la [feuille de route](07-feuille-de-route.md#m7--app-tauri). La page d'une paire ajoute un onglet **Changements**, qui liste le plan, et n'a pas encore d'onglet Historique. Pour l'instant, l'intervalle est seulement global, les clés de frontmatter se saisissent en liste, et les options non implémentées ne sont pas affichées (noms de fichiers, `strip_comments`, `inline_embeds`). Les hooks lancent la commande `markoo`, qui doit être installée.
 
 ## Principes
 

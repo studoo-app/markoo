@@ -3,22 +3,31 @@
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { Conflict, PairView, Plan } from "./api";
 
+const options = {
+  assets_dir: "assets",
+  links: "markdown",
+  frontmatter: "filter",
+  frontmatter_drop: ["cssclasses", "aliases", "publish"],
+  callouts: "github",
+  hooks: { install: ["post-merge"], branches: [] },
+} as const satisfies Partial<PairView>;
+
 const pairs: PairView[] = [
   {
     name: "clara", kb: "~/Obsidian/Knowledge/Projets/Clara", kb_type: "obsidian",
     repo: "~/Projets/lerebours/clara/docs", direction: "both", target_changes: "protect",
-    include: ["**/*.md"], exclude: [], paused: false, pending: 1, errors: [], active: false,
+    include: ["**/*.md"], exclude: [], paused: false, pending: 1, errors: [], active: false, ...options,
   },
   {
     name: "markoo", kb: "~/Obsidian/Knowledge/Projets/Markoo", kb_type: "obsidian",
     repo: "~/Projets/opensource/markoo/documentation", direction: "repo-to-kb",
     target_changes: "protect", include: ["**/*.md"], exclude: [], paused: false, pending: 0,
-    errors: [], active: true,
+    errors: [], active: true, ...options,
   },
   {
     name: "notes-api", kb: "~/notes/api", kb_type: "markdown", repo: "~/api/docs",
     direction: "kb-to-repo", target_changes: "protect", include: ["**/*.md"], exclude: [],
-    paused: true, pending: 0, errors: [], active: false,
+    paused: true, pending: 0, errors: [], active: false, ...options,
   },
 ];
 
@@ -61,6 +70,25 @@ export function installMock(): void {
         return { conflicts: params.pair === "clara" ? [conflict] : [], excluded: [], errors: [] };
       case "conflict_draft":
         return "# Architecture\n\n<<<<<<< ours\nThe engine uses a queue per pair.\n=======\nThe engine uses one global queue.\n>>>>>>> theirs\n";
+      case "preview_filters":
+      case "preview_new_pair_filters":
+        return {
+          tracked_count: 42, excluded_count: 1,
+          tracked: ["architecture.md", "adr/001-stack.md"], excluded: ["drafts/ideas.md"],
+        };
+      case "preview_transform":
+        return {
+          path: "architecture.md",
+          before: "---\naliases: [arch]\ntitle: Architecture\n---\nSee [[glossary]].\n",
+          after: "---\ntitle: Architecture\n---\nSee [glossary](./glossary.md).\n",
+        };
+      case "global_settings":
+        return {
+          interval: "300s", on_startup: true, api_enabled: true, api_port: 4848,
+          mcp_http: true, mcp_allow_config_write: false,
+        };
+      case "hooks_state":
+        return { git: true, installed: ["post-merge"], manager: null };
       case "known_kbs":
         return ["~/Obsidian/Knowledge", "~/Obsidian/Work"];
       case "inspect_kb":

@@ -453,6 +453,7 @@ impl Ctx {
                     repo,
                     direction,
                     target_changes,
+                    settings: Vec::new(),
                 })
             }
             PairCommand::List => self.pair_list(),

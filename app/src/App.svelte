@@ -6,9 +6,14 @@
   import { api, type AppInfo } from "./lib/api";
   import Home from "./views/Home.svelte";
   import Pair from "./views/Pair.svelte";
+  import Settings from "./views/Settings.svelte";
   import Wizard from "./views/Wizard.svelte";
 
-  type Route = { name: "home" } | { name: "wizard" } | { name: "pair"; pair: string };
+  type Route =
+    | { name: "home" }
+    | { name: "wizard" }
+    | { name: "settings" }
+    | { name: "pair"; pair: string };
 
   let route = $state<Route>({ name: "home" });
   let info = $state<AppInfo | null>(null);
@@ -27,7 +32,7 @@
   });
 </script>
 
-<header class="row">
+<header class="row spread">
   <button class="home" type="button" onclick={() => (route = { name: "home" })} aria-label="Home">
     <picture>
       <source srcset={logoDark} media="(prefers-color-scheme: dark)" />
@@ -35,6 +40,7 @@
     </picture>
     <span>Markoo</span>
   </button>
+  <button type="button" onclick={() => (route = { name: "settings" })}>Settings</button>
 </header>
 
 {#if info?.note}
@@ -48,6 +54,8 @@
       onopen={(pair) => (route = { name: "pair", pair })}
       onnew={() => (route = { name: "wizard" })}
     />
+  {:else if route.name === "settings"}
+    <Settings {info} onclose={() => (route = { name: "home" })} />
   {:else if route.name === "wizard"}
     <Wizard
       oncancel={() => (route = { name: "home" })}

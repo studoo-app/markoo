@@ -119,7 +119,9 @@ struct UpdateParams {
     /// Name of the pair.
     pair: String,
     /// Settings to change: `direction`, `target_changes`, `kb`, `repo`,
-    /// `kb_type`, `include`, `exclude`, `paused`.
+    /// `kb_type`, `include`, `exclude`, `paused`, `transform.links`,
+    /// `transform.assets_dir`, `transform.frontmatter`, `kb_options.callouts`,
+    /// `kb_options.frontmatter_drop`, `hooks.install`, `hooks.branches`.
     changes: Map<String, Value>,
 }
 

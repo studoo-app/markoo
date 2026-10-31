@@ -226,6 +226,7 @@ async fn create_pair(
             repo: body.repo,
             direction: body.direction,
             target_changes: body.target_changes,
+            settings: Vec::new(),
         };
         let warnings = {
             let _edit = service::config_edit();

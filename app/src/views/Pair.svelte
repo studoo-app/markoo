@@ -2,7 +2,10 @@
   import { api, arrow, errorText, kbLabel, type PairView } from "../lib/api";
   import ChangesTab from "./ChangesTab.svelte";
   import ConflictsTab from "./ConflictsTab.svelte";
+  import FiltersTab from "./FiltersTab.svelte";
   import GeneralTab from "./GeneralTab.svelte";
+  import TransformationsTab from "./TransformationsTab.svelte";
+  import TriggersTab from "./TriggersTab.svelte";
 
   let {
     name,
@@ -10,7 +13,7 @@
     onclose,
   }: { name: string; revision: number; onclose: () => void } = $props();
 
-  type Tab = "changes" | "conflicts" | "general";
+  type Tab = "changes" | "conflicts" | "general" | "filters" | "transformations" | "triggers";
 
   let pair = $state<PairView | null>(null);
   let tab = $state<Tab>("changes");
@@ -69,6 +72,9 @@
     { id: "changes", label: "Changes" },
     { id: "conflicts", label: "Conflicts" },
     { id: "general", label: "General" },
+    { id: "filters", label: "Filters" },
+    { id: "transformations", label: "Transformations" },
+    { id: "triggers", label: "Triggers" },
   ];
 </script>
 
@@ -128,6 +134,12 @@
     <ChangesTab {name} revision={revision + localRevision} />
   {:else if tab === "conflicts"}
     <ConflictsTab {name} direction={pair.direction} revision={revision + localRevision} onchange={changed} />
+  {:else if tab === "filters"}
+    <FiltersTab {pair} onchange={changed} />
+  {:else if tab === "transformations"}
+    <TransformationsTab {pair} onchange={changed} />
+  {:else if tab === "triggers"}
+    <TriggersTab {pair} onchange={changed} />
   {:else}
     <GeneralTab {pair} onchange={changed} />
     <section class="remove card">

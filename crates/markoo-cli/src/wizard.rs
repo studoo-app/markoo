@@ -60,6 +60,7 @@ pub fn ask_new_pair(input: &mut impl BufRead, output: &mut impl Write) -> Result
         repo,
         direction: Some(direction),
         target_changes,
+        settings: Vec::new(),
     })
 }
 

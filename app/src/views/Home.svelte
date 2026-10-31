@@ -49,7 +49,9 @@
 
 <div class="row spread title">
   <h1>Pairs</h1>
-  <button class="primary" type="button" onclick={onnew}>+ New pair</button>
+  {#if pairs?.length}
+    <button class="primary" type="button" onclick={onnew}>+ New pair</button>
+  {/if}
 </div>
 
 {#if error}

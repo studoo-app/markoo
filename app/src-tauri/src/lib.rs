@@ -4,6 +4,7 @@
 #[cfg(target_os = "macos")]
 mod tray_macos;
 
+use std::path::PathBuf;
 use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
@@ -95,6 +96,8 @@ struct NewPairArgs {
     repo: String,
     direction: Option<String>,
     target_changes: Option<String>,
+    #[serde(default)]
+    settings: Vec<(String, String)>,
 }
 
 impl From<NewPairArgs> for NewPair {
@@ -106,6 +109,7 @@ impl From<NewPairArgs> for NewPair {
             repo: args.repo,
             direction: args.direction,
             target_changes: args.target_changes,
+            settings: args.settings,
         }
     }
 }
@@ -229,6 +233,86 @@ async fn sync_pair(backend: State<'_, Backend>, pair: String) -> CommandResult {
 }
 
 #[tauri::command]
+async fn preview_filters(
+    backend: State<'_, Backend>,
+    pair: String,
+    settings: Map<String, Value>,
+) -> CommandResult {
+    let paths = backend.paths.clone();
+    blocking(move || service::preview_filters(&paths, &pair, &settings)).await
+}
+
+#[tauri::command]
+async fn preview_new_pair_filters(backend: State<'_, Backend>, new: NewPairArgs) -> CommandResult {
+    let paths = backend.paths.clone();
+    blocking(move || service::preview_new_pair_filters(&paths, &new.into())).await
+}
+
+#[tauri::command]
+async fn preview_transform(
+    backend: State<'_, Backend>,
+    pair: String,
+    settings: Map<String, Value>,
+) -> CommandResult {
+    let paths = backend.paths.clone();
+    blocking(move || service::preview_transform(&paths, &pair, &settings)).await
+}
+
+#[tauri::command]
+async fn global_settings(backend: State<'_, Backend>) -> CommandResult {
+    let paths = backend.paths.clone();
+    blocking(move || service::global_settings(&paths)).await
+}
+
+#[tauri::command]
+async fn update_global_settings(
+    backend: State<'_, Backend>,
+    settings: Map<String, Value>,
+) -> CommandResult<()> {
+    let paths = backend.paths.clone();
+    blocking(move || service::update_global_settings(&paths, &settings)).await
+}
+
+/// The `markoo` command, which hooks run. The app does not ship it yet, and an
+/// app started from the Finder has a short `PATH`: the usual folders are tried too.
+fn find_cli() -> CommandResult<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let usual = [
+        home.map(|home| home.join(".cargo/bin")),
+        Some(PathBuf::from("/opt/homebrew/bin")),
+        Some(PathBuf::from("/usr/local/bin")),
+    ];
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    std::env::split_paths(&path)
+        .chain(usual.into_iter().flatten())
+        .map(|folder| folder.join("markoo"))
+        .find(|file| file.is_file())
+        .ok_or_else(|| {
+            "Git hooks run the markoo command, which was not found: install it first".to_owned()
+        })
+}
+
+#[tauri::command]
+async fn hooks_state(backend: State<'_, Backend>, pair: String) -> CommandResult {
+    let paths = backend.paths.clone();
+    blocking(move || service::hooks_state(&paths, &pair)).await
+}
+
+#[tauri::command]
+async fn install_hooks(backend: State<'_, Backend>, pair: String) -> CommandResult {
+    let program = find_cli()?;
+    let paths = backend.paths.clone();
+    blocking(move || service::install_hooks(&paths, &pair, &program)).await
+}
+
+#[tauri::command]
+async fn uninstall_hooks(backend: State<'_, Backend>, pair: String) -> CommandResult {
+    let program = find_cli().unwrap_or_default();
+    let paths = backend.paths.clone();
+    blocking(move || service::uninstall_hooks(&paths, &pair, &program)).await
+}
+
+#[tauri::command]
 fn inspect_kb(path: String) -> Value {
     service::inspect_kb(&path)
 }
@@ -239,7 +323,7 @@ fn inspect_repo(path: String) -> Value {
 }
 
 #[tauri::command]
-fn known_kbs() -> Vec<std::path::PathBuf> {
+fn known_kbs() -> Vec<PathBuf> {
     service::known_kbs()
 }
 
@@ -470,6 +554,14 @@ pub fn run() {
             conflict_draft,
             resolve_conflict,
             sync_pair,
+            preview_filters,
+            preview_new_pair_filters,
+            preview_transform,
+            global_settings,
+            update_global_settings,
+            hooks_state,
+            install_hooks,
+            uninstall_hooks,
             inspect_kb,
             inspect_repo,
             known_kbs,

@@ -4,7 +4,7 @@
 
 Markoo must be configurable **without editing a file by hand**: creating a pair, picking the **knowledge base (KB)** and its type, the repo folder, the **sync direction**, filters, transformations and triggers.
 
-> **Status**: this page describes the target. What exists today is listed in the [roadmap](07-roadmap.md#m7--tauri-app). The creation wizard has four steps for now, without filters and triggers; the pair page adds a **Changes** tab, which lists the plan.
+> **Status**: this page describes the target. What exists today is listed in the [roadmap](07-roadmap.md#m7--tauri-app). The pair page adds a **Changes** tab, which lists the plan, and has no History tab yet. For now, the interval is global only, frontmatter keys are typed as a list, and options that are not implemented are not shown (file names, `strip_comments`, `inline_embeds`). Hooks run the `markoo` command, which has to be installed.
 
 ## Principles
 

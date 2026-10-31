@@ -13,7 +13,7 @@ use crate::apply::Report;
 use crate::config::{Config, ConfigError, NewPair, PairEntry, Problem, expand_home};
 use crate::engine::issue_id;
 use crate::fs::DiskFs;
-use crate::hooks::GitRepo;
+use crate::hooks::{self, GitRepo, HookChange, HookError, HookManager, HookSettings, HookTarget};
 use crate::kb::KbType;
 use crate::paths::Paths;
 use crate::plan::{Action, Plan};
@@ -88,7 +88,26 @@ pub fn pair_view(entry: &PairEntry) -> Value {
         "include": pair.include,
         "exclude": pair.exclude,
         "paused": pair.paused,
+        "assets_dir": pair.assets_dir,
+        "links": if pair.kb_options.convert_links { "markdown" } else { "keep" },
+        "frontmatter": frontmatter_mode(pair),
+        "frontmatter_drop": pair.kb_options.frontmatter_drop,
+        "callouts": if pair.kb_options.convert_callouts { "github" } else { "keep" },
+        "hooks": {
+            "install": pair.hooks.install,
+            "branches": pair.hooks.branches,
+        },
     })
+}
+
+fn frontmatter_mode(pair: &Pair) -> &'static str {
+    if pair.kb_options.frontmatter_drop_all {
+        "drop"
+    } else if pair.kb_options.frontmatter_drop.is_empty() {
+        "keep"
+    } else {
+        "filter"
+    }
 }
 
 /// Settings of every pair, with what is pending and what prevents it from syncing.
@@ -264,6 +283,145 @@ pub fn preview_config(
     let changes = setting_changes(settings)?;
     let pair = manage::preview_set_pair(paths, name, &changes)?;
     plan_view(&open_engine(paths)?, &pair)
+}
+
+/// Most files listed by a filter preview, which also gives their real number.
+const PREVIEW_FILES: usize = 200;
+
+fn filter_view(paths: &Paths, pair: &Pair) -> Result<Value, Error> {
+    let preview = open_engine(paths)?.filter_preview(pair)?;
+    let listed = |files: &[EntryPath]| -> Vec<String> {
+        files
+            .iter()
+            .take(PREVIEW_FILES)
+            .map(ToString::to_string)
+            .collect()
+    };
+    Ok(json!({
+        "tracked_count": preview.tracked.len(),
+        "excluded_count": preview.excluded.len(),
+        "tracked": listed(&preview.tracked),
+        "excluded": listed(&preview.excluded),
+    }))
+}
+
+/// Which files a pair would track with these settings, which are not saved.
+pub fn preview_filters(
+    paths: &Paths,
+    name: &str,
+    settings: &Map<String, Value>,
+) -> Result<Value, Error> {
+    let changes = setting_changes(settings)?;
+    let pair = manage::preview_set_pair(paths, name, &changes)?;
+    filter_view(paths, &pair)
+}
+
+/// Which files a new pair would track; it is not saved.
+pub fn preview_new_pair_filters(paths: &Paths, new: &NewPair) -> Result<Value, Error> {
+    check_folder("kb", &new.kb)?;
+    check_folder("repo", &new.repo)?;
+    let pair = manage::preview_new_pair(paths, new)?;
+    filter_view(paths, &pair)
+}
+
+/// A note before and after conversion with these settings, which are not saved.
+pub fn preview_transform(
+    paths: &Paths,
+    name: &str,
+    settings: &Map<String, Value>,
+) -> Result<Value, Error> {
+    let changes = setting_changes(settings)?;
+    let pair = manage::preview_set_pair(paths, name, &changes)?;
+    Ok(json!(open_engine(paths)?.transform_sample(&pair)?))
+}
+
+/// Settings that apply to every pair.
+pub fn global_settings(paths: &Paths) -> Result<Value, Error> {
+    let config = Config::load(paths.config_file())?;
+    Ok(json!({
+        "interval": config.schedule.interval.map_or_else(
+            || "off".to_owned(),
+            |interval| format!("{}s", interval.as_secs()),
+        ),
+        "on_startup": config.schedule.on_startup,
+        "api_enabled": config.api.enabled,
+        "api_port": config.api.port,
+        "mcp_http": config.mcp.http,
+        "mcp_allow_config_write": config.mcp.allow_config_write,
+    }))
+}
+
+/// Changes settings that apply to every pair. Numbers and booleans are given as text.
+pub fn update_global_settings(paths: &Paths, settings: &Map<String, Value>) -> Result<(), Error> {
+    let changes = settings
+        .iter()
+        .map(|(key, value)| Ok((key.clone(), setting_text(key, value)?)))
+        .collect::<Result<Vec<_>, Error>>()?;
+    let _edit = config_edit();
+    manage::set_global(paths, &changes)
+}
+
+/// The hooks of a pair found in its repository, and what edits them.
+pub fn hooks_state(paths: &Paths, name: &str) -> Result<Value, Error> {
+    let config = Config::load(paths.config_file())?;
+    let pair = &config.pair(name)?.pair;
+    let Ok(repo) = GitRepo::open(&pair.repo) else {
+        return Ok(json!({"git": false, "installed": [], "manager": null}));
+    };
+    let installed: Vec<String> = hooks::files_with_block(&DiskFs, &repo, name)
+        .map_err(hook_error)?
+        .iter()
+        .filter_map(|file| file.file_name())
+        .map(|file| file.to_string_lossy().into_owned())
+        .collect();
+    let manager = hooks::detect_manager(&DiskFs, &repo).map_err(hook_error)?;
+    Ok(json!({
+        "git": true,
+        "installed": installed,
+        "manager": manager.map(|manager| match manager {
+            HookManager::Husky => "husky".to_owned(),
+            HookManager::Lefthook => "lefthook".to_owned(),
+            HookManager::HooksPath(path) => format!("core.hooksPath ({path})"),
+        }),
+    }))
+}
+
+fn hook_error(error: HookError) -> Error {
+    Error::InvalidRequest(error.to_string())
+}
+
+/// Installs the hooks of a pair; they run this `markoo` binary.
+pub fn install_hooks(paths: &Paths, name: &str, program: &Path) -> Result<Value, Error> {
+    edit_hooks(paths, name, program, hooks::install)
+}
+
+/// Removes the hooks of a pair.
+pub fn uninstall_hooks(paths: &Paths, name: &str, program: &Path) -> Result<Value, Error> {
+    edit_hooks(paths, name, program, hooks::uninstall)
+}
+
+fn edit_hooks(
+    paths: &Paths,
+    name: &str,
+    program: &Path,
+    edit: impl Fn(
+        &DiskFs,
+        &GitRepo,
+        &HookTarget<'_>,
+        &HookSettings,
+    ) -> Result<Vec<HookChange>, HookError>,
+) -> Result<Value, Error> {
+    let config = Config::load(paths.config_file())?;
+    let pair = &config.pair(name)?.pair;
+    let repo = GitRepo::open(&pair.repo).map_err(hook_error)?;
+    let target = HookTarget {
+        pair: name,
+        program,
+        config_file: paths.config_file(),
+        data_dir: paths.data_dir(),
+    };
+    let changes = edit(&DiskFs, &repo, &target, &pair.hooks).map_err(hook_error)?;
+    Ok(json!(changes))
 }
 
 /// What a folder would be as a knowledge base.

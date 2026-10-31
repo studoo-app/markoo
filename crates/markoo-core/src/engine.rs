@@ -1,6 +1,6 @@
 //! Entry point of the sync engine: scan, plan, apply, resolve.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -73,6 +73,29 @@ pub struct FileDiff {
     /// Unified diff from the repo version to the KB version.
     pub patch: String,
 }
+
+/// Which files of a pair its filters keep.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct FilterPreview {
+    /// Files that are synced.
+    pub tracked: Vec<EntryPath>,
+    /// Files the include patterns take and the exclude patterns remove.
+    pub excluded: Vec<EntryPath>,
+}
+
+/// A note before and after conversion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TransformSample {
+    /// The note.
+    pub path: EntryPath,
+    /// Its text in the knowledge base.
+    pub before: String,
+    /// Its text in the repo.
+    pub after: String,
+}
+
+/// How many files are looked at to find a note that shows a conversion.
+const SAMPLE_FILES: usize = 500;
 
 /// The sync engine for one data directory.
 #[derive(Debug)]
@@ -355,6 +378,64 @@ impl<F: Fs> Engine<F> {
     /// Whether moving from `both` to a one-way mode would be refused.
     pub fn pending_count(&self, pair: &Pair) -> Result<usize, Error> {
         Ok(self.state.pending(&pair.name)?.len())
+    }
+
+    /// Which files of the pair are tracked, with its filters as they are.
+    pub fn filter_preview(&self, pair: &Pair) -> Result<FilterPreview, Error> {
+        let prepared = self.prepare(pair)?;
+        let mut paths = BTreeSet::new();
+        for root in [&pair.kb, &pair.repo] {
+            for file in self.fs.list(root)? {
+                if let Some(path) = EntryPath::from_relative(&file) {
+                    paths.insert(path);
+                }
+            }
+        }
+        let mut preview = FilterPreview::default();
+        for path in paths {
+            if prepared.filter.accepts(&path) {
+                preview.tracked.push(path);
+            } else if prepared.filter.includes(&path) && !prepared.filter.always_excludes(&path) {
+                preview.excluded.push(path);
+            }
+        }
+        Ok(preview)
+    }
+
+    /// A note of the pair before and after conversion to the repo's form,
+    /// preferably one that the conversion changes.
+    pub fn transform_sample(&self, pair: &Pair) -> Result<Option<TransformSample>, Error> {
+        let prepared = self.prepare(pair)?;
+        let mut first = None;
+        for file in self.fs.list(&pair.kb)?.into_iter().take(SAMPLE_FILES) {
+            let Some(path) = EntryPath::from_relative(&file) else {
+                continue;
+            };
+            if !prepared.filter.accepts(&path) {
+                continue;
+            }
+            let Ok(before) = String::from_utf8(self.fs.read(&path.under(&pair.kb))?) else {
+                continue;
+            };
+            let ctx = ConvertCtx {
+                path: &path,
+                index: &prepared.index,
+            };
+            let Ok(after) = prepared.adapter.to_canonical(&normalize(&before), &ctx) else {
+                continue;
+            };
+            let changed = normalize(&before) != after;
+            let sample = TransformSample {
+                path,
+                before,
+                after,
+            };
+            if changed {
+                return Ok(Some(sample));
+            }
+            first.get_or_insert(sample);
+        }
+        Ok(first)
     }
 
     /// The version of each entry at the last sync.

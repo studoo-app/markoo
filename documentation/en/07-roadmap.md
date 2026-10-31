@@ -80,7 +80,7 @@ gantt
 - Three-column conflict view with an editor.
 - [Configuration UI](08-configuration-ui.md): creation wizard, direction choice, filters with preview, transformations, triggers.
 
-**Status**: in progress, step by step. Done: menu bar, list of pairs, pending changes with diffs, three-column conflict view with a text area, creation wizard (without its filter and trigger steps), General tab with preview, all on macOS. Next: filters with preview, transformations, triggers and global settings; then the journal and the History tab, which needs it.
+**Status**: in progress, step by step. Done, on macOS: menu bar, list of pairs, pending changes with diffs, three-column conflict view with a text area, creation wizard, General, Filters, Transformations and Triggers tabs, global settings. Next: the journal and the History tab, which needs it.
 
 ### M8 — v1.0
 - Signed binaries (notarized on macOS), Homebrew formula, user documentation.

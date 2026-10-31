@@ -22,6 +22,9 @@ fn with_new_pair(paths: &Paths, new: &NewPair) -> Result<(ConfigFile, String), E
     }
     let mut file = ConfigFile::open(config_file)?;
     file.add_pair(&new)?;
+    for (key, value) in &new.settings {
+        file.set(&new.name, key, value)?;
+    }
     Ok((file, new.name))
 }
 
@@ -84,6 +87,16 @@ fn with_changes(
         }
     }
     Ok(file)
+}
+
+/// Changes settings that apply to every pair, all at once.
+pub fn set_global(paths: &Paths, changes: &[(String, String)]) -> Result<(), Error> {
+    let mut file = ConfigFile::open(paths.config_file())?;
+    for (key, value) in changes {
+        file.set_global(key, value)?;
+    }
+    file.save()?;
+    Ok(())
 }
 
 /// Removes a pair and forgets its state. Its files are not touched.

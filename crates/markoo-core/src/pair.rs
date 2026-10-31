@@ -110,22 +110,39 @@ impl Pair {
 pub struct Filter {
     include: GlobSet,
     exclude: GlobSet,
+    always_excluded: GlobSet,
 }
 
 impl Filter {
     /// Builds the filter of a pair, adding the always-excluded patterns and
     /// the adapter's own exclusions.
     pub fn new(pair: &Pair, adapter_excluded: &[&str]) -> Result<Self, globset::Error> {
+        let always_excluded = || {
+            ALWAYS_EXCLUDED
+                .iter()
+                .copied()
+                .chain(adapter_excluded.iter().copied())
+        };
         let excluded = pair
             .exclude
             .iter()
             .map(String::as_str)
-            .chain(ALWAYS_EXCLUDED.iter().copied())
-            .chain(adapter_excluded.iter().copied());
+            .chain(always_excluded());
         Ok(Self {
             include: glob_set(pair.include.iter().map(String::as_str))?,
             exclude: glob_set(excluded)?,
+            always_excluded: glob_set(always_excluded())?,
         })
+    }
+
+    /// Whether the include patterns take an entry.
+    pub fn includes(&self, path: &EntryPath) -> bool {
+        self.include.is_match(path.as_str())
+    }
+
+    /// Whether an entry is out whatever the pair's own patterns say.
+    pub fn always_excludes(&self, path: &EntryPath) -> bool {
+        self.always_excluded.is_match(path.as_str())
     }
 
     /// Whether an entry is tracked.
