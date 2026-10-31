@@ -67,6 +67,8 @@ gantt
 ### M5 — Hooks Git
 - `markoo hook install|uninstall`, cohabitation avec les hooks existants, husky et lefthook.
 
+**État** : terminé. Les vrais hooks sont testés sur macOS et Linux seulement ; sous Windows, l'installation est testée, pas l'exécution des hooks par Git. husky et lefthook sont reconnus à leurs fichiers, sans avoir essayé les extraits proposés dans ces outils.
+
 ### M6 — Serveur MCP
 - Outils et ressources décrits dans [Déclencheurs](05-declencheurs.md#4-serveur-mcp), en stdio et en HTTP.
 - Test avec Claude Code.

@@ -135,7 +135,8 @@ target_changes = "protect"      # une édition dans la KB est signalée, jamais 
 | `paused` | booléen | `false` | Suspend la paire pour tous les déclencheurs |
 | `transform.*` | — | voir ci-dessus | Options génériques, voir [Transformations](04-transformations.md) |
 | `kb_options.*` | — | selon l'adaptateur | Options propres à l'adaptateur (par ex. Obsidian : callouts, embeds, filtrage du frontmatter), voir [Adaptateur Obsidian](09-bases-de-connaissance.md#adaptateur-obsidian) |
-| `hooks.*` | — | aucun hook | Voir [Déclencheurs](05-declencheurs.md#2-hooks-git) |
+| `hooks.install` | liste | `["post-merge"]` | Hooks mis en place par `markoo hook install` : `post-merge`, `post-checkout`, `post-commit`, `pre-commit`. Rien n'est installé tant que cette commande n'a pas été lancée, voir [Déclencheurs](05-declencheurs.md#2-hooks-git) |
+| `hooks.branches` | liste | `[]` | Branches sur lesquelles les hooks agissent ; vide pour toutes |
 
 ### Stratégies de conflit
 

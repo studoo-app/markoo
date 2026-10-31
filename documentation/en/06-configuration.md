@@ -135,7 +135,8 @@ target_changes = "protect"      # an edit in the KB is reported, never overwritt
 | `paused` | boolean | `false` | Suspends the pair for all triggers |
 | `transform.*` | — | see above | Generic options, see [Transformations](04-transformations.md) |
 | `kb_options.*` | — | adapter-dependent | Adapter-specific options (e.g. Obsidian: callouts, embeds, frontmatter filtering), see [Obsidian adapter](09-knowledge-bases.md#obsidian-adapter) |
-| `hooks.*` | — | no hooks | See [Triggers](05-triggers.md#2-git-hooks) |
+| `hooks.install` | list | `["post-merge"]` | Hooks set up by `markoo hook install`: `post-merge`, `post-checkout`, `post-commit`, `pre-commit`. Nothing is installed until that command runs, see [Triggers](05-triggers.md#2-git-hooks) |
+| `hooks.branches` | list | `[]` | Branches the hooks act on; empty means all of them |
 
 ### Conflict strategies
 

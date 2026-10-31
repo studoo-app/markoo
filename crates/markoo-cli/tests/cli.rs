@@ -896,3 +896,342 @@ fn sync_reports_a_busy_pair() {
     lock.lock().unwrap();
     assert!(env.fails(&["sync"]).contains("busy"));
 }
+
+// Git hooks, in real repositories
+
+/// Runs `git` in the pair's repository, away from the user's own settings.
+fn git(env: &Env, args: &[&str]) -> Output {
+    Command::new("git")
+        .args([
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "init.defaultBranch=main",
+        ])
+        .args(args)
+        .current_dir(env.path("repo"))
+        .env("GIT_CONFIG_GLOBAL", env.path("no-gitconfig"))
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap()
+}
+
+fn git_ok(env: &Env, args: &[&str]) {
+    let output = git(env, args);
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// A pair whose repository is a real one, with a first commit.
+fn env_with_git() -> Env {
+    let env = Env::with_pair();
+    std::fs::remove_dir_all(env.path("repo/.git")).unwrap();
+    git_ok(&env, &["init", "-q"]);
+    env.write(&env.path("repo"), "README", "hello\n");
+    // Otherwise the pair's folder disappears on a branch where it is empty.
+    env.write(&env.repo(), "keep.txt", "keep\n");
+    git_ok(&env, &["add", "."]);
+    git_ok(&env, &["commit", "-q", "-m", "first"]);
+    env
+}
+
+/// Adds settings to the only pair of the file, which is its last table.
+fn with_hooks(env: &Env, settings: &str) {
+    let config = std::fs::read_to_string(env.config()).unwrap();
+    std::fs::write(
+        env.config(),
+        format!("{config}\n[pair.hooks]\n{settings}\n"),
+    )
+    .unwrap();
+}
+
+fn hook_path(env: &Env, name: &str) -> PathBuf {
+    env.path("repo/.git/hooks").join(name)
+}
+
+fn hook_text(env: &Env, name: &str) -> Option<String> {
+    std::fs::read_to_string(hook_path(env, name)).ok()
+}
+
+#[test]
+fn hook_install_creates_post_merge_by_default() {
+    let env = env_with_git();
+    let output = env.ok(&["hook", "install", "--pair", "clara"]);
+    assert!(output.contains("post-merge: created"), "{output}");
+    assert!(
+        hook_text(&env, "post-merge")
+            .unwrap()
+            .contains("# >>> markoo clara")
+    );
+    assert_eq!(hook_text(&env, "post-commit"), None);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_hook_is_executable() {
+    use std::os::unix::fs::PermissionsExt;
+    let env = env_with_git();
+    env.ok(&["hook", "install", "--pair", "clara"]);
+    let mode = std::fs::metadata(hook_path(&env, "post-merge"))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o111, 0o111);
+}
+
+#[test]
+fn hook_install_twice_changes_nothing() {
+    let env = env_with_git();
+    env.ok(&["hook", "install", "--pair", "clara"]);
+    let first = hook_text(&env, "post-merge");
+    let output = env.ok(&["hook", "install", "--pair", "clara"]);
+    assert!(output.contains("already in place"), "{output}");
+    assert_eq!(hook_text(&env, "post-merge"), first);
+}
+
+#[test]
+fn hook_uninstall_restores_a_hook_of_the_user() {
+    let env = env_with_git();
+    let mine = "#!/bin/sh\necho mine\n";
+    std::fs::write(hook_path(&env, "post-merge"), mine).unwrap();
+    make_executable(&hook_path(&env, "post-merge"));
+    env.ok(&["hook", "install", "--pair", "clara"]);
+    assert!(hook_text(&env, "post-merge").unwrap().starts_with(mine));
+    env.ok(&["hook", "uninstall", "--pair", "clara"]);
+    assert_eq!(hook_text(&env, "post-merge").unwrap(), mine);
+}
+
+fn make_executable(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+}
+
+#[test]
+fn hook_uninstall_removes_a_hook_markoo_created() {
+    let env = env_with_git();
+    env.ok(&["hook", "install", "--pair", "clara"]);
+    env.ok(&["hook", "uninstall", "--pair", "clara"]);
+    assert_eq!(hook_text(&env, "post-merge"), None);
+}
+
+#[test]
+fn hook_install_gives_lefthook_a_snippet() {
+    let env = env_with_git();
+    env.write(&env.path("repo"), "lefthook.yml", "pre-commit:\n");
+    let output = env.ok(&["hook", "install", "--pair", "clara"]);
+    assert!(output.contains("markoo-clara:"), "{output}");
+    assert_eq!(hook_text(&env, "post-merge"), None);
+}
+
+#[test]
+fn hook_install_outside_a_repository_fails() {
+    let env = Env::with_pair();
+    std::fs::remove_dir_all(env.path("repo/.git")).unwrap();
+    let stderr = env.fails(&["hook", "install", "--pair", "clara"]);
+    assert!(stderr.contains("not a Git working tree"), "{stderr}");
+}
+
+#[test]
+fn hook_install_reports_as_json() {
+    let env = env_with_git();
+    let changes = env.json(&["hook", "install", "--pair", "clara"]);
+    assert_eq!(changes[0]["hook"], "post-merge");
+    assert_eq!(changes[0]["status"], "created");
+}
+
+#[test]
+fn hook_run_syncs_the_pair() {
+    let env = env_with_git();
+    env.write(&env.repo(), "api.md", "from the team\n");
+    env.ok(&["hook", "run", "post-merge", "--pair", "clara", "0"]);
+    assert_eq!(env.read(&env.kb(), "api.md").unwrap(), "from the team\n");
+}
+
+#[test]
+fn hook_run_skips_another_branch() {
+    let env = env_with_git();
+    with_hooks(&env, "branches = ['release']");
+    env.write(&env.repo(), "api.md", "from the team\n");
+    env.ok(&["hook", "run", "post-merge", "--pair", "clara"]);
+    assert_eq!(env.read(&env.kb(), "api.md"), None);
+}
+
+#[test]
+fn hook_run_skips_a_rebase_under_way() {
+    let env = env_with_git();
+    std::fs::create_dir(env.path("repo/.git/rebase-merge")).unwrap();
+    env.write(&env.repo(), "api.md", "half done\n");
+    env.ok(&["hook", "run", "post-commit", "--pair", "clara"]);
+    assert_eq!(env.read(&env.kb(), "api.md"), None);
+}
+
+#[test]
+fn hook_run_logs_a_failure_and_succeeds() {
+    let env = env_with_git();
+    env.ok(&["hook", "run", "post-merge", "--pair", "nobody"]);
+    let log = std::fs::read_to_string(env.path("data/hooks.log")).unwrap();
+    assert!(log.contains("post-merge nobody: no pair named"), "{log}");
+}
+
+/// Makes both sides of `note.md` disagree, leaving a conflict pending.
+fn pending_conflict(env: &Env) {
+    env.write(&env.kb(), "note.md", "base\n");
+    env.ok(&["sync"]);
+    env.write(&env.kb(), "note.md", "from the kb\n");
+    env.write(&env.repo(), "note.md", "from the repo\n");
+    env.ok(&["sync"]);
+}
+
+#[test]
+fn pre_commit_refuses_while_a_conflict_is_pending() {
+    let env = env_with_git();
+    pending_conflict(&env);
+    let stderr = env.fails(&["hook", "run", "pre-commit", "--pair", "clara"]);
+    assert!(stderr.contains("1 Markoo conflict(s) pending"), "{stderr}");
+}
+
+#[test]
+fn pre_commit_accepts_without_conflicts() {
+    let env = env_with_git();
+    env.ok(&["hook", "run", "pre-commit", "--pair", "clara"]);
+}
+
+#[test]
+fn pre_commit_lets_the_commit_through_when_markoo_fails() {
+    let env = env_with_git();
+    env.ok(&["hook", "run", "pre-commit", "--pair", "nobody"]);
+}
+
+// Git for Windows runs hooks too, but through its own shell and path rules.
+#[cfg(unix)]
+mod real_hooks {
+    use super::*;
+
+    fn wait_for(env: &Env, file: &str) -> Option<String> {
+        for _ in 0..500 {
+            if let Some(text) = env.read(&env.kb(), file) {
+                return Some(text);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        None
+    }
+
+    #[test]
+    fn a_commit_reaches_the_kb_through_the_hook() {
+        let env = env_with_git();
+        with_hooks(&env, "install = ['post-commit']");
+        env.ok(&["hook", "install", "--pair", "clara"]);
+        env.write(&env.repo(), "api.md", "from a commit\n");
+        git_ok(&env, &["add", "."]);
+        git_ok(&env, &["commit", "-q", "-m", "docs"]);
+        assert_eq!(wait_for(&env, "api.md").unwrap(), "from a commit\n");
+    }
+
+    #[test]
+    fn a_merge_reaches_the_kb_through_the_hook() {
+        let env = env_with_git();
+        env.ok(&["hook", "install", "--pair", "clara"]);
+        git_ok(&env, &["checkout", "-q", "-b", "team"]);
+        env.write(&env.repo(), "api.md", "from the team\n");
+        git_ok(&env, &["add", "."]);
+        git_ok(&env, &["commit", "-q", "-m", "docs"]);
+        git_ok(&env, &["checkout", "-q", "-"]);
+        git_ok(&env, &["merge", "-q", "team"]);
+        assert_eq!(wait_for(&env, "api.md").unwrap(), "from the team\n");
+    }
+
+    #[test]
+    fn a_branch_switch_reaches_the_kb_through_the_hook() {
+        let env = env_with_git();
+        with_hooks(&env, "install = ['post-checkout']");
+        git_ok(&env, &["checkout", "-q", "-b", "team"]);
+        env.write(&env.repo(), "api.md", "from the team\n");
+        git_ok(&env, &["add", "."]);
+        git_ok(&env, &["commit", "-q", "-m", "docs"]);
+        git_ok(&env, &["checkout", "-q", "-"]);
+        env.ok(&["hook", "install", "--pair", "clara"]);
+        git_ok(&env, &["checkout", "-q", "team"]);
+        assert_eq!(wait_for(&env, "api.md").unwrap(), "from the team\n");
+    }
+
+    #[test]
+    fn a_failing_sync_does_not_fail_the_commit() {
+        let env = env_with_git();
+        with_hooks(&env, "install = ['post-commit']");
+        env.ok(&["hook", "install", "--pair", "clara"]);
+        std::fs::write(env.config(), "not toml =").unwrap();
+        env.write(&env.path("repo"), "other", "x\n");
+        git_ok(&env, &["add", "."]);
+        git_ok(&env, &["commit", "-q", "-m", "still works"]);
+    }
+
+    #[test]
+    fn pre_commit_blocks_a_real_commit() {
+        let env = env_with_git();
+        with_hooks(&env, "install = ['pre-commit']");
+        env.ok(&["hook", "install", "--pair", "clara"]);
+        pending_conflict(&env);
+        env.write(&env.path("repo"), "other", "x\n");
+        git_ok(&env, &["add", "other"]);
+        let output = git(&env, &["commit", "-q", "-m", "refused"]);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("conflict(s) pending"));
+    }
+
+    #[test]
+    fn a_removed_binary_does_not_block_commits() {
+        let env = env_with_git();
+        with_hooks(&env, "install = ['pre-commit']");
+        env.ok(&["hook", "install", "--pair", "clara"]);
+        let text = hook_text(&env, "pre-commit").unwrap();
+        let program = env!("CARGO_BIN_EXE_markoo");
+        std::fs::write(
+            hook_path(&env, "pre-commit"),
+            text.replace(program, "/nowhere/markoo"),
+        )
+        .unwrap();
+        env.write(&env.path("repo"), "other", "x\n");
+        git_ok(&env, &["add", "other"]);
+        git_ok(&env, &["commit", "-q", "-m", "fine"]);
+    }
+
+    #[test]
+    fn a_disabled_hook_is_not_turned_on() {
+        let env = env_with_git();
+        std::fs::write(hook_path(&env, "post-merge"), "#!/bin/sh\necho mine\n").unwrap();
+        let output = env.run(&["hook", "install", "--pair", "clara"]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("not executable"), "{stderr}");
+        assert_eq!(
+            hook_text(&env, "post-merge").unwrap(),
+            "#!/bin/sh\necho mine\n"
+        );
+    }
+
+    #[test]
+    fn a_linked_hook_stays_a_link() {
+        let env = env_with_git();
+        env.write(&env.path("repo"), "my-hook", "#!/bin/sh\necho mine\n");
+        make_executable(&env.path("repo/my-hook"));
+        std::os::unix::fs::symlink(env.path("repo/my-hook"), hook_path(&env, "post-merge"))
+            .unwrap();
+        env.ok(&["hook", "install", "--pair", "clara"]);
+        assert!(hook_path(&env, "post-merge").is_symlink());
+        assert_eq!(
+            env.read(&env.path("repo"), "my-hook").unwrap(),
+            "#!/bin/sh\necho mine\n"
+        );
+    }
+}

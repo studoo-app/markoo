@@ -8,6 +8,7 @@ pub mod config;
 pub mod engine;
 pub mod entry;
 pub mod fs;
+pub mod hooks;
 pub mod kb;
 pub mod manage;
 pub mod merge;

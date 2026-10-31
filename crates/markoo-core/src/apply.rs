@@ -362,7 +362,7 @@ impl<F: Fs> Applier<'_, F> {
 }
 
 /// Identifier of an apply run, used to group its backups and trashed files.
-fn run_id() -> String {
+pub(crate) fn run_id() -> String {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_millis());

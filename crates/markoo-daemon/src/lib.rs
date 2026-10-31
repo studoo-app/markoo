@@ -4,6 +4,7 @@
 //! returns; all the sync logic stays in the core.
 
 mod api;
+pub mod client;
 mod queue;
 mod runner;
 mod scheduler;

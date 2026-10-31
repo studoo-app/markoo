@@ -13,6 +13,7 @@ use serde::Deserialize;
 use toml_edit::{Array, ArrayOfTables, DocumentMut, Item, Table, value};
 
 use crate::fs::{DiskFs, Fs, FsError};
+use crate::hooks::HookSettings;
 use crate::kb::KbType;
 use crate::pair::{Direction, Pair, TargetChanges};
 
@@ -93,7 +94,7 @@ struct RawPair {
     paused: bool,
     transform: Option<RawTransform>,
     kb_options: Option<toml::Table>,
-    hooks: Option<toml::Value>,
+    hooks: Option<HookSettings>,
 }
 
 /// `[pair.transform]`
@@ -360,10 +361,8 @@ impl PairEntry {
         if raw.conflict.as_deref().is_some_and(|c| c != "ask") {
             not_implemented.push("conflict (conflicts are always put on hold)".to_owned());
         }
-        if raw.hooks.is_some() {
-            not_implemented.push("hooks".to_owned());
-        }
         let mut pair = Pair::new(raw.name, kb, expand_home(&raw.repo));
+        pair.hooks = raw.hooks.unwrap_or_default();
         if let Some(transform) = raw.transform {
             if transform
                 .filenames
@@ -675,6 +674,33 @@ fn in_git_repository(folder: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn hooks_are_read_from_the_pair() {
+        let text = "[[pair]]\nname='a'\nkb='/k'\nrepo='/r'\n[pair.hooks]\ninstall=['post-commit']\nbranches=['main']\n";
+        let config = Config::parse(text).unwrap();
+        let entry = &config.pairs[0];
+        assert_eq!(
+            entry.pair.hooks.install,
+            [crate::hooks::HookName::PostCommit]
+        );
+        assert_eq!(entry.pair.hooks.branches, ["main"]);
+        assert!(entry.not_implemented.is_empty());
+    }
+
+    #[test]
+    fn hooks_default_to_post_merge_on_every_branch() {
+        let text = "[[pair]]\nname='a'\nkb='/k'\nrepo='/r'\n";
+        let hooks = &Config::parse(text).unwrap().pairs[0].pair.hooks;
+        assert_eq!(hooks.install, [crate::hooks::HookName::PostMerge]);
+        assert!(hooks.branches.is_empty());
+    }
+
+    #[test]
+    fn an_unknown_hook_is_refused() {
+        let text = "[[pair]]\nname='a'\nkb='/k'\nrepo='/r'\n[pair.hooks]\ninstall=['post-push']\n";
+        assert!(matches!(Config::parse(text), Err(ConfigError::Invalid(_))));
+    }
+
     #[test]
     fn interval_is_parsed_in_seconds_minutes_and_hours() {
         let durations = ["30s", "5m", "1h"].map(|text| parse_interval(text).unwrap().unwrap());

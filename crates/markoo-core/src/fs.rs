@@ -80,6 +80,18 @@ pub trait Fs {
     /// Takes an exclusive lock named by `path`, across threads and processes.
     /// Returns `None` if someone else holds it; never waits.
     fn try_lock(&self, path: &Path) -> Result<Option<FsLock>, FsError>;
+    /// Whether `path` is a symbolic link.
+    fn is_symlink(&self, _path: &Path) -> bool {
+        false
+    }
+    /// Whether an existing file can be executed.
+    fn is_executable(&self, _path: &Path) -> bool {
+        true
+    }
+    /// Lets a file be executed.
+    fn make_executable(&self, _path: &Path) -> Result<(), FsError> {
+        Ok(())
+    }
 }
 
 /// The real file system.
@@ -109,6 +121,27 @@ fn create_parent(path: &Path) -> Result<(), FsError> {
 }
 
 impl Fs for DiskFs {
+    fn is_symlink(&self, path: &Path) -> bool {
+        path.is_symlink()
+    }
+
+    #[cfg(unix)]
+    fn is_executable(&self, path: &Path) -> bool {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).is_ok_and(|meta| meta.permissions().mode() & 0o111 != 0)
+    }
+
+    #[cfg(unix)]
+    fn make_executable(&self, path: &Path) -> Result<(), FsError> {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(path)
+            .map_err(io_err(path))?
+            .permissions()
+            .mode();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode | 0o111))
+            .map_err(io_err(path))
+    }
+
     fn try_lock(&self, path: &Path) -> Result<Option<FsLock>, FsError> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(io_err(parent))?;

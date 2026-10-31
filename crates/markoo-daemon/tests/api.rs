@@ -669,3 +669,75 @@ async fn sync_refuses_a_malformed_body() {
     assert_eq!(client.send("POST", "/pairs/clara/sync", body).await.0, 400);
     client.stop().await;
 }
+
+fn port_of(client: &Client) -> u16 {
+    client.addr.port()
+}
+
+#[tokio::test]
+async fn a_hook_can_ask_the_daemon_for_a_sync() {
+    let env = Env::new();
+    std::fs::write(env.kb().join("note.md"), "hello\n").unwrap();
+    let client = env.start().await;
+    let port = port_of(&client);
+    let data_dir = env.paths.data_dir().to_path_buf();
+    let answer = tokio::task::spawn_blocking(move || {
+        markoo_daemon::client::request_sync(&data_dir, port, "clara")
+    })
+    .await
+    .unwrap();
+    assert_eq!(answer, markoo_daemon::client::SyncRequest::Queued);
+    for _ in 0..500 {
+        if env.repo().join("note.md").exists() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the daemon did not sync");
+}
+
+#[tokio::test]
+async fn a_hook_is_told_when_the_daemon_refuses() {
+    let env = Env::new();
+    let client = env.start().await;
+    let port = port_of(&client);
+    let data_dir = env.paths.data_dir().to_path_buf();
+    let answer = tokio::task::spawn_blocking(move || {
+        markoo_daemon::client::request_sync(&data_dir, port, "nobody")
+    })
+    .await
+    .unwrap();
+    assert!(matches!(
+        answer,
+        markoo_daemon::client::SyncRequest::Refused(_)
+    ));
+}
+
+#[tokio::test]
+async fn the_daemon_of_another_data_folder_counts_as_unavailable() {
+    let env = Env::new();
+    let client = env.start().await;
+    let port = port_of(&client);
+    let other = tempfile::tempdir().unwrap();
+    std::fs::write(other.path().join(token::TOKEN_FILE), "another-token").unwrap();
+    let data_dir = other.path().to_path_buf();
+    let answer = tokio::task::spawn_blocking(move || {
+        markoo_daemon::client::request_sync(&data_dir, port, "clara")
+    })
+    .await
+    .unwrap();
+    assert_eq!(answer, markoo_daemon::client::SyncRequest::Unavailable);
+}
+
+#[test]
+fn no_daemon_counts_as_unavailable() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join(token::TOKEN_FILE), "token").unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+    assert_eq!(
+        markoo_daemon::client::request_sync(dir.path(), port, "clara"),
+        markoo_daemon::client::SyncRequest::Unavailable
+    );
+}

@@ -11,15 +11,17 @@ use markoo_core::config::{
     Config, ConfigError, ConfigFile, NewPair, PairEntry, Problem, expand_home,
 };
 use markoo_core::fs::{DiskFs, Fs};
+use markoo_core::hooks::{self, GitRepo, HookChange, HookName, HookStatus, HookTarget};
 use markoo_core::manage;
 use markoo_core::paths::{Overrides, Paths};
 use markoo_core::plan::{Action, AttachmentAction, PlannedAttachment, PlannedEntry};
 use markoo_core::state::IssueKind;
 use markoo_core::{Direction, Engine, EntryPath, Pair, Report, Resolution, Side, TargetChanges};
+use markoo_daemon::client::{self, SyncRequest};
 use serde_json::{Value, json};
 
 use crate::output::Style;
-use crate::{DaemonCommand, Keep, PairCommand, wizard};
+use crate::{DaemonCommand, HookCommand, Keep, PairCommand, wizard};
 
 /// How the user wants to settle an issue.
 #[derive(Debug)]
@@ -594,6 +596,144 @@ impl Ctx {
             }
         }
         Ok(())
+    }
+
+    pub fn hook(&self, command: HookCommand) -> Result<()> {
+        match command {
+            HookCommand::Install { pair } => self.hook_edit(&pair, hooks::install),
+            HookCommand::Uninstall { pair } => self.hook_edit(&pair, hooks::uninstall),
+            HookCommand::Run {
+                hook,
+                pair,
+                arguments,
+            } => {
+                // Git carries on whatever happens here, so the only trace of
+                // a failure is the log.
+                if let Err(error) = self.hook_run(&hook, &pair, &arguments) {
+                    self.log_hook_error(&hook, &pair, &format!("{error:#}"));
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn hook_edit(
+        &self,
+        name: &str,
+        edit: impl Fn(
+            &DiskFs,
+            &GitRepo,
+            &HookTarget<'_>,
+            &hooks::HookSettings,
+        ) -> Result<Vec<HookChange>, hooks::HookError>,
+    ) -> Result<()> {
+        let config = self.config()?;
+        let pair = &config.pair(name)?.pair;
+        let repo = GitRepo::open(&pair.repo)?;
+        let program = std::env::current_exe().context("cannot find the markoo binary")?;
+        let target = HookTarget {
+            pair: name,
+            program: &program,
+            config_file: self.paths.config_file(),
+            data_dir: self.paths.data_dir(),
+        };
+        let changes = edit(&DiskFs, &repo, &target, &pair.hooks)?;
+        if self.json {
+            return self.print_json(&serde_json::to_value(&changes)?);
+        }
+        if changes.is_empty() {
+            println!("No hook to change.");
+        }
+        for change in &changes {
+            self.print_hook_change(change);
+        }
+        Ok(())
+    }
+
+    fn print_hook_change(&self, change: &HookChange) {
+        let hook = change.hook.as_str();
+        let done = match &change.status {
+            HookStatus::Created => "created",
+            HookStatus::Added => "added to the existing hook",
+            HookStatus::Updated => "updated",
+            HookStatus::Unchanged => "already in place",
+            HookStatus::Removed => "removed",
+            HookStatus::Manual { reason, snippet } => {
+                self.warn(&format!("{hook}: {reason}:"));
+                println!("{snippet}");
+                return;
+            }
+        };
+        println!("{} {hook}: {done}", self.style.green("✓"));
+    }
+
+    fn hook_run(&self, hook: &str, name: &str, arguments: &[String]) -> Result<()> {
+        let hook: HookName = hook.parse().map_err(anyhow::Error::msg)?;
+        let config = self.config()?;
+        let pair = &config.pair(name)?.pair;
+        if pair.paused {
+            return Ok(());
+        }
+        let repo = GitRepo::open(&pair.repo)?;
+        if !hooks::should_act(&DiskFs, &repo, hook, arguments, &pair.hooks)? {
+            return Ok(());
+        }
+        let validation = config.validate();
+        if !validation.is_ok(name) {
+            let problems: Vec<_> = validation
+                .errors
+                .iter()
+                .filter(|problem| problem.pair == name)
+                .map(|problem| problem.message.as_str())
+                .collect();
+            bail!("{}", problems.join("; "));
+        }
+        if hook == HookName::PreCommit {
+            let conflicts = self
+                .engine()?
+                .issues(pair)?
+                .iter()
+                .filter(|issue| issue.kind == IssueKind::Conflict)
+                .count();
+            if conflicts > 0 {
+                self.report_error(&format!(
+                    "{conflicts} Markoo conflict(s) pending in \"{name}\": \
+                     see `markoo conflicts`, or skip this check with `git commit --no-verify`"
+                ));
+            }
+            return Ok(());
+        }
+        let answer = if config.api.enabled {
+            client::request_sync(self.paths.data_dir(), config.api.port, name)
+        } else {
+            SyncRequest::Unavailable
+        };
+        match answer {
+            SyncRequest::Queued => {}
+            SyncRequest::Refused(message) => bail!(message),
+            SyncRequest::Unavailable => {
+                self.engine()?.run(pair, false)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn log_hook_error(&self, hook: &str, pair: &str, message: &str) {
+        use std::io::Write;
+        let seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs());
+        let file = self.paths.data_dir().join("hooks.log");
+        let opened = std::fs::create_dir_all(self.paths.data_dir()).and_then(|()| {
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&file)
+        });
+        // Nothing more can be done: a hook must not get in the way of Git.
+        if let Ok(mut log) = opened {
+            let _ = writeln!(log, "{seconds} {hook} {pair}: {message}");
+        }
     }
 
     pub fn token_rotate(&self) -> Result<()> {

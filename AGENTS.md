@@ -17,7 +17,7 @@ The design lives in [`documentation/`](documentation/INDEX.md). **Read it before
 
 ## Current status
 
-**M0 to M2 and M4 done** (`markoo-daemon`: job queue, scheduler, HTTP API, `launchd` service, tried on a real `launchd`), **M3 Obsidian adapter in place** (`markoo-core::kb::obsidian`): wikilinks, embeds, attachments, callouts, frontmatter, detection; validation on real vaults under way (`MARKOO_CORPUS`, see `crates/markoo-core/tests/obsidian.rs`). Not implemented yet: the journal, `schedule.pause_on_battery`, the `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, `[pair.hooks]`, merging frontmatter by key (all accepted in `markoo.toml`, ignored with a warning where they are options). The next milestones are **M5** (Git hooks) and **M6** (MCP server). Don't build ahead of the roadmap without being asked.
+**M0 to M2, M4 and M5 done** (`markoo-daemon`: job queue, scheduler, HTTP API, `launchd` service, tried on a real `launchd`), **M3 Obsidian adapter in place** (`markoo-core::kb::obsidian`): wikilinks, embeds, attachments, callouts, frontmatter, detection; validation on real vaults under way (`MARKOO_CORPUS`, see `crates/markoo-core/tests/obsidian.rs`). Not implemented yet: the journal, `schedule.pause_on_battery`, the `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, merging frontmatter by key (all accepted in `markoo.toml`, ignored with a warning where they are options). The next milestone is **M6** (MCP server). Don't build ahead of the roadmap without being asked.
 
 ## Repository layout (target)
 

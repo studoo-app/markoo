@@ -101,6 +101,37 @@ enum Command {
     /// Manage the token of the local API.
     #[command(subcommand)]
     Token(TokenCommand),
+    /// Manage the Git hooks of a pair.
+    #[command(subcommand)]
+    Hook(HookCommand),
+}
+
+#[derive(Debug, Subcommand)]
+enum HookCommand {
+    /// Install the hooks listed in the pair's `[pair.hooks]`, by default `post-merge`.
+    Install {
+        /// The pair.
+        #[arg(long)]
+        pair: String,
+    },
+    /// Remove the pair's hooks and nothing else.
+    Uninstall {
+        /// The pair.
+        #[arg(long)]
+        pair: String,
+    },
+    /// What a hook runs; a failure is logged and Git carries on.
+    #[command(hide = true)]
+    Run {
+        /// The hook.
+        hook: String,
+        /// The pair.
+        #[arg(long)]
+        pair: String,
+        /// What Git passes to the hook.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        arguments: Vec<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -219,6 +250,7 @@ fn run(cli: Cli) -> Result<bool> {
         Command::Paths => ctx.paths()?,
         Command::Daemon { action } => ctx.daemon(action)?,
         Command::Token(TokenCommand::Rotate) => ctx.token_rotate()?,
+        Command::Hook(command) => ctx.hook(command)?,
     }
     Ok(ctx.succeeded())
 }

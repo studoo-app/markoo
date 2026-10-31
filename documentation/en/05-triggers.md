@@ -40,7 +40,7 @@ pause_on_battery = false # not implemented yet: accepted and ignored, with a war
 markoo hook install --pair clara
 ```
 
-Installs hooks in the pair's repository that call Markoo:
+Installs in the pair's repository the hooks listed in `[pair.hooks]`, by default `post-merge`, and removes the pair's other ones. `markoo hook uninstall --pair clara` removes them. The hooks call Markoo:
 
 | Hook | When | Purpose |
 |------|------|---------|
@@ -60,14 +60,17 @@ sequenceDiagram
     U->>G: git pull
     G->>G: merge remote commits
     G->>H: run the hook
-    H->>D: POST /sync?pair=clara (or CLI if the daemon is stopped)
+    H->>D: POST /pairs/clara/sync (or CLI if the daemon is stopped)
     D->>V: update the changed notes (through the KB adapter)
     D-->>U: notification “3 notes updated”
 ```
 
-- The hook **never fails** because of Markoo (except `pre-commit`, if enabled): errors are logged and Git carries on.
-- Existing hooks are preserved: Markoo appends itself at the end, between two `# >>> markoo` / `# <<< markoo` markers. The `husky` and `lefthook` managers are detected, and a configuration snippet is suggested instead.
-- Branches can be filtered (`hook_branches = ["main"]`) to sync only the main branch.
+- The hook **never fails** because of Markoo and never makes Git wait: it runs in the background, and errors are logged in `<data>/hooks.log`. `pre-commit` is the exception: it waits, and refuses the commit while a conflict is pending (`git commit --no-verify` skips it); a failure of Markoo itself lets the commit through.
+- Existing hooks are preserved: Markoo appends itself at the end, between two `# >>> markoo clara` / `# <<< markoo clara` markers naming the pair, after keeping a copy in `<data>/backups/`. Uninstalling removes only that block; a hook left empty goes to `<data>/trash/`.
+- Markoo leaves a hook alone and prints the lines to add by hand when it could not run after it or would damage it: not a shell script, ending with `exit` or `exec`, not executable (Git ignores it), a symbolic link.
+- The `husky` and `lefthook` managers, and any other `core.hooksPath`, are detected, and a configuration snippet is suggested instead: those files may be versioned or shared, so the snippet needs `markoo` in the `PATH` and does nothing without it.
+- Branches can be filtered (`branches = ["main"]` in `[pair.hooks]`) to sync only the main branch. A paused pair does nothing.
+- Nothing runs during a rebase, merge, cherry-pick, revert or bisect under way: their intermediate states must not reach the KB. `post-checkout` only acts when the branch's commit changes.
 
 ## 3. Local HTTP API
 

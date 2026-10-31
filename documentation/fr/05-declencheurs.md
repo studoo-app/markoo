@@ -40,7 +40,7 @@ pause_on_battery = false # pas encore implémenté : accepté et ignoré, avec u
 markoo hook install --pair clara
 ```
 
-Installe, dans le dépôt de la paire, des hooks qui appellent Markoo :
+Installe, dans le dépôt de la paire, les hooks listés dans `[pair.hooks]`, par défaut `post-merge`, et retire les autres hooks de la paire. `markoo hook uninstall --pair clara` les retire. Les hooks appellent Markoo :
 
 | Hook | Moment | Intérêt |
 |------|--------|---------|
@@ -60,14 +60,17 @@ sequenceDiagram
     U->>G: git pull
     G->>G: merge des commits distants
     G->>H: exécution du hook
-    H->>D: POST /sync?pair=clara (ou CLI si le daemon est arrêté)
+    H->>D: POST /pairs/clara/sync (ou CLI si le daemon est arrêté)
     D->>V: met à jour les notes modifiées (via l'adaptateur de la KB)
     D-->>U: notification « 3 notes mises à jour »
 ```
 
-- Le hook **n'échoue jamais** à cause de Markoo (sauf `pre-commit`, si activé) : une erreur est journalisée et Git continue.
-- Les hooks existants sont respectés : Markoo s'ajoute à la fin, entre deux marqueurs `# >>> markoo` / `# <<< markoo`. Les gestionnaires `husky` et `lefthook` sont détectés et un extrait de configuration est proposé à la place.
-- Les branches peuvent être filtrées (`hook_branches = ["main"]`) pour ne synchroniser que la branche principale.
+- Le hook **n'échoue jamais** à cause de Markoo et ne fait jamais attendre Git : il tourne en arrière-plan, et les erreurs sont journalisées dans `<data>/hooks.log`. `pre-commit` fait exception : il attend, et refuse le commit tant qu'un conflit est en attente (`git commit --no-verify` le contourne) ; une panne de Markoo lui-même laisse passer le commit.
+- Les hooks existants sont respectés : Markoo s'ajoute à la fin, entre deux marqueurs `# >>> markoo clara` / `# <<< markoo clara` qui nomment la paire, après en avoir gardé une copie dans `<data>/backups/`. La désinstallation ne retire que ce bloc ; un hook resté vide part dans `<data>/trash/`.
+- Markoo ne touche pas à un hook et affiche les lignes à ajouter à la main quand elles ne pourraient pas s'exécuter après lui ou que l'écriture l'abîmerait : pas un script shell, fin par `exit` ou `exec`, non exécutable (Git l'ignore), lien symbolique.
+- Les gestionnaires `husky` et `lefthook`, ainsi que tout autre `core.hooksPath`, sont détectés et un extrait de configuration est proposé à la place : ces fichiers peuvent être versionnés ou partagés, donc l'extrait a besoin de `markoo` dans le `PATH` et ne fait rien sans lui.
+- Les branches peuvent être filtrées (`branches = ["main"]` dans `[pair.hooks]`) pour ne synchroniser que la branche principale. Une paire en pause ne fait rien.
+- Rien ne s'exécute pendant un rebase, un merge, un cherry-pick, un revert ou un bisect en cours : leurs états intermédiaires ne doivent pas arriver dans la KB. `post-checkout` n'agit que si le commit de la branche change.
 
 ## 3. API HTTP locale
 

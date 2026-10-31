@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::entry::{EntryPath, Side};
 use crate::fs::TMP_SUFFIX;
+use crate::hooks::HookSettings;
 use crate::kb::{KbOptions, KbType};
 
 /// Patterns ignored on both sides of every pair, whatever the configuration.
@@ -72,6 +73,8 @@ pub struct Pair {
     pub assets_dir: String,
     /// Options of the knowledge base adapter.
     pub kb_options: KbOptions,
+    /// Git hooks of the pair.
+    pub hooks: HookSettings,
 }
 
 impl Pair {
@@ -89,6 +92,7 @@ impl Pair {
             paused: false,
             assets_dir: "assets".to_owned(),
             kb_options: KbOptions::default(),
+            hooks: HookSettings::default(),
         }
     }
 
