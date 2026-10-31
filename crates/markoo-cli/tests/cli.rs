@@ -986,6 +986,23 @@ fn a_hook_is_executable() {
 }
 
 #[test]
+fn hook_install_says_that_nothing_was_synced() {
+    let env = env_with_git();
+    env.write(&env.repo(), "api.md", "not yet\n");
+    let output = env.ok(&["hook", "install", "--pair", "clara"]);
+    assert!(output.contains("markoo sync --pair clara"), "{output}");
+    assert_eq!(env.read(&env.kb(), "api.md"), None);
+}
+
+#[test]
+fn a_snippet_comes_without_the_sync_reminder() {
+    let env = env_with_git();
+    env.write(&env.path("repo"), "lefthook.yml", "pre-commit:\n");
+    let output = env.ok(&["hook", "install", "--pair", "clara"]);
+    assert!(!output.contains("Nothing was synced"), "{output}");
+}
+
+#[test]
 fn hook_install_twice_changes_nothing() {
     let env = env_with_git();
     env.ok(&["hook", "install", "--pair", "clara"]);

@@ -40,7 +40,7 @@ pause_on_battery = false # not implemented yet: accepted and ignored, with a war
 markoo hook install --pair clara
 ```
 
-Installs in the pair's repository the hooks listed in `[pair.hooks]`, by default `post-merge`, and removes the pair's other ones. `markoo hook uninstall --pair clara` removes them. The hooks call Markoo:
+Installs in the pair's repository the hooks listed in `[pair.hooks]`, by default `post-merge`, and removes the pair's other ones. `markoo hook uninstall --pair clara` removes them. Installing syncs nothing: the hooks act the next time Git runs them, and `markoo sync --pair clara` syncs right away. The hooks call Markoo:
 
 | Hook | When | Purpose |
 |------|------|---------|

@@ -600,8 +600,23 @@ impl Ctx {
 
     pub fn hook(&self, command: HookCommand) -> Result<()> {
         match command {
-            HookCommand::Install { pair } => self.hook_edit(&pair, hooks::install),
-            HookCommand::Uninstall { pair } => self.hook_edit(&pair, hooks::uninstall),
+            HookCommand::Install { pair } => {
+                let changes = self.hook_edit(&pair, hooks::install)?;
+                let in_place = changes
+                    .iter()
+                    .any(|change| !matches!(change.status, HookStatus::Manual { .. }));
+                if in_place && !self.json {
+                    println!(
+                        "{}",
+                        self.style.dim(&format!(
+                            "Nothing was synced: hooks act the next time Git runs them. \
+                             To sync now: markoo sync --pair {pair}"
+                        ))
+                    );
+                }
+                Ok(())
+            }
+            HookCommand::Uninstall { pair } => self.hook_edit(&pair, hooks::uninstall).map(drop),
             HookCommand::Run {
                 hook,
                 pair,
@@ -626,7 +641,7 @@ impl Ctx {
             &HookTarget<'_>,
             &hooks::HookSettings,
         ) -> Result<Vec<HookChange>, hooks::HookError>,
-    ) -> Result<()> {
+    ) -> Result<Vec<HookChange>> {
         let config = self.config()?;
         let pair = &config.pair(name)?.pair;
         let repo = GitRepo::open(&pair.repo)?;
@@ -639,7 +654,8 @@ impl Ctx {
         };
         let changes = edit(&DiskFs, &repo, &target, &pair.hooks)?;
         if self.json {
-            return self.print_json(&serde_json::to_value(&changes)?);
+            self.print_json(&serde_json::to_value(&changes)?)?;
+            return Ok(changes);
         }
         if changes.is_empty() {
             println!("No hook to change.");
@@ -647,7 +663,7 @@ impl Ctx {
         for change in &changes {
             self.print_hook_change(change);
         }
-        Ok(())
+        Ok(changes)
     }
 
     fn print_hook_change(&self, change: &HookChange) {

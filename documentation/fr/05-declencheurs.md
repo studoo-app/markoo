@@ -40,7 +40,7 @@ pause_on_battery = false # pas encore implémenté : accepté et ignoré, avec u
 markoo hook install --pair clara
 ```
 
-Installe, dans le dépôt de la paire, les hooks listés dans `[pair.hooks]`, par défaut `post-merge`, et retire les autres hooks de la paire. `markoo hook uninstall --pair clara` les retire. Les hooks appellent Markoo :
+Installe, dans le dépôt de la paire, les hooks listés dans `[pair.hooks]`, par défaut `post-merge`, et retire les autres hooks de la paire. `markoo hook uninstall --pair clara` les retire. L'installation ne synchronise rien : les hooks agissent la prochaine fois que Git les lance, et `markoo sync --pair clara` synchronise tout de suite. Les hooks appellent Markoo :
 
 | Hook | Moment | Intérêt |
 |------|--------|---------|
