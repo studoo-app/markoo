@@ -1,0 +1,13 @@
+{
+  "bundle": {
+    "externalBin": [
+      "binaries/markoo"
+    ],
+    "targets": [
+      "dmg"
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}

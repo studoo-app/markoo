@@ -16,7 +16,7 @@ Knowledge base tools are supported through **adapters**. **Obsidian is the first
 > 🇫🇷 [Version française](README.fr.md)
 
 > [!WARNING]
-> **Early development.** The sync engine, the CLI and the Obsidian adapter work, but they have not been proven on real vaults yet: keep a backup of your notes. Automatic triggers and the desktop app are not there yet: see the [roadmap](documentation/en/07-roadmap.md).
+> **Release candidate.** Markoo has been tried on real vaults, but it is still young: keep a backup of your notes, and start on a copy. The macOS app is not signed yet, and Linux and Windows only have the command line.
 
 ```mermaid
 flowchart LR
@@ -33,9 +33,9 @@ flowchart LR
     E <-->|diff / merge| R
 ```
 
-## Features (planned)
+## Features
 
-- **Any knowledge base, through adapters**: Obsidian first, others later. Each adapter converts its tool's Markdown dialect to standard Markdown and back.
+- **Any knowledge base, through adapters**: Obsidian and plain Markdown folders today, others later. Each adapter converts its tool's Markdown dialect to standard Markdown and back.
 - **Three sync directions per pair**: KB → repo, repo → KB, or both ways.
 - **3-way merge**: changes on both sides are merged line by line against the last synced version. You only decide on real conflicts.
 - **No data loss**: dry-run before anything is written, atomic writes, backups and a trash folder. Markoo never commits or pushes for you.
@@ -43,7 +43,7 @@ flowchart LR
 - **Rename detection**: a moved or renamed note is moved on the other side too, and links pointing to it are updated.
 - **Many triggers**: time interval, Git hooks (`post-merge`…), local HTTP API, MCP server for Claude and other AI agents, CLI.
 - **Desktop app**: menu bar status, pair setup wizard, side-by-side conflict view.
-- **Cross-platform**: macOS first, then Linux and Windows.
+- **Cross-platform**: the app runs on macOS; the command line also runs on Linux and Windows.
 
 ## How it works
 
@@ -63,7 +63,7 @@ Details: [sync algorithm](documentation/en/03-sync-algorithm.md).
 
 ## Usage
 
-There is no release yet: build from source with `cargo build --release`. `markoo hook` below is not available yet.
+Get the app or the command line from the [releases](https://github.com/studoo-app/markoo/releases), or build from source with `cargo install --path crates/markoo-cli --locked`. The [user guide](documentation/en/10-user-guide.md) explains the rest.
 
 ```bash
 markoo pair add clara --kb ~/Obsidian/Knowledge/Projects/Clara --kb-type obsidian --repo ~/code/clara/docs --direction both
@@ -97,7 +97,7 @@ app/                   Tauri desktop app
 
 ## Documentation
 
-The design documentation is available in English and French: [documentation index](documentation/INDEX.md).
+Start with the [user guide](documentation/en/10-user-guide.md). The design documentation is available in English and French: [documentation index](documentation/INDEX.md).
 
 | | |
 |---|---|
@@ -105,11 +105,11 @@ The design documentation is available in English and French: [documentation inde
 | [Sync algorithm](documentation/en/03-sync-algorithm.md) | [Transformations](documentation/en/04-transformations.md) |
 | [Triggers](documentation/en/05-triggers.md) | [Configuration](documentation/en/06-configuration.md) |
 | [Roadmap](documentation/en/07-roadmap.md) | [Configuration UI](documentation/en/08-configuration-ui.md) |
-| [Knowledge bases](documentation/en/09-knowledge-bases.md) | |
+| [Knowledge bases](documentation/en/09-knowledge-bases.md) | [User guide](documentation/en/10-user-guide.md) |
 
 ## Contributing
 
-Contributions are welcome once the first milestones land. Before contributing:
+Contributions are welcome. Before contributing:
 
 - read [AGENTS.md](AGENTS.md): it lists the project's invariants and conventions (they apply to humans too);
 - documentation is bilingual: any change in `documentation/en/` must be mirrored in `documentation/fr/` in the same commit, and vice versa.

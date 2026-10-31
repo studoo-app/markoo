@@ -21,6 +21,7 @@ cobertura.xml
 # --- Tauri app (app/) ---------------------------------------------------
 /app/src-tauri/target/
 /app/src-tauri/gen/schemas/
+/app/src-tauri/binaries/
 /app/node_modules/
 /app/dist/
 /app/.vite/

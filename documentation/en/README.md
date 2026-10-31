@@ -39,6 +39,7 @@ flowchart LR
 | 7 | [Roadmap](07-roadmap.md) | Milestones and exit criteria |
 | 8 | [Configuration UI](08-configuration-ui.md) | Screens, wizard, direction choice, configuration CLI and API |
 | 9 | [Knowledge bases](09-knowledge-bases.md) | Adapter model, supported types (Obsidian first), adding an adapter |
+| 10 | [User guide](10-user-guide.md) | Install, first pair, daily use, recovering files |
 | — | [Glossary](glossary.md) | Project vocabulary |
 
 ## Decisions already made

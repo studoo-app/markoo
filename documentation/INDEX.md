@@ -32,4 +32,5 @@ Markoo intelligently syncs Markdown documentation between a **knowledge base** (
 | 7 | [Feuille de route](fr/07-feuille-de-route.md) | [Roadmap](en/07-roadmap.md) |
 | 8 | [Interface de configuration](fr/08-interface-de-configuration.md) | [Configuration UI](en/08-configuration-ui.md) |
 | 9 | [Bases de connaissance](fr/09-bases-de-connaissance.md) | [Knowledge bases](en/09-knowledge-bases.md) |
+| 10 | [Guide utilisateur](fr/10-guide-utilisateur.md) | [User guide](en/10-user-guide.md) |
 | — | [Glossaire](fr/glossaire.md) | [Glossary](en/glossary.md) |

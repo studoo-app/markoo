@@ -80,10 +80,12 @@ gantt
 - Three-column conflict view with an editor.
 - [Configuration UI](08-configuration-ui.md): creation wizard, direction choice, filters with preview, transformations, triggers.
 
-**Status**: done on macOS, except that the screens were mostly checked with sample data. Not done: rollback from the history, per-pair intervals, the Linux and Windows builds of the app. The app does not ship the `markoo` command that hooks run yet.
+**Status**: done on macOS, except that the screens were mostly checked with sample data. Not done: rollback from the history, per-pair intervals, the Linux and Windows builds of the app.
 
 ### M8 — v1.0
 - Signed binaries (notarized on macOS), Homebrew formula, user documentation.
+
+**Status**: in progress, starting with `1.0.0-rc.1`. Done: release workflow (command line for macOS, Linux and Windows, app for macOS, with the command included), user guide, changelog. Not done: signing and notarization, which the workflow applies once the Apple secrets exist; the Homebrew formula, postponed.
 
 ## After v1
 

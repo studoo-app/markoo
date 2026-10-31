@@ -282,9 +282,17 @@ async fn update_global_settings(
     blocking(move || service::update_global_settings(&paths, &settings)).await
 }
 
-/// The `markoo` command, which hooks run. The app does not ship it yet, and an
-/// app started from the Finder has a short `PATH`: the usual folders are tried too.
+/// The `markoo` command, which hooks run. A release ships it next to the app.
+/// Otherwise it is looked for elsewhere, and an app started from the Finder has
+/// a short `PATH`: the usual folders are tried too.
 fn find_cli() -> CommandResult<PathBuf> {
+    if let Some(shipped) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.join("markoo")))
+        .filter(|file| file.is_file())
+    {
+        return Ok(shipped);
+    }
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let usual = [
         home.map(|home| home.join(".cargo/bin")),

@@ -39,6 +39,7 @@ flowchart LR
 | 7 | [Feuille de route](07-feuille-de-route.md) | Jalons et critères de fin |
 | 8 | [Interface de configuration](08-interface-de-configuration.md) | Écrans, assistant, choix du sens, CLI et API de configuration |
 | 9 | [Bases de connaissance](09-bases-de-connaissance.md) | Modèle d'adaptateur, types pris en charge (Obsidian d'abord), ajouter un adaptateur |
+| 10 | [Guide utilisateur](10-guide-utilisateur.md) | Installation, première paire, usage courant, récupérer des fichiers |
 | — | [Glossaire](glossaire.md) | Vocabulaire du projet |
 
 ## Décisions déjà prises

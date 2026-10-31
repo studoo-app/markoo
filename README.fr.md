@@ -15,7 +15,7 @@ Les outils de base de connaissance sont pris en charge par des **adaptateurs**. 
 > 🇬🇧 [English version](README.md)
 
 > [!WARNING]
-> **Développement en cours.** Le moteur de synchro, la CLI et l'adaptateur Obsidian fonctionnent, mais n'ont pas encore fait leurs preuves sur de vrais vaults : gardez une sauvegarde de vos notes. Les déclencheurs automatiques et l'application desktop n'existent pas encore : voir la [feuille de route](documentation/fr/07-feuille-de-route.md).
+> **Version candidate.** Markoo a été essayé sur de vrais vaults, mais il reste jeune : gardez une sauvegarde de vos notes et commencez sur une copie. L'app macOS n'est pas encore signée, et Linux et Windows n'ont que la ligne de commande.
 
 ```mermaid
 flowchart LR
@@ -32,9 +32,9 @@ flowchart LR
     E <-->|diff / fusion| R
 ```
 
-## Fonctionnalités (prévues)
+## Fonctionnalités
 
-- **N'importe quelle base de connaissance, via des adaptateurs** : Obsidian d'abord, les autres ensuite. Chaque adaptateur convertit le dialecte Markdown de son outil en Markdown standard, et inversement.
+- **N'importe quelle base de connaissance, via des adaptateurs** : Obsidian et les dossiers Markdown simples aujourd'hui, les autres ensuite. Chaque adaptateur convertit le dialecte Markdown de son outil en Markdown standard, et inversement.
 - **Trois sens de synchro par paire** : KB → repo, repo → KB, ou bidirectionnel.
 - **Fusion 3-way** : les modifications des deux côtés sont fusionnées ligne à ligne par rapport à la dernière version synchronisée. Vous ne tranchez que les vrais conflits.
 - **Aucune perte de données** : aperçu (dry-run) avant toute écriture, écritures atomiques, sauvegardes et corbeille. Markoo ne fait jamais de commit ni de push à votre place.
@@ -42,7 +42,7 @@ flowchart LR
 - **Détection des renommages** : une note déplacée ou renommée l'est aussi de l'autre côté, et les liens qui pointent vers elle sont mis à jour.
 - **Nombreux déclencheurs** : intervalle de temps, hooks Git (`post-merge`…), API HTTP locale, serveur MCP pour Claude et d'autres agents IA, CLI.
 - **Application desktop** : état dans la barre de menus, assistant de création de paire, vue de conflit côte à côte.
-- **Multi-plateforme** : macOS d'abord, puis Linux et Windows.
+- **Multi-plateforme** : l'app tourne sur macOS ; la ligne de commande tourne aussi sur Linux et Windows.
 
 ## Fonctionnement
 
@@ -62,7 +62,7 @@ Détails : [algorithme de synchronisation](documentation/fr/03-algorithme-de-syn
 
 ## Utilisation
 
-Il n'y a pas encore de version publiée : compilez depuis les sources avec `cargo build --release`. `markoo hook` ci-dessous n'est pas encore disponible.
+Récupérez l'app ou la ligne de commande sur les [versions publiées](https://github.com/studoo-app/markoo/releases), ou compilez depuis les sources avec `cargo install --path crates/markoo-cli --locked`. Le [guide utilisateur](documentation/fr/10-guide-utilisateur.md) explique la suite.
 
 ```bash
 markoo pair add clara --kb ~/Obsidian/Knowledge/Projets/Clara --kb-type obsidian --repo ~/code/clara/docs --direction both
@@ -96,7 +96,7 @@ app/                   application desktop Tauri
 
 ## Documentation
 
-La documentation de conception existe en français et en anglais : [index de la documentation](documentation/INDEX.md).
+Commencez par le [guide utilisateur](documentation/fr/10-guide-utilisateur.md). La documentation de conception existe en français et en anglais : [index de la documentation](documentation/INDEX.md).
 
 | | |
 |---|---|
@@ -104,11 +104,11 @@ La documentation de conception existe en français et en anglais : [index de la 
 | [Algorithme de synchronisation](documentation/fr/03-algorithme-de-synchronisation.md) | [Transformations](documentation/fr/04-transformations.md) |
 | [Déclencheurs](documentation/fr/05-declencheurs.md) | [Configuration](documentation/fr/06-configuration.md) |
 | [Feuille de route](documentation/fr/07-feuille-de-route.md) | [Interface de configuration](documentation/fr/08-interface-de-configuration.md) |
-| [Bases de connaissance](documentation/fr/09-bases-de-connaissance.md) | |
+| [Bases de connaissance](documentation/fr/09-bases-de-connaissance.md) | [Guide utilisateur](documentation/fr/10-guide-utilisateur.md) |
 
 ## Contribuer
 
-Les contributions seront les bienvenues une fois les premiers jalons livrés. Avant de contribuer :
+Les contributions sont les bienvenues. Avant de contribuer :
 
 - lisez [AGENTS.md](AGENTS.md) : il liste les règles et conventions du projet (elles valent aussi pour les humains) ;
 - la documentation est bilingue : toute modification dans `documentation/fr/` doit être reportée dans `documentation/en/` dans le même commit, et inversement.
