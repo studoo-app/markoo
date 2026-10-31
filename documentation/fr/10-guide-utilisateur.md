@@ -12,17 +12,17 @@ Markoo garde synchronisés un dossier de votre base de connaissance (KB) et un d
 
 Téléchargez le `.dmg` correspondant à votre Mac sur les [versions publiées](https://github.com/studoo-app/markoo/releases) (`aarch64` pour Apple Silicon, `x64` pour Intel) et glissez Markoo dans Applications.
 
-L'app **n'est pas encore signée** : macOS refuse donc de l'ouvrir et peut la dire endommagée. Si vous faites confiance à ce téléchargement, retirez la marque de quarantaine :
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Markoo.app
-```
-
-L'app contient la commande `markoo`, dans `/Applications/Markoo.app/Contents/MacOS/markoo`.
+L'app est signée et notarisée par Apple : elle s'ouvre donc normalement. Elle contient la commande `markoo`, dans `/Applications/Markoo.app/Contents/MacOS/markoo`.
 
 ### Ligne de commande seule
 
-Téléchargez l'archive de votre système sur la même page et placez `markoo` dans votre `PATH`. Elle tourne sur macOS, Linux et Windows. Pour la compiler depuis les sources, avec Rust installé :
+Téléchargez l'archive de votre système sur la même page et placez `markoo` dans votre `PATH`. Elle tourne sur macOS, Linux et Windows. **Sur macOS, seule la copie incluse dans l'app est signée :** si le système bloque une copie téléchargée à part, utilisez celle de l'app ou retirez la marque de quarantaine :
+
+```bash
+xattr -d com.apple.quarantine ./markoo
+```
+
+Pour la compiler depuis les sources, avec Rust installé :
 
 ```bash
 cargo install --path crates/markoo-cli --locked
@@ -119,7 +119,7 @@ Supprimer une paire garde tous les fichiers des deux côtés, et ceux qu'elle a 
 
 ## Limites connues
 
-- L'app ne tourne que sur macOS, et elle n'est pas signée.
+- L'app ne tourne que sur macOS.
 - Il n'y a pas encore de formule Homebrew.
 - L'intervalle s'applique à toutes les paires.
 - Les options non implémentées sont acceptées dans `markoo.toml` et ignorées avec un avertissement.

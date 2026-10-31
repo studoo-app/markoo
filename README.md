@@ -16,7 +16,7 @@ Knowledge base tools are supported through **adapters**. **Obsidian is the first
 > 🇫🇷 [Version française](README.fr.md)
 
 > [!WARNING]
-> **Release candidate.** Markoo has been tried on real vaults, but it is still young: keep a backup of your notes, and start on a copy. The macOS app is not signed yet, and Linux and Windows only have the command line.
+> **Release candidate.** Markoo has been tried on real vaults, but it is still young: keep a backup of your notes, and start on a copy. Linux and Windows only have the command line for now.
 
 ```mermaid
 flowchart LR

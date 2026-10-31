@@ -15,7 +15,7 @@ Les outils de base de connaissance sont pris en charge par des **adaptateurs**. 
 > 🇬🇧 [English version](README.md)
 
 > [!WARNING]
-> **Version candidate.** Markoo a été essayé sur de vrais vaults, mais il reste jeune : gardez une sauvegarde de vos notes et commencez sur une copie. L'app macOS n'est pas encore signée, et Linux et Windows n'ont que la ligne de commande.
+> **Version candidate.** Markoo a été essayé sur de vrais vaults, mais il reste jeune : gardez une sauvegarde de vos notes et commencez sur une copie. Linux et Windows n'ont que la ligne de commande pour l'instant.
 
 ```mermaid
 flowchart LR

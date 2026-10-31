@@ -12,17 +12,17 @@ Markoo keeps a folder of your knowledge base (KB) and a folder of a Git reposito
 
 Download the `.dmg` for your Mac from the [releases](https://github.com/studoo-app/markoo/releases) (`aarch64` for Apple Silicon, `x64` for Intel) and drag Markoo to Applications.
 
-The app is **not signed yet**, so macOS refuses to open it and may call it damaged. If you trust this download, remove the quarantine mark:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Markoo.app
-```
-
-The app includes the `markoo` command, in `/Applications/Markoo.app/Contents/MacOS/markoo`.
+The app is signed and notarized by Apple, so it opens normally. It includes the `markoo` command, in `/Applications/Markoo.app/Contents/MacOS/markoo`.
 
 ### Command line only
 
-Download the archive for your system from the same page and put `markoo` somewhere in your `PATH`. It runs on macOS, Linux and Windows. To build it from the sources instead, with Rust installed:
+Download the archive for your system from the same page and put `markoo` somewhere in your `PATH`. It runs on macOS, Linux and Windows. **On macOS, only the copy inside the app is signed:** if the system blocks one downloaded on its own, use the app's copy or remove the quarantine mark:
+
+```bash
+xattr -d com.apple.quarantine ./markoo
+```
+
+To build it from the sources instead, with Rust installed:
 
 ```bash
 cargo install --path crates/markoo-cli --locked
@@ -119,7 +119,7 @@ Removing a pair keeps every file on both sides, and files it copied stay where t
 
 ## Known limits
 
-- The app runs on macOS only, and it is not signed.
+- The app runs on macOS only.
 - There is no Homebrew formula yet.
 - The interval applies to every pair.
 - Options that are not implemented are accepted in `markoo.toml` and ignored with a warning.

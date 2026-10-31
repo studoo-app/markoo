@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] - 2026-10-31
+
+### Changed
+
+- The macOS app is now signed and notarized by Apple, so it opens without any workaround. The `markoo` command inside it is signed too.
+
+### Known limits
+
+- The command line archives for macOS are not signed: a copy downloaded on its own may be blocked, and the [user guide](documentation/en/10-user-guide.md) explains what to do.
+- No Homebrew formula yet, and no app for Linux or Windows.
+- No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
+
 ## [1.0.0-rc.1] - 2026-10-31
 
 First release candidate. Keep a backup of your notes, and start on a copy.
@@ -29,5 +41,6 @@ First release candidate. Keep a backup of your notes, and start on a copy.
 - No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
 - Not implemented, and ignored with a warning: `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, `schedule.pause_on_battery`, merging frontmatter by key.
 
-[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.1...HEAD
+[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.2...HEAD
+[1.0.0-rc.2]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/studoo-app/markoo/releases/tag/v1.0.0-rc.1

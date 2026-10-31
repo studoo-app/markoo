@@ -85,7 +85,7 @@ gantt
 ### M8 — v1.0
 - Signed binaries (notarized on macOS), Homebrew formula, user documentation.
 
-**Status**: in progress, starting with `1.0.0-rc.1`. Done: release workflow (command line for macOS, Linux and Windows, app for macOS, with the command included), user guide, changelog. Not done: signing and notarization, which the workflow applies once the Apple secrets exist; the Homebrew formula, postponed.
+**Status**: in progress, with release candidates. Done: release workflow (command line for macOS, Linux and Windows, app for macOS, with the command included), signing and notarization of the app, user guide, changelog. Not done: signing the command line archives, the Homebrew formula, postponed.
 
 ## After v1
 
