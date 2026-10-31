@@ -3,7 +3,7 @@
 use markoo_core::paths::Paths;
 use markoo_core::service;
 
-use crate::queue::{JobOutcome, Runner};
+use crate::queue::{JobOutcome, Runner, Trigger};
 
 /// The runner used in production: every job opens its own engine, because
 /// the state database cannot be shared across threads.
@@ -20,7 +20,8 @@ impl EngineRunner {
 }
 
 impl Runner for EngineRunner {
-    fn run(&self, name: &str, dry_run: bool) -> Result<JobOutcome, String> {
-        service::run_sync(&self.paths, name, dry_run).map_err(|error| error.to_string())
+    fn run(&self, name: &str, dry_run: bool, trigger: Trigger) -> Result<JobOutcome, String> {
+        service::run_sync(&self.paths, name, dry_run, trigger.as_str())
+            .map_err(|error| error.to_string())
     }
 }

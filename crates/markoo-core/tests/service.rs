@@ -164,10 +164,10 @@ fn a_missing_folder_is_reported() {
 fn a_conflict_draft_has_the_markers() {
     let env = Env::new().with_saved_pair();
     std::fs::write(env.kb().join("note.md"), "base\n").unwrap();
-    service::run_sync(&env.paths, "clara", false).unwrap();
+    service::run_sync(&env.paths, "clara", false, "test").unwrap();
     std::fs::write(env.kb().join("note.md"), "from the kb\n").unwrap();
     std::fs::write(env.repo().join("note.md"), "from the repo\n").unwrap();
-    service::run_sync(&env.paths, "clara", false).unwrap();
+    service::run_sync(&env.paths, "clara", false, "test").unwrap();
     let all = service::conflicts(&env.paths, None).unwrap();
     let id = all["conflicts"][0]["id"].as_str().unwrap();
     let draft = service::conflict_draft(&env.paths, id).unwrap();
@@ -328,4 +328,81 @@ fn hooks_are_reported_once_installed() {
     service::uninstall_hooks(&env.paths, "clara", program).unwrap();
     let state = service::hooks_state(&env.paths, "clara").unwrap();
     assert_eq!(state["installed"], json!([]));
+}
+
+#[test]
+fn a_sync_that_writes_goes_to_the_history() {
+    let env = Env::new().with_saved_pair();
+    std::fs::write(env.kb().join("note.md"), "hello\n").unwrap();
+    service::run_sync(&env.paths, "clara", false, "cli").unwrap();
+    let history = service::history(&env.paths, "clara", 10).unwrap();
+    assert_eq!(history[0]["trigger"], "cli");
+    assert_eq!(history[0]["report"]["written"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn a_sync_that_changes_nothing_leaves_no_trace() {
+    let env = Env::new().with_saved_pair();
+    std::fs::write(env.kb().join("note.md"), "hello\n").unwrap();
+    service::run_sync(&env.paths, "clara", false, "cli").unwrap();
+    service::run_sync(&env.paths, "clara", false, "cli").unwrap();
+    let history = service::history(&env.paths, "clara", 10).unwrap();
+    assert_eq!(history.as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn a_dry_run_leaves_no_trace() {
+    let env = Env::new().with_saved_pair();
+    std::fs::write(env.kb().join("note.md"), "hello\n").unwrap();
+    service::run_sync(&env.paths, "clara", true, "cli").unwrap();
+    let history = service::history(&env.paths, "clara", 10).unwrap();
+    assert!(history.as_array().unwrap().is_empty());
+}
+
+#[test]
+fn a_failure_is_recorded_once_in_a_row() {
+    let env = Env::new().with_saved_pair();
+    let config = markoo_core::config::Config::load(env.paths.config_file()).unwrap();
+    let pair = config.pair("clara").unwrap().pair.clone();
+    let engine = markoo_core::Engine::open(markoo_core::fs::DiskFs, &env.paths).unwrap();
+    std::fs::remove_dir_all(env.kb()).unwrap();
+    for _ in 0..3 {
+        assert!(engine.run_recorded(&pair, false, "interval").is_err());
+    }
+    let history = engine.history("clara", 10).unwrap();
+    assert_eq!(history.len(), 1);
+    assert!(history[0].error.as_ref().unwrap().contains("unavailable"));
+}
+
+#[test]
+fn settling_a_conflict_goes_to_the_history() {
+    let env = Env::new().with_saved_pair();
+    std::fs::write(env.kb().join("note.md"), "base\n").unwrap();
+    service::run_sync(&env.paths, "clara", false, "cli").unwrap();
+    std::fs::write(env.kb().join("note.md"), "from the kb\n").unwrap();
+    std::fs::write(env.repo().join("note.md"), "from the repo\n").unwrap();
+    service::run_sync(&env.paths, "clara", false, "cli").unwrap();
+    let all = service::conflicts(&env.paths, None).unwrap();
+    let id = all["conflicts"][0]["id"].as_str().unwrap();
+    let keep = service::resolution(Some("kb"), None, false).unwrap();
+    service::resolve(&env.paths, id, keep).unwrap();
+    let history = service::history(&env.paths, "clara", 1).unwrap();
+    assert_eq!(history[0]["trigger"], "resolve");
+}
+
+#[test]
+fn removing_a_pair_forgets_its_history() {
+    let env = Env::new().with_saved_pair();
+    std::fs::write(env.kb().join("note.md"), "hello\n").unwrap();
+    service::run_sync(&env.paths, "clara", false, "cli").unwrap();
+    markoo_core::manage::remove_pair(&env.paths, "clara").unwrap();
+    markoo_core::manage::add_pair(&env.paths, &env.new_pair()).unwrap();
+    let history = service::history(&env.paths, "clara", 10).unwrap();
+    assert!(history.as_array().unwrap().is_empty());
+}
+
+#[test]
+fn the_history_of_an_unknown_pair_is_an_error() {
+    let env = Env::new().with_saved_pair();
+    assert!(service::history(&env.paths, "nobody", 10).is_err());
 }

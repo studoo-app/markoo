@@ -1,6 +1,6 @@
-//! Asking a running daemon for a sync, from a blocking context such as a Git
-//! hook. It uses a plain socket: the request is a single line of HTTP sent to
-//! `127.0.0.1`, and the caller has no async runtime.
+//! Asking a running daemon for a sync, from a Git hook. It uses a plain socket:
+//! the request is a short HTTP message sent to `127.0.0.1`, and the caller has
+//! no async runtime.
 
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
@@ -8,6 +8,9 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::token;
+
+/// Says who is asking, for the history.
+const HOOK_BODY: &str = r#"{"trigger":"hook"}"#;
 
 /// How long a daemon has to accept the connection.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
@@ -36,8 +39,9 @@ pub fn request_sync(data_dir: &Path, port: u16, pair: &str) -> SyncRequest {
     };
     let request = format!(
         "POST /pairs/{pair}/sync HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\
-         Authorization: Bearer {}\r\nContent-Length: 0\r\n\r\n",
-        token.trim()
+         Authorization: Bearer {}\r\nContent-Length: {}\r\n\r\n{HOOK_BODY}",
+        token.trim(),
+        HOOK_BODY.len()
     );
     let mut response = String::new();
     let exchange = stream

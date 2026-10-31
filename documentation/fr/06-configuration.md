@@ -7,16 +7,15 @@
 Markoo range deux choses **hors de la base de connaissance (KB) et hors du repo**, pour ne polluer ni l'outil de KB (par ex. Obsidian) ni Git :
 
 - la **configuration** (`<config>`) : le fichier `markoo.toml`, que l'utilisateur peut éditer ;
-- l'**état** (`<data>`) : la base, le journal, les sauvegardes, la corbeille et le jeton d'API, que seul Markoo gère.
+- l'**état** (`<data>`) : la base, avec l'historique, les sauvegardes, la corbeille et le jeton d'API, que seul Markoo gère.
 
 ```mermaid
 flowchart TD
     G["&lt;config&gt;/markoo.toml<br/><i>configuration globale</i>"]
-    S["&lt;data&gt;/<br/><i>état, journaux, sauvegardes</i>"]
+    S["&lt;data&gt;/<br/><i>état, sauvegardes</i>"]
     G --> P1["[[pair]] clara"]
     G --> P2["[[pair]] markoo"]
     S --> DB["state.db"]
-    S --> J["journal/"]
     S --> B["backups/"]
     S --> T["trash/"]
     S --> TK["token"]
@@ -165,7 +164,6 @@ erDiagram
     PAIR ||--o{ ENTRY : suit
     ENTRY ||--o{ CONFLICT : "peut avoir"
     PAIR ||--o{ RUN : "historique"
-    RUN ||--o{ ACTION : contient
 
     PAIR {
         text name PK
@@ -196,16 +194,10 @@ erDiagram
     RUN {
         text id PK
         text pair FK
-        text trigger "interval | hook | api | mcp | cli"
+        text trigger "interval | hook | api | mcp | app | cli…"
         int started_at
         int duration_ms
-        text summary_json
-    }
-    ACTION {
-        int id PK
-        text run FK
-        text kind "copy | merge | delete | rename"
-        text direction
-        text path
+        text report_json
+        text error
     }
 ```

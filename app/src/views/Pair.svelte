@@ -4,6 +4,7 @@
   import ConflictsTab from "./ConflictsTab.svelte";
   import FiltersTab from "./FiltersTab.svelte";
   import GeneralTab from "./GeneralTab.svelte";
+  import HistoryTab from "./HistoryTab.svelte";
   import TransformationsTab from "./TransformationsTab.svelte";
   import TriggersTab from "./TriggersTab.svelte";
 
@@ -13,7 +14,7 @@
     onclose,
   }: { name: string; revision: number; onclose: () => void } = $props();
 
-  type Tab = "changes" | "conflicts" | "general" | "filters" | "transformations" | "triggers";
+  type Tab = "changes" | "conflicts" | "general" | "filters" | "transformations" | "triggers" | "history";
 
   let pair = $state<PairView | null>(null);
   let tab = $state<Tab>("changes");
@@ -75,6 +76,7 @@
     { id: "filters", label: "Filters" },
     { id: "transformations", label: "Transformations" },
     { id: "triggers", label: "Triggers" },
+    { id: "history", label: "History" },
   ];
 </script>
 
@@ -138,6 +140,8 @@
     <FiltersTab {pair} onchange={changed} />
   {:else if tab === "transformations"}
     <TransformationsTab {pair} onchange={changed} />
+  {:else if tab === "history"}
+    <HistoryTab {name} revision={revision + localRevision} />
   {:else if tab === "triggers"}
     <TriggersTab {pair} onchange={changed} />
   {:else}

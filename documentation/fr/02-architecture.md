@@ -82,7 +82,7 @@ markoo/
 | `transform` | Applique les options génériques (liens, noms de fichiers, frontmatter, pièces jointes) entre forme canonique et dialecte `gfm` du repo (KB ↔ repo) | `pulldown-cmark`, `serde_yaml` |
 | `planner` | Compare KB / repo / base en forme canonique, produit un **plan** d'actions | — |
 | `merge` | Fusion 3-way ligne à ligne | `diffy` ou `similar` |
-| `applier` | Exécute le plan : écritures atomiques, journal, sauvegardes | `tempfile` |
+| `applier` | Exécute le plan : écritures atomiques, sauvegardes | `tempfile` |
 | `service` | Ce que demandent les interfaces distantes (API HTTP, MCP), sous forme de vues JSON, pour qu'elles appliquent les mêmes contrôles | `serde_json` |
 | `events` | Émet des événements (progression, conflits) vers les interfaces | `tokio::sync::broadcast` |
 

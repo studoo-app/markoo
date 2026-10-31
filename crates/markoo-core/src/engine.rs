@@ -2,8 +2,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
+use serde_json::Value;
 
 use crate::Error;
 use crate::apply::{Applier, Report};
@@ -16,7 +18,7 @@ use crate::pair::{Direction, Filter, Pair, TargetChanges};
 use crate::paths::Paths;
 use crate::plan::{self, Action, AttachmentAction, Plan, PlannedAttachment, PlannedEntry};
 use crate::scan::{ScanIssue, SideScan, normalize, scan_side};
-use crate::state::{BaseEntry, PendingIssue, State};
+use crate::state::{BaseEntry, PendingIssue, RunRecord, State};
 
 /// Name of the state database inside `<data>`.
 pub const STATE_FILE: &str = "state.db";
@@ -92,6 +94,37 @@ pub struct TransformSample {
     pub before: String,
     /// Its text in the repo.
     pub after: String,
+}
+
+/// When a run started, to record it afterwards.
+struct Timer {
+    started_at: u64,
+    clock: Instant,
+}
+
+impl Timer {
+    fn start() -> Self {
+        let started_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |elapsed| {
+                u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
+            });
+        Self {
+            started_at,
+            clock: Instant::now(),
+        }
+    }
+
+    fn record(&self, trigger: &str, report: Option<Value>, error: Option<String>) -> RunRecord {
+        RunRecord {
+            id: 0,
+            trigger: trigger.to_owned(),
+            started_at: self.started_at,
+            duration_ms: u64::try_from(self.clock.elapsed().as_millis()).unwrap_or(u64::MAX),
+            report,
+            error,
+        }
+    }
 }
 
 /// How many files are looked at to find a note that shows a conversion.
@@ -302,6 +335,59 @@ impl<F: Fs> Engine<F> {
         self.apply_locked(pair, &planned.plan)
     }
 
+    /// [`Engine::run`] for a real interface: what it did goes to the history.
+    /// A sync that changes nothing leaves no trace, nor does a busy pair, and
+    /// the same failure is only recorded once in a row. The history is not worth
+    /// failing a sync for, so its own errors are ignored.
+    pub fn run_recorded(
+        &self,
+        pair: &Pair,
+        dry_run: bool,
+        trigger: &str,
+    ) -> Result<RunOutcome, Error> {
+        let started = Timer::start();
+        let result = self.run(pair, dry_run);
+        if dry_run {
+            return result;
+        }
+        match &result {
+            Ok(outcome) => {
+                if let Some(report) = &outcome.report {
+                    self.record_report(pair, trigger, &started, report);
+                }
+            }
+            Err(Error::Busy(_)) => {}
+            Err(error) => {
+                let message = error.to_string();
+                let repeated = self.state.runs(&pair.name, 1).is_ok_and(|last| {
+                    last.first()
+                        .is_some_and(|run| run.error.as_ref() == Some(&message))
+                });
+                if !repeated {
+                    let _ = self
+                        .state
+                        .add_run(&pair.name, &started.record(trigger, None, Some(message)));
+                }
+            }
+        }
+        result
+    }
+
+    fn record_report(&self, pair: &Pair, trigger: &str, started: &Timer, report: &Report) {
+        if report.written.is_empty() && report.trashed.is_empty() && report.skipped.is_empty() {
+            return;
+        }
+        let _ = self.state.add_run(
+            &pair.name,
+            &started.record(trigger, serde_json::to_value(report).ok(), None),
+        );
+    }
+
+    /// The most recent syncs of a pair, the latest first.
+    pub fn history(&self, pair: &str, limit: u32) -> Result<Vec<RunRecord>, Error> {
+        Ok(self.state.runs(pair, limit)?)
+    }
+
     /// The sync used by every trigger: plans, then applies unless `dry_run`.
     ///
     /// After a change of direction, the run is forced to be a dry run. Moving
@@ -457,6 +543,18 @@ impl<F: Fs> Engine<F> {
 
     /// Settles a conflict or a divergence.
     pub fn resolve(
+        &self,
+        pair: &Pair,
+        path: &EntryPath,
+        resolution: Resolution,
+    ) -> Result<Report, Error> {
+        let started = Timer::start();
+        let report = self.resolve_now(pair, path, resolution)?;
+        self.record_report(pair, "resolve", &started, &report);
+        Ok(report)
+    }
+
+    fn resolve_now(
         &self,
         pair: &Pair,
         path: &EntryPath,

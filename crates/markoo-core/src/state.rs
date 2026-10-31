@@ -6,6 +6,7 @@ use std::path::Path;
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::entry::{ContentHash, EntryPath};
 use crate::fs::FileMeta;
@@ -89,6 +90,26 @@ pub struct PendingIssue {
     pub repo: Option<String>,
 }
 
+/// How many runs are kept for each pair.
+const KEPT_RUNS: u32 = 500;
+
+/// A past sync of a pair.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RunRecord {
+    /// Identifier, growing with time.
+    pub id: i64,
+    /// What started it: `interval`, `hook`, `api`, `mcp`, `app`, `cli`…
+    pub trigger: String,
+    /// When it started, in milliseconds since the Unix epoch.
+    pub started_at: u64,
+    /// How long it took.
+    pub duration_ms: u64,
+    /// What it did, if it went through.
+    pub report: Option<Value>,
+    /// Why it failed, if it did.
+    pub error: Option<String>,
+}
+
 /// SQLite-backed state store.
 pub struct State {
     conn: Connection,
@@ -127,6 +148,16 @@ CREATE TABLE IF NOT EXISTS pair_settings (
     pair        TEXT PRIMARY KEY,
     direction   TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS runs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    pair        TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    started_at  INTEGER NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    report      TEXT,
+    error       TEXT
+);
+CREATE INDEX IF NOT EXISTS runs_by_pair ON runs (pair, id);
 CREATE TABLE IF NOT EXISTS pending (
     pair        TEXT NOT NULL,
     path        TEXT NOT NULL,
@@ -356,6 +387,49 @@ impl State {
         Ok(())
     }
 
+    /// Records a past sync, keeping the most recent ones only.
+    pub fn add_run(&self, pair: &str, run: &RunRecord) -> Result<(), StateError> {
+        let report = run.report.as_ref().map(ToString::to_string);
+        self.conn.execute(
+            "INSERT INTO runs (pair, source, started_at, duration_ms, report, error)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                pair,
+                run.trigger,
+                i64::try_from(run.started_at).unwrap_or(i64::MAX),
+                i64::try_from(run.duration_ms).unwrap_or(i64::MAX),
+                report,
+                run.error,
+            ],
+        )?;
+        self.conn.execute(
+            "DELETE FROM runs WHERE pair = ?1 AND id NOT IN
+             (SELECT id FROM runs WHERE pair = ?1 ORDER BY id DESC LIMIT ?2)",
+            params![pair, KEPT_RUNS],
+        )?;
+        Ok(())
+    }
+
+    /// The most recent syncs of a pair, the latest first.
+    pub fn runs(&self, pair: &str, limit: u32) -> Result<Vec<RunRecord>, StateError> {
+        let mut statement = self.conn.prepare(
+            "SELECT id, source, started_at, duration_ms, report, error FROM runs
+             WHERE pair = ?1 ORDER BY id DESC LIMIT ?2",
+        )?;
+        let rows = statement.query_map(params![pair, limit], |row| {
+            let report: Option<String> = row.get(4)?;
+            Ok(RunRecord {
+                id: row.get(0)?,
+                trigger: row.get(1)?,
+                started_at: u64::try_from(row.get::<_, i64>(2)?).unwrap_or(0),
+                duration_ms: u64::try_from(row.get::<_, i64>(3)?).unwrap_or(0),
+                report: report.and_then(|text| serde_json::from_str(&text).ok()),
+                error: row.get(5)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     /// Forgets everything known about a pair. User files are not touched.
     pub fn forget_pair(&self, pair: &str) -> Result<(), StateError> {
         for table in [
@@ -364,6 +438,7 @@ impl State {
             "ignored",
             "pair_settings",
             "attachments",
+            "runs",
         ] {
             self.conn.execute(
                 &format!("DELETE FROM {table} WHERE pair = ?1"),
@@ -411,6 +486,39 @@ fn meta_to(meta: Option<FileMeta>) -> (Option<i64>, Option<i64>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn run(error: &str) -> RunRecord {
+        RunRecord {
+            id: 0,
+            trigger: "test".to_owned(),
+            started_at: 1,
+            duration_ms: 2,
+            report: None,
+            error: Some(error.to_owned()),
+        }
+    }
+
+    #[test]
+    fn runs_are_listed_from_the_latest() {
+        let state = State::open_in_memory().unwrap();
+        state.add_run("p", &run("first")).unwrap();
+        state.add_run("p", &run("second")).unwrap();
+        state.add_run("other", &run("elsewhere")).unwrap();
+        let runs = state.runs("p", 10).unwrap();
+        assert_eq!(runs.len(), 2);
+        assert_eq!(runs[0].error.as_deref(), Some("second"));
+    }
+
+    #[test]
+    fn old_runs_are_dropped() {
+        let state = State::open_in_memory().unwrap();
+        for index in 0..=KEPT_RUNS {
+            state.add_run("p", &run(&index.to_string())).unwrap();
+        }
+        let runs = state.runs("p", KEPT_RUNS + 10).unwrap();
+        assert_eq!(runs.len(), usize::try_from(KEPT_RUNS).unwrap());
+        assert_eq!(runs.last().unwrap().error.as_deref(), Some("1"));
+    }
 
     fn entry(path: &str) -> EntryPath {
         EntryPath::from_relative(Path::new(path)).unwrap()

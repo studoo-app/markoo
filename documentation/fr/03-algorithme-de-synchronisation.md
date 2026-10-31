@@ -221,7 +221,7 @@ flowchart TD
 
 - **Écriture atomique** : écrire dans `fichier.md.markoo-tmp`, `fsync`, puis `rename`.
 - **Vérification juste avant d'écrire** : si le fichier cible a changé depuis le scan (l'outil de la KB, par ex. Obsidian, vient de l'enregistrer), l'action est annulée et sera replanifiée à la synchro suivante.
-- **Journal** : chaque application écrit `<data>/journal/<horodatage>.json`. Une synchro interrompue est reprise ou annulée au démarrage suivant.
+- **Historique** : chaque synchro qui change quelque chose, ou qui échoue, est enregistrée dans `state.db`, avec son déclencheur et les fichiers concernés ; les 500 dernières sont gardées par paire. Une synchro interrompue n'a pas besoin de reprise : chaque fichier est écrit de façon atomique et enregistré juste après, donc la synchro suivante planifie ce qui reste. Il n'y a pas encore de retour en arrière : ce qui a été écrasé ou supprimé reste dans `<data>/backups/` et `<data>/trash/`.
 - **Dossier indisponible** : si un dossier de la paire est absent (disque débranché, volume démonté), la synchro est refusée. Sinon, une liste vide ferait croire que tous les fichiers ont été supprimés, et l'autre côté serait vidé.
 - **Fichiers illisibles** : un fichier qu'on ne peut pas lire (UTF-8 invalide) est signalé et laissé hors du plan, des deux côtés ; il ne compte jamais comme supprimé.
 - **Sauvegardes** : le contenu écrasé est copié dans `<data>/backups/` avant l'écriture.

@@ -64,7 +64,7 @@ impl Syncer for DirectSyncer {
     fn sync(&self, pair: String, dry_run: bool) -> SyncFuture {
         let paths = self.paths.clone();
         Box::pin(async move {
-            tokio::task::spawn_blocking(move || service::run_sync(&paths, &pair, dry_run))
+            tokio::task::spawn_blocking(move || service::run_sync(&paths, &pair, dry_run, "mcp"))
                 .await
                 .map_err(|error| error.to_string())?
                 .map_err(|error| error.to_string())

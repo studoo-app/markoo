@@ -278,6 +278,8 @@ async fn diff(
 struct SyncBody {
     #[serde(default)]
     dry_run: bool,
+    /// `"hook"` when a Git hook asks, for the history.
+    trigger: Option<String>,
 }
 
 async fn sync(
@@ -286,12 +288,19 @@ async fn sync(
     body: Bytes,
 ) -> ApiResult<(StatusCode, Json<Value>)> {
     // The body is optional, whatever the Content-Type says.
-    let dry_run = if body.is_empty() {
-        false
+    let (dry_run, trigger) = if body.is_empty() {
+        (false, Trigger::Api)
     } else {
-        serde_json::from_slice::<SyncBody>(&body)
-            .map_err(|error| ApiError::bad_request(error.to_string()))?
-            .dry_run
+        let body = serde_json::from_slice::<SyncBody>(&body)
+            .map_err(|error| ApiError::bad_request(error.to_string()))?;
+        let trigger = match body.trigger.as_deref() {
+            None => Trigger::Api,
+            Some("hook") => Trigger::Hook,
+            Some(other) => {
+                return Err(ApiError::bad_request(format!("unknown trigger {other}")));
+            }
+        };
+        (body.dry_run, trigger)
     };
     let paths = app.paths.clone();
     let lookup = name.clone();
@@ -299,7 +308,7 @@ async fn sync(
     if pair.paused {
         return Err(markoo_core::Error::Paused(name).into());
     }
-    let job = app.queue.submit(&name, dry_run, Trigger::Api);
+    let job = app.queue.submit(&name, dry_run, trigger);
     Ok((
         StatusCode::ACCEPTED,
         Json(json!({"job": job, "pair": name})),

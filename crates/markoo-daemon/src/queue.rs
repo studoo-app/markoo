@@ -31,6 +31,23 @@ pub enum Trigger {
     Mcp,
     /// A request from the desktop app.
     App,
+    /// A Git hook, through the API.
+    Hook,
+}
+
+impl Trigger {
+    /// Its name in the history.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Startup => "startup",
+            Self::Interval => "interval",
+            Self::Config => "config",
+            Self::Api => "api",
+            Self::Mcp => "mcp",
+            Self::App => "app",
+            Self::Hook => "hook",
+        }
+    }
 }
 
 /// Progress of a job.
@@ -119,7 +136,7 @@ impl Event {
 /// Runs one sync. It blocks, so the queue calls it outside the async runtime.
 pub trait Runner: Send + Sync + 'static {
     /// Syncs `pair`; the error is a message for the user.
-    fn run(&self, pair: &str, dry_run: bool) -> Result<JobOutcome, String>;
+    fn run(&self, pair: &str, dry_run: bool, trigger: Trigger) -> Result<JobOutcome, String>;
 }
 
 #[derive(Default)]
@@ -233,7 +250,7 @@ impl Queue {
 
     /// Runs the pair's jobs one after the other until none is left.
     async fn work(self, pair: String) {
-        while let Some((number, dry_run)) = self.next_job(&pair) {
+        while let Some((number, dry_run, trigger)) = self.next_job(&pair) {
             self.publish(Event::JobStarted {
                 job: job_id(number),
                 pair: pair.clone(),
@@ -241,7 +258,7 @@ impl Queue {
             let started = Instant::now();
             let runner = Arc::clone(&self.runner);
             let name = pair.clone();
-            let result = tokio::task::spawn_blocking(move || runner.run(&name, dry_run))
+            let result = tokio::task::spawn_blocking(move || runner.run(&name, dry_run, trigger))
                 .await
                 .unwrap_or_else(|error| Err(format!("the sync stopped unexpectedly: {error}")));
             self.finish(&pair, number, result, started);
@@ -249,7 +266,7 @@ impl Queue {
     }
 
     /// Takes the pair's next job, or marks the pair idle if there is none.
-    fn next_job(&self, pair: &str) -> Option<(u64, bool)> {
+    fn next_job(&self, pair: &str) -> Option<(u64, bool, Trigger)> {
         let mut inner = self.lock();
         let inner = &mut *inner;
         let slot = inner.pairs.entry(pair.to_owned()).or_default();
@@ -259,7 +276,7 @@ impl Queue {
         };
         let job = inner.jobs.get_mut(&number)?;
         job.status = JobStatus::Running;
-        Some((number, job.dry_run))
+        Some((number, job.dry_run, job.trigger))
     }
 
     fn finish(
@@ -379,7 +396,7 @@ mod tests {
     }
 
     impl Runner for GatedRunner {
-        fn run(&self, pair: &str, dry_run: bool) -> Result<JobOutcome, String> {
+        fn run(&self, pair: &str, dry_run: bool, _trigger: Trigger) -> Result<JobOutcome, String> {
             let open = self.open.lock().unwrap();
             drop(self.changed.wait_while(open, |open| !*open).unwrap());
             self.runs.lock().unwrap().push((pair.to_owned(), dry_run));

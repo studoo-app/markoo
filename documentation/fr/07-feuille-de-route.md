@@ -80,7 +80,7 @@ gantt
 - Vue de conflit en trois colonnes avec éditeur.
 - [Interface de configuration](08-interface-de-configuration.md) : assistant de création, choix du sens, filtres avec aperçu, transformations, déclencheurs.
 
-**État** : en cours, par étapes. Fait, sur macOS : barre de menus, liste des paires, changements en attente avec leurs diffs, vue des conflits en trois colonnes avec une zone de texte, assistant de création, onglets Général, Filtres, Transformations et Déclencheurs, réglages globaux. Ensuite : le journal et l'onglet Historique, qui en a besoin.
+**État** : terminé sur macOS, mais les écrans ont surtout été vérifiés avec des données d'exemple. Pas fait : le retour en arrière depuis l'historique, les intervalles par paire, les builds Linux et Windows de l'app. L'app ne fournit pas encore la commande `markoo` que lancent les hooks.
 
 ### M8 — v1.0
 - Binaires signés (macOS notarisé), formule Homebrew, documentation utilisateur.

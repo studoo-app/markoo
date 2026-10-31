@@ -7,16 +7,15 @@
 Markoo keeps two things **outside the knowledge base (KB) and outside the repo**, so that neither the KB tool (e.g. Obsidian) nor Git gets cluttered:
 
 - the **configuration** (`<config>`): the `markoo.toml` file, which the user may edit;
-- the **state** (`<data>`): the database, the journal, backups, the trash and the API token, managed by Markoo alone.
+- the **state** (`<data>`): the database, with the history, backups, the trash and the API token, managed by Markoo alone.
 
 ```mermaid
 flowchart TD
     G["&lt;config&gt;/markoo.toml<br/><i>global configuration</i>"]
-    S["&lt;data&gt;/<br/><i>state, journals, backups</i>"]
+    S["&lt;data&gt;/<br/><i>state, backups</i>"]
     G --> P1["[[pair]] clara"]
     G --> P2["[[pair]] markoo"]
     S --> DB["state.db"]
-    S --> J["journal/"]
     S --> B["backups/"]
     S --> T["trash/"]
     S --> TK["token"]
@@ -165,7 +164,6 @@ erDiagram
     PAIR ||--o{ ENTRY : tracks
     ENTRY ||--o{ CONFLICT : "may have"
     PAIR ||--o{ RUN : "history"
-    RUN ||--o{ ACTION : contains
 
     PAIR {
         text name PK
@@ -196,16 +194,10 @@ erDiagram
     RUN {
         text id PK
         text pair FK
-        text trigger "interval | hook | api | mcp | cli"
+        text trigger "interval | hook | api | mcp | app | cli…"
         int started_at
         int duration_ms
-        text summary_json
-    }
-    ACTION {
-        int id PK
-        text run FK
-        text kind "copy | merge | delete | rename"
-        text direction
-        text path
+        text report_json
+        text error
     }
 ```

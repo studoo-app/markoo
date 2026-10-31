@@ -229,7 +229,7 @@ impl Ctx {
                 }
                 continue;
             }
-            let outcome = match engine.run(&pair, dry_run) {
+            let outcome = match engine.run_recorded(&pair, dry_run, "cli") {
                 Ok(outcome) => outcome,
                 Err(error) => {
                     self.report_error(&error.to_string());
@@ -747,7 +747,7 @@ impl Ctx {
             SyncRequest::Queued => {}
             SyncRequest::Refused(message) => bail!(message),
             SyncRequest::Unavailable => {
-                self.engine()?.run(pair, false)?;
+                self.engine()?.run_recorded(pair, false, "hook")?;
             }
         }
         Ok(())

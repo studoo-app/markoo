@@ -82,6 +82,25 @@ export function installMock(): void {
           before: "---\naliases: [arch]\ntitle: Architecture\n---\nSee [[glossary]].\n",
           after: "---\ntitle: Architecture\n---\nSee [glossary](./glossary.md).\n",
         };
+      case "pair_history":
+        return [
+          {
+            id: 2, trigger: "interval", started_at: Date.now() - 120000, duration_ms: 84, error: null,
+            report: {
+              written: [
+                { path: "adr/001-stack.md", side: "repo" },
+                { path: "guide/install.md", side: "kb" },
+              ],
+              trashed: [{ path: "old.md", side: "kb" }],
+              skipped: [],
+              pending: [],
+            },
+          },
+          {
+            id: 1, trigger: "hook", started_at: Date.now() - 3600000, duration_ms: 12, report: null,
+            error: 'pair "clara": the kb folder is unavailable',
+          },
+        ];
       case "global_settings":
         return {
           interval: "300s", on_startup: true, api_enabled: true, api_port: 4848,

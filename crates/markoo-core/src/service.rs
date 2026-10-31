@@ -568,6 +568,12 @@ pub fn resolve(paths: &Paths, id: &str, resolution: Resolution) -> Result<Value,
     Ok(json!({"pair": pair.name, "path": path, "report": report}))
 }
 
+/// The most recent syncs of a pair, the latest first.
+pub fn history(paths: &Paths, name: &str, limit: u32) -> Result<Value, Error> {
+    Config::load(paths.config_file())?.pair(name)?;
+    Ok(json!(open_engine(paths)?.history(name, limit)?))
+}
+
 /// The pairs a sync of everything applies to.
 pub fn runnable_pairs(paths: &Paths) -> Result<Vec<String>, Error> {
     let config = Config::load(paths.config_file())?;
@@ -582,12 +588,17 @@ pub fn runnable_pairs(paths: &Paths) -> Result<Vec<String>, Error> {
 
 /// Syncs a pair through the engine. The configuration is read here: a queued
 /// sync may have waited behind a change.
-pub fn run_sync(paths: &Paths, name: &str, dry_run: bool) -> Result<SyncOutcome, Error> {
+pub fn run_sync(
+    paths: &Paths,
+    name: &str,
+    dry_run: bool,
+    trigger: &str,
+) -> Result<SyncOutcome, Error> {
     let pair = usable_pair(paths, name)?;
     if pair.paused {
         return Err(Error::Paused(name.to_owned()));
     }
-    let outcome = open_engine(paths)?.run(&pair, dry_run)?;
+    let outcome = open_engine(paths)?.run_recorded(&pair, dry_run, trigger)?;
     let plan = &outcome.planned.plan;
     let conflicts = plan
         .entries

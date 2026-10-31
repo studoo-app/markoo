@@ -48,6 +48,20 @@ export type HookChange = { hook: string } & (
   | { status: "manual"; reason: string; snippet: string }
 );
 
+export interface RunRecord {
+  id: number;
+  trigger: string;
+  started_at: number;
+  duration_ms: number;
+  report: {
+    written: { path: string; side: "kb" | "repo" }[];
+    trashed: { path: string; side: "kb" | "repo" }[];
+    skipped: { path: string; reason: string }[];
+    pending: unknown[];
+  } | null;
+  error: string | null;
+}
+
 export interface GlobalSettings {
   interval: string;
   on_startup: boolean;
@@ -146,6 +160,7 @@ export const api = {
     invoke<FilterPreview>("preview_new_pair_filters", { new: fresh }),
   previewTransform: (pair: string, settings: Settings) =>
     invoke<TransformSample | null>("preview_transform", { pair, settings }),
+  pairHistory: (pair: string) => invoke<RunRecord[]>("pair_history", { pair }),
   globalSettings: () => invoke<GlobalSettings>("global_settings"),
   updateGlobalSettings: (settings: Settings) =>
     invoke<void>("update_global_settings", { settings }),

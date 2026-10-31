@@ -210,7 +210,7 @@ async fn sync_one(backend: &Backend, pair: String) -> CommandResult<SyncOutcome>
     // Without an embedded daemon, the lock of the pair answers if another
     // process is syncing it.
     let paths = backend.paths.clone();
-    blocking(move || service::run_sync(&paths, &pair, false)).await
+    blocking(move || service::run_sync(&paths, &pair, false, "app")).await
 }
 
 async fn sync_everything(backend: &Backend) -> CommandResult {
@@ -256,6 +256,15 @@ async fn preview_transform(
 ) -> CommandResult {
     let paths = backend.paths.clone();
     blocking(move || service::preview_transform(&paths, &pair, &settings)).await
+}
+
+/// How many past syncs the History tab shows.
+const HISTORY_LENGTH: u32 = 100;
+
+#[tauri::command]
+async fn pair_history(backend: State<'_, Backend>, pair: String) -> CommandResult {
+    let paths = backend.paths.clone();
+    blocking(move || service::history(&paths, &pair, HISTORY_LENGTH)).await
 }
 
 #[tauri::command]
@@ -557,6 +566,7 @@ pub fn run() {
             preview_filters,
             preview_new_pair_filters,
             preview_transform,
+            pair_history,
             global_settings,
             update_global_settings,
             hooks_state,

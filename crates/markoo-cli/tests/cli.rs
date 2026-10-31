@@ -1332,3 +1332,17 @@ fn mcp_answers_on_stdio_and_writes_only_the_protocol() {
     assert_eq!(env.read(&env.repo(), "note.md").unwrap(), "hello\n");
     drop(running);
 }
+
+#[test]
+fn a_sync_from_the_command_line_goes_to_the_history() {
+    let env = Env::with_pair();
+    env.write(&env.kb(), "note.md", "hello\n");
+    env.ok(&["sync"]);
+    let engine_paths = markoo_core::paths::Paths::resolve(&markoo_core::paths::Overrides {
+        config_file: Some(env.config()),
+        data_dir: Some(env.path("data")),
+    })
+    .unwrap();
+    let history = markoo_core::service::history(&engine_paths, "clara", 1).unwrap();
+    assert_eq!(history[0]["trigger"], "cli");
+}
