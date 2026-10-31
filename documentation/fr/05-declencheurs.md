@@ -28,7 +28,7 @@ pause_on_battery = false # pas encore implémenté : accepté et ignoré, avec u
 ```
 
 - Le planificateur `tokio` lance une synchro de chaque paire à chaque intervalle, sauf les paires en pause et celles qui échouent à la validation.
-- `markoo daemon` tourne au premier plan. Sur macOS, `markoo daemon install` le lance comme service `launchd` de l'utilisateur courant, avec les dossiers de configuration et de données utilisés à ce moment-là ; `markoo daemon uninstall` le retire.
+- `markoo daemon` tourne au premier plan. Sur macOS, `markoo daemon install` le lance comme service `launchd` de l'utilisateur courant, avec les dossiers de configuration et de données utilisés à ce moment-là ; il refuse de l'installer si cette configuration est absente ou invalide, puisque le démon ne pourrait pas démarrer. `markoo daemon uninstall` le retire.
 - Un dossier de données n'a qu'un seul daemon à la fois (`<data>/daemon.lock`).
 - `markoo.toml` est vérifié toutes les quelques secondes. Une paire dont les réglages ont changé, ou une nouvelle paire, est synchronisée aussitôt ; les changements de `[api]` demandent un redémarrage. Tant que le fichier est invalide, le daemon **suspend ses synchros** : utiliser les anciens réglages pourrait écrire dans un sens que l'utilisateur vient de changer.
 - La comparaison rapide (`mtime` + taille) rend une synchro « à vide » quasi gratuite, ce qui autorise des intervalles courts.

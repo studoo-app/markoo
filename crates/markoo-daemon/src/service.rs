@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 #[cfg(target_os = "macos")]
 use std::process::Command;
 
+use markoo_core::config::ConfigError;
 use markoo_core::paths::Paths;
 
 /// Label of the service.
@@ -15,6 +16,9 @@ pub enum ServiceError {
     /// This system has no supported service manager yet.
     #[error("running as a service is only supported on macOS for now; run `markoo daemon`")]
     Unsupported,
+    /// The configuration is missing or invalid: the daemon could not start.
+    #[error(transparent)]
+    Config(#[from] ConfigError),
     /// File access failed.
     #[error("cannot access {path}: {source}")]
     Io {
@@ -76,6 +80,14 @@ fn xml_escape(path: &Path) -> String {
         .replace('>', "&gt;")
 }
 
+/// Refuses a configuration the daemon could not start with: launchd would
+/// restart it forever, while the installation looks successful.
+#[cfg(any(target_os = "macos", test))]
+fn check_config(paths: &Paths) -> Result<(), ServiceError> {
+    markoo_core::config::Config::load(paths.config_file())?;
+    Ok(())
+}
+
 /// Where launchd looks for the services of the current user.
 #[cfg(target_os = "macos")]
 fn plist_path() -> PathBuf {
@@ -111,6 +123,7 @@ fn user_domain() -> Result<String, ServiceError> {
 /// Installs and starts the service; returns the path of its property list.
 #[cfg(target_os = "macos")]
 pub fn install(paths: &Paths) -> Result<PathBuf, ServiceError> {
+    check_config(paths)?;
     let io = |path: &Path| {
         let path = path.to_path_buf();
         move |source| ServiceError::Io { path, source }
@@ -200,6 +213,44 @@ mod tests {
     #[test]
     fn plist_runs_the_daemon_command_last() {
         assert!(sample().contains("<string>daemon</string>\n  </array>"));
+    }
+
+    fn paths_with_config(content: Option<&str>) -> (tempfile::TempDir, Paths) {
+        let dir = tempfile::tempdir().unwrap();
+        let config_file = dir.path().join("markoo.toml");
+        if let Some(content) = content {
+            std::fs::write(&config_file, content).unwrap();
+        }
+        let paths = Paths::resolve(&Overrides {
+            config_file: Some(config_file),
+            data_dir: Some(dir.path().join("data")),
+        })
+        .unwrap();
+        (dir, paths)
+    }
+
+    #[test]
+    fn missing_configuration_is_refused() {
+        let (_dir, paths) = paths_with_config(None);
+        assert!(matches!(
+            check_config(&paths),
+            Err(ServiceError::Config(ConfigError::Missing(_)))
+        ));
+    }
+
+    #[test]
+    fn invalid_configuration_is_refused() {
+        let (_dir, paths) = paths_with_config(Some("not toml ="));
+        assert!(matches!(
+            check_config(&paths),
+            Err(ServiceError::Config(ConfigError::Invalid(_)))
+        ));
+    }
+
+    #[test]
+    fn configuration_without_pairs_is_accepted() {
+        let (_dir, paths) = paths_with_config(Some(""));
+        assert!(check_config(&paths).is_ok());
     }
 
     #[test]

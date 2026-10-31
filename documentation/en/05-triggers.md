@@ -28,7 +28,7 @@ pause_on_battery = false # not implemented yet: accepted and ignored, with a war
 ```
 
 - The `tokio` scheduler syncs every pair at each interval, except paused pairs and pairs failing validation.
-- `markoo daemon` runs in the foreground. On macOS, `markoo daemon install` runs it as a `launchd` service for the current user, using the configuration and data folders in use at that moment; `markoo daemon uninstall` removes it.
+- `markoo daemon` runs in the foreground. On macOS, `markoo daemon install` runs it as a `launchd` service for the current user, using the configuration and data folders in use at that moment; it refuses to install when that configuration is missing or invalid, since the daemon could not start. `markoo daemon uninstall` removes it.
 - A data folder has only one daemon at a time (`<data>/daemon.lock`).
 - `markoo.toml` is checked every few seconds. A pair whose settings changed, or a new one, is synced at once; changes to `[api]` need a restart. While the file is invalid, the daemon **suspends its syncs**: using the previous settings could write in a direction the user has just changed.
 - The fast comparison (`mtime` + size) makes a no-op sync almost free, so short intervals are fine.

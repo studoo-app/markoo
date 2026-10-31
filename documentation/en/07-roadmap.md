@@ -62,7 +62,7 @@ gantt
 - HTTP API (`axum`), token, SSE stream.
 - `launchd` service on macOS.
 
-**Status**: done, except that `markoo daemon install` has not been tried against a real `launchd` yet (its property list is checked with `plutil`). Progress events are limited to the start and end of jobs: the engine does not report progress during a sync.
+**Status**: done. On a real `launchd`, `markoo daemon install` and `uninstall` work and a failed start is retried, but the service has not yet been seen staying up with a configuration. Progress events are limited to the start and end of jobs: the engine does not report progress during a sync.
 
 ### M5 — Git hooks
 - `markoo hook install|uninstall`, coexistence with existing hooks, husky and lefthook.
