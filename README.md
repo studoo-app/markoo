@@ -18,20 +18,12 @@ Knowledge base tools are supported through **adapters**. **Obsidian is the first
 > [!WARNING]
 > **Release candidate.** Markoo has been tried on real vaults, but it is still young: keep a backup of your notes, and start on a copy. Linux and Windows only have the command line for now.
 
-```mermaid
-flowchart LR
-    subgraph KB["🧠 Knowledge base<br/>Obsidian first"]
-        V["Projects/Clara/*.md<br/>[[wikilinks]], ![[images]]"]
-    end
-    subgraph Markoo["⚙️ Markoo"]
-        E["3-way sync engine<br/>+ link conversion"]
-    end
-    subgraph Repo["📦 Git repository"]
-        R["docs/*.md<br/>[links](./standards.md)"]
-    end
-    V <-->|diff / merge| E
-    E <-->|diff / merge| R
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/sync-overview.svg">
+    <img src="assets/sync-overview-light.svg" alt="Markoo sits between the knowledge base (Obsidian) and the Git repository and syncs both with a 3-way diff / merge" width="900">
+  </picture>
+</p>
 
 ## Features
 
