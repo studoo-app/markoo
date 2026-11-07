@@ -71,7 +71,7 @@
   let restarted = $state(false);
 </script>
 
-<button class="back" type="button" onclick={onclose}>‹ Pairs</button>
+<button class="back" type="button" onclick={onclose}>‹ Sync</button>
 <h1>Settings</h1>
 
 {#if saved}

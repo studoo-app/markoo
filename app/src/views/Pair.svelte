@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { api, arrow, errorText, kbLabel, type PairView } from "../lib/api";
+  import { api, errorText, type PairView } from "../lib/api";
+  import PairFlow from "../lib/PairFlow.svelte";
   import ChangesTab from "./ChangesTab.svelte";
   import ConflictsTab from "./ConflictsTab.svelte";
   import FiltersTab from "./FiltersTab.svelte";
@@ -27,7 +28,7 @@
     try {
       const pairs = await api.listPairs();
       pair = pairs.find((candidate) => candidate.name === name) ?? null;
-      error = pair ? null : `The pair "${name}" no longer exists.`;
+      error = pair ? null : `The sync "${name}" no longer exists.`;
     } catch (failure) {
       error = errorText(failure);
     }
@@ -82,11 +83,11 @@
 
 <div class="row spread title">
   <div>
-    <button class="back" type="button" onclick={onclose}>‹ Pairs</button>
+    <button class="back" type="button" onclick={onclose}>‹ Sync</button>
     <h1>{name}</h1>
     {#if pair}
-      <p class="muted path sub">
-        {kbLabel(pair.kb_type)} · {pair.kb} <strong>{arrow(pair.direction)}</strong> {pair.repo}
+      <p class="sub">
+        <PairFlow kbType={pair.kb_type} direction={pair.direction} kb={pair.kb} repo={pair.repo} />
       </p>
     {/if}
   </div>
@@ -147,8 +148,8 @@
   {:else}
     <GeneralTab {pair} onchange={changed} />
     <section class="remove card">
-      <h2>Remove this pair</h2>
-      <p class="muted">Files stay where they are on both sides. Markoo forgets the pair and its last sync.</p>
+      <h2>Remove this sync</h2>
+      <p class="muted">Files stay where they are on both sides. Markoo forgets this sync and its last run.</p>
       {#if confirmRemove}
         <div class="row">
           <button class="danger" type="button" onclick={remove}>Yes, remove “{name}”</button>

@@ -68,7 +68,7 @@
 <section class="field">
   <h2>Interval</h2>
   {#if globals}
-    <p class="muted">Every pair syncs on the same schedule: {globals.interval}. It is set in Settings.</p>
+    <p class="muted">Every sync runs on the same schedule: {globals.interval}. It is set in Settings.</p>
   {/if}
 </section>
 

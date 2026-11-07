@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
-  import logo from "../../assets/logo-mark.svg";
-  import logoDark from "../../assets/logo-mark-dark.svg";
+  import logoName from "../../assets/logo-mark-name.svg";
+  import logoNameDark from "../../assets/logo-mark-name-dark.svg";
   import { api, type AppInfo } from "./lib/api";
   import Home from "./views/Home.svelte";
   import Pair from "./views/Pair.svelte";
@@ -35,10 +35,9 @@
 <header class="row spread">
   <button class="home" type="button" onclick={() => (route = { name: "home" })} aria-label="Home">
     <picture>
-      <source srcset={logoDark} media="(prefers-color-scheme: dark)" />
-      <img src={logo} alt="" width="28" height="28" />
+      <source srcset={logoNameDark} media="(prefers-color-scheme: dark)" />
+      <img src={logoName} alt="Markoo" height="30" />
     </picture>
-    <span>Markoo</span>
   </button>
   <button type="button" onclick={() => (route = { name: "settings" })}>Settings</button>
 </header>
