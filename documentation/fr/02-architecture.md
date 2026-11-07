@@ -129,7 +129,7 @@ Binaire `markoo` (`clap`) :
  \_\ /_/  |_| |_| |_|\__,_|_|  |_|\_\___/ \___/
 ```
 
-Si le terminal gère les couleurs, `<` est affiché en rose (`#F0418E`) et `>` en vert (`#22A55A`), les couleurs du logo. Sinon (`NO_COLOR` défini, sortie qui n'est pas un terminal), la bannière est affichée en texte brut.
+Si le terminal gère les couleurs, `<` est affiché en rose (`#FF0070`) et `>` en vert (`#00FF7F`), les couleurs du logo. Sinon (`NO_COLOR` défini, sortie qui n'est pas un terminal), la bannière est affichée en texte brut.
 
 ### `markoo-daemon`
 

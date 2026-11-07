@@ -1,14 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Markoo">
-  <rect width="192" height="192" rx="44" fill="#0F3D2C"/>
-  <g transform="translate(21.5 29) scale(1.24)">
-    <g fill="none" stroke-linecap="round" stroke-width="10">
-      <circle cx="60" cy="20" r="8" stroke="#FFFFFF"/>
-      <line x1="60" y1="28" x2="60" y2="96" stroke="#FFFFFF"/>
-      <line x1="38" y1="42" x2="82" y2="42" stroke="#FFFFFF"/>
-      <path d="M60 96 Q30 96 27 76" stroke="#FF6FAE"/>
-      <path d="M60 96 Q90 96 93 76" stroke="#4ED37E"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="192" height="192" viewBox="0 0 192 192">
+  <title>app-icon.svg</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <path d="M44 0 L148 0 C172.301 0 192 19.699 192 44 L192 148 C192 172.301 172.301 192 148 192 L44 192 C19.699 192 0 172.301 0 148 L0 44 C0 19.699 19.699 0 44 0 Z" fill="#fdf3d0"/>
+    <g>
+      <circle cx="96" cy="60.66" r="18.6" fill="#00fd7d"/>
+      <g>
+        <path d="M96 143.74 C73.401 143.74 55.08 125.419 55.08 102.82" fill="none" stroke="#ff0070" stroke-width="12.4" stroke-linecap="round"/>
+        <path d="M96 143.74 C118.599 143.74 136.92 125.419 136.92 102.82" fill="none" stroke="#00ff7e" stroke-width="12.4" stroke-linecap="round"/>
+      </g>
+      <polygon points="55.08,73.06 73.06,104.06 37.1,104.06" fill="#ff0070" stroke="#ff0070" stroke-width="4" stroke-miterlimit="10"/>
+      <polygon points="136.92,73.06 118.94,104.06 154.9,104.06" fill="#00ff7e" stroke="#00ff7e" stroke-width="4" stroke-miterlimit="10"/>
     </g>
-    <polygon points="25.5,54 40,77 12,78" fill="#FF6FAE"/>
-    <polygon points="94.5,54 80,77 108,78" fill="#4ED37E"/>
   </g>
 </svg>

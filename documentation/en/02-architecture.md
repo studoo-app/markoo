@@ -129,7 +129,7 @@ The `markoo` binary (`clap`):
  \_\ /_/  |_| |_| |_|\__,_|_|  |_|\_\___/ \___/
 ```
 
-When the terminal supports color, `<` is printed in pink (`#F0418E`) and `>` in green (`#22A55A`), the logo's colors. Otherwise (`NO_COLOR` set, output not a terminal), the banner is printed as plain text.
+When the terminal supports color, `<` is printed in rose (`#FF0070`) and `>` in green (`#00FF7F`), the logo's colors. Otherwise (`NO_COLOR` set, output not a terminal), the banner is printed as plain text.
 
 ### `markoo-daemon`
 
