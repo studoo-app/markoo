@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { setLocale, t } from "./lib/i18n.svelte";
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import logo from "../../assets/logo-mark.svg";
@@ -22,6 +23,7 @@
 
   onMount(() => {
     api.appInfo().then((value) => (info = value));
+    api.globalSettings().then((value) => setLocale(value.language)).catch(() => {});
     const unlisten = listen("markoo-changed", () => revision++);
     const onFocus = () => revision++;
     window.addEventListener("focus", onFocus);
@@ -33,14 +35,15 @@
 </script>
 
 <header class="row spread">
-  <button class="home" type="button" onclick={() => (route = { name: "home" })} aria-label="Home">
+  <button class="home" type="button" onclick={() => (route = { name: "home" })} aria-label={t("Home")}>
     <picture>
       <source srcset={logoDark} media="(prefers-color-scheme: dark)" />
       <img src={logo} alt="" width="28" height="28" />
     </picture>
     <span>Markoo</span>
+    <span class="version">v{__APP_VERSION__}</span>
   </button>
-  <button type="button" onclick={() => (route = { name: "settings" })}>Settings</button>
+  <button type="button" onclick={() => (route = { name: "settings" })}>{t("Settings")}</button>
 </header>
 
 {#if info?.note}
@@ -86,6 +89,11 @@
   }
   picture {
     display: flex;
+  }
+  .version {
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--muted, #6b6b6b);
   }
   .note {
     margin: 0;

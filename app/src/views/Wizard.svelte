@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../lib/i18n.svelte";
   import { onMount } from "svelte";
   import {
     api,
@@ -142,10 +143,10 @@
   }
 </script>
 
-<h1>New pair</h1>
+<h1>{t("New pair")}</h1>
 <ol class="steps">
   {#each steps as label, index}
-    <li class:current={index === step} class:done={index < step}>{index + 1}. {label}</li>
+    <li class:current={index === step} class:done={index < step}>{index + 1}. {t(label)}</li>
   {/each}
 </ol>
 
@@ -153,7 +154,7 @@
   {#if step === 0}
     {#if known.length > 0}
       <div class="field">
-        <span class="heading">Known vaults</span>
+        <span class="heading">{t("Known vaults")}</span>
         <div class="row wrap">
           {#each known as path}
             <button type="button" class="path" onclick={() => (kb = path)}>{path}</button>
@@ -162,62 +163,62 @@
       </div>
     {/if}
     <div class="field">
-      <label for="kb">Folder of the knowledge base</label>
+      <label for="kb">{t("Folder of the knowledge base")}</label>
       <Picker id="kb" bind:value={kb} />
       <div class="hint">
         {#if detected && !detected.exists}
-          <span class="error">This folder does not exist.</span>
+          <span class="error">{t("This folder does not exist.")}</span>
         {:else if detected}
-          <span class="ok">✓ {kbLabel(detected.kb_type)} {detected.kb_type === "obsidian" ? "vault" : "folder"} detected</span>
+          <span class="ok">{t("✓ {label} {kind} detected", { label: kbLabel(detected.kb_type), kind: t(detected.kb_type === "obsidian" ? "vault" : "folder") })}</span>
         {/if}
       </div>
     </div>
     <div class="field">
-      <label for="kb-type">KB type</label>
+      <label for="kb-type">{t("KB type")}</label>
       <select id="kb-type" bind:value={kbType}>
-        <option value="">Detect from the folder</option>
+        <option value="">{t("Detect from the folder")}</option>
         <option value="obsidian">Obsidian</option>
         <option value="markdown">Markdown</option>
       </select>
     </div>
     <div class="field">
-      <label for="name">Name of the pair</label>
+      <label for="name">{t("Name of the pair")}</label>
       <input id="name" type="text" bind:value={name} oninput={() => (nameEdited = true)} spellcheck="false" />
       {#if name && !/^[a-z0-9-]+$/.test(name)}
-        <div class="hint error">Use lowercase letters, digits and hyphens.</div>
+        <div class="hint error">{t("Use lowercase letters, digits and hyphens.")}</div>
       {/if}
     </div>
   {:else if step === 1}
     <div class="field">
-      <label for="repo">Folder in the Git repository</label>
+      <label for="repo">{t("Folder in the Git repository")}</label>
       <Picker id="repo" bind:value={repo} />
       <div class="hint">
         {#if repoInfo && !repoInfo.exists}
-          <span class="error">This folder does not exist.</span>
+          <span class="error">{t("This folder does not exist.")}</span>
         {:else if repoInfo && !repoInfo.git}
-          <span class="warn">This folder is not in a Git repository.</span>
+          <span class="warn">{t("This folder is not in a Git repository.")}</span>
         {:else if repoInfo}
-          <span class="ok">✓ Git repository{repoInfo.branch ? `, branch ${repoInfo.branch}` : ""}</span>
+          <span class="ok">{repoInfo.branch ? t("✓ Git repository, branch {branch}", { branch: repoInfo.branch }) : t("✓ Git repository")}</span>
         {/if}
       </div>
     </div>
-    <p class="muted">Markoo never commits or pushes: what it writes here stays for you to review.</p>
+    <p class="muted">{t("Markoo never commits or pushes: what it writes here stays for you to review.")}</p>
   {:else if step === 2}
     <DirectionCards bind:direction bind:targetChanges />
   {:else if step === 3}
     <FilterEditor bind:include bind:exclude load={loadFilters} />
   {:else if step === 4}
     <div class="field">
-      <span class="heading">Git hooks (optional)</span>
+      <span class="heading">{t("Git hooks (optional)")}</span>
       {#each hookChoices as hook}
         <label class="choice">
           <input type="checkbox" bind:group={hooks} value={hook} /> {hook}
         </label>
       {/each}
-      <p class="muted hint">The interval is set for every pair in Settings.</p>
+      <p class="muted hint">{t("The interval is set for every pair in Settings.")}</p>
     </div>
     <div class="field">
-      <label for="branches">Branches covered, separated by commas (all if empty)</label>
+      <label for="branches">{t("Branches covered, separated by commas (all if empty)")}</label>
       <input id="branches" type="text" bind:value={branches} spellcheck="false" />
     </div>
   {:else if preview}
@@ -225,7 +226,7 @@
     <p class="muted path">{kb} {arrow(direction)} {repo}</p>
     {#if conflicts > 0}
       <p class="warn">
-        {conflicts} file(s) exist on both sides with different content. They will wait for your decision.
+        {t("{count} file(s) exist on both sides with different content. They will wait for your decision.", { count: conflicts })}
       </p>
     {/if}
     <PlanList plan={preview} />
@@ -237,17 +238,17 @@
 {/if}
 
 <div class="row spread">
-  <button type="button" onclick={oncancel}>Cancel</button>
+  <button type="button" onclick={oncancel}>{t("Cancel")}</button>
   <div class="row">
     {#if step > 0}
-      <button type="button" onclick={() => { step--; error = null; }}>Back</button>
+      <button type="button" onclick={() => { step--; error = null; }}>{t("Back")}</button>
     {/if}
     {#if step < 5}
       <button class="primary" type="button" disabled={!canContinue || busy} onclick={next}>
-        {step === 4 ? "Preview" : "Continue"}
+        {step === 4 ? t("Preview") : t("Continue")}
       </button>
     {:else}
-      <button class="primary" type="button" disabled={busy} onclick={create}>Create and sync</button>
+      <button class="primary" type="button" disabled={busy} onclick={create}>{t("Create and sync")}</button>
     {/if}
   </div>
 </div>

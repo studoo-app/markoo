@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale, t } from "../lib/i18n.svelte";
   import { api, errorText, type RunRecord } from "../lib/api";
 
   let { name, revision }: { name: string; revision: number } = $props();
@@ -35,22 +36,22 @@
     const toRepo = report.written.filter((file) => file.side === "repo").length;
     const toKb = report.written.filter((file) => file.side === "kb").length;
     const parts = [];
-    if (toRepo > 0) parts.push(`${toRepo} to the repo`);
-    if (toKb > 0) parts.push(`${toKb} to the KB`);
-    if (report.trashed.length > 0) parts.push(`${report.trashed.length} to the trash`);
-    if (report.skipped.length > 0) parts.push(`${report.skipped.length} skipped`);
+    if (toRepo > 0) parts.push(t("{count} to the repo", { count: toRepo }));
+    if (toKb > 0) parts.push(t("{count} to the KB", { count: toKb }));
+    if (report.trashed.length > 0) parts.push(t("{count} to the trash", { count: report.trashed.length }));
+    if (report.skipped.length > 0) parts.push(t("{count} skipped", { count: report.skipped.length }));
     return parts.join(" · ");
   }
 
-  const when = (run: RunRecord) => new Date(run.started_at).toLocaleString();
+  const when = (run: RunRecord) => new Date(run.started_at).toLocaleString(locale());
 </script>
 
 {#if error}
   <p class="error" role="alert">{error}</p>
 {:else if runs === null}
-  <p class="muted">Loading…</p>
+  <p class="muted">{t("Loading…")}</p>
 {:else if runs.length === 0}
-  <p class="muted">No sync has changed anything yet.</p>
+  <p class="muted">{t("No sync has changed anything yet.")}</p>
 {:else}
   <ul>
     {#each runs as run (run.id)}
@@ -58,9 +59,9 @@
         <details>
           <summary>
             <span class="muted">{when(run)}</span>
-            <span class="muted">{triggers[run.trigger] ?? run.trigger}</span>
+            <span class="muted">{t(triggers[run.trigger] ?? run.trigger)}</span>
             {#if run.error}
-              <span class="error">Failed</span>
+              <span class="error">{t("Failed")}</span>
             {:else}
               <strong>{summary(run)}</strong>
             {/if}
@@ -81,12 +82,12 @@
               {/each}
             </ul>
           {/if}
-          <p class="muted hint">Took {run.duration_ms} ms.</p>
+          <p class="muted hint">{t("Took {ms} ms.", { ms: run.duration_ms })}</p>
         </details>
       </li>
     {/each}
   </ul>
-  <p class="muted hint">The latest 100 syncs that changed something, or failed.</p>
+  <p class="muted hint">{t("The latest 100 syncs that changed something, or failed.")}</p>
 {/if}
 
 <style>

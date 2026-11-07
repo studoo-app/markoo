@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../lib/i18n.svelte";
   import { api, errorText, type PairView, type Plan, type Settings } from "../lib/api";
   import DirectionCards from "../lib/DirectionCards.svelte";
   import Picker from "../lib/Picker.svelte";
@@ -71,19 +72,19 @@
 </script>
 
 {#if preview}
-  <h2>Preview</h2>
-  <p class="muted">Nothing is saved yet. Saving lets Markoo sync with these settings.</p>
+  <h2>{t("Preview")}</h2>
+  <p class="muted">{t("Nothing is saved yet. Saving lets Markoo sync with these settings.")}</p>
   <div class="card"><PlanList plan={preview} /></div>
   {#if error}
     <p class="error" role="alert">{error}</p>
   {/if}
   <div class="row end">
-    <button type="button" onclick={() => (preview = null)}>Back</button>
-    <button class="primary" type="button" disabled={busy} onclick={confirm}>Save</button>
+    <button type="button" onclick={() => (preview = null)}>{t("Back")}</button>
+    <button class="primary" type="button" disabled={busy} onclick={confirm}>{t("Save")}</button>
   </div>
 {:else}
   <div class="field">
-    <label for="kb-type">KB type</label>
+    <label for="kb-type">{t("KB type")}</label>
     <select id="kb-type" bind:value={kbType}>
       <option value="obsidian">Obsidian</option>
       <option value="markdown">Markdown</option>
@@ -94,23 +95,21 @@
     <Picker id="kb" bind:value={kb} />
   </div>
   <div class="field">
-    <label for="repo">Repo</label>
+    <label for="repo">{t("Repo")}</label>
     <Picker id="repo" bind:value={repo} />
   </div>
   <div class="field">
-    <span class="heading">Sync direction</span>
+    <span class="heading">{t("Sync direction")}</span>
     <DirectionCards bind:direction bind:targetChanges />
   </div>
   {#if error}
     <p class="error" role="alert">{error}</p>
   {/if}
   {#if saved}
-    <p class="ok" role="status">Saved.</p>
+    <p class="ok" role="status">{t("Saved.")}</p>
   {/if}
   <div class="row end">
-    <button class="primary" type="button" disabled={!dirty || busy} onclick={showPreview}>
-      Save and preview
-    </button>
+    <button class="primary" type="button" disabled={!dirty || busy} onclick={showPreview}>{t("Save and preview")}</button>
   </div>
 {/if}
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../lib/i18n.svelte";
   import { api, arrow, errorText, kbLabel, type PairView } from "../lib/api";
 
   let {
@@ -40,17 +41,17 @@
 
   function status(pair: PairView): { text: string; tone: string } {
     if (pair.errors.length > 0) return { text: pair.errors.join("; "), tone: "error" };
-    if (pair.active) return { text: "🔄 Syncing", tone: "muted" };
-    if (pair.pending > 0) return { text: `⚠️ ${pair.pending} to settle`, tone: "warn" };
-    if (pair.paused) return { text: "Paused", tone: "muted" };
-    return { text: "✅ No pending conflict", tone: "ok" };
+    if (pair.active) return { text: t("🔄 Syncing"), tone: "muted" };
+    if (pair.pending > 0) return { text: t("⚠️ {count} to settle", { count: pair.pending }), tone: "warn" };
+    if (pair.paused) return { text: t("Paused"), tone: "muted" };
+    return { text: t("✅ No pending conflict"), tone: "ok" };
   }
 </script>
 
 <div class="row spread title">
-  <h1>Pairs</h1>
+  <h1>{t("Pairs")}</h1>
   {#if pairs?.length}
-    <button class="primary" type="button" onclick={onnew}>+ New pair</button>
+    <button class="primary" type="button" onclick={onnew}>{t("+ New pair")}</button>
   {/if}
 </div>
 
@@ -59,12 +60,12 @@
 {/if}
 
 {#if pairs === null}
-  <p class="muted">Loading…</p>
+  <p class="muted">{t("Loading…")}</p>
 {:else if pairs.length === 0}
   <div class="card empty">
-    <h2>No pair yet</h2>
-    <p class="muted">A pair keeps a folder of your knowledge base in sync with a folder of a Git repository.</p>
-    <button class="primary" type="button" onclick={onnew}>Create the first one</button>
+    <h2>{t("No pair yet")}</h2>
+    <p class="muted">{t("A pair keeps a folder of your knowledge base in sync with a folder of a Git repository.")}</p>
+    <button class="primary" type="button" onclick={onnew}>{t("Create the first one")}</button>
   </div>
 {:else}
   <ul>
@@ -84,7 +85,7 @@
           disabled={pair.paused || pair.active || syncing !== null || pair.errors.length > 0}
           onclick={() => sync(pair.name)}
         >
-          {syncing === pair.name ? "Syncing…" : "Sync now"}
+          {syncing === pair.name ? t("Syncing…") : t("Sync now")}
         </button>
       </li>
     {/each}
