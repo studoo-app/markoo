@@ -76,7 +76,7 @@
   let restarted = $state(false);
 </script>
 
-<button class="back" type="button" onclick={onclose}>{t("‹ Pairs")}</button>
+<button class="back" type="button" onclick={onclose}>{t("‹ Sync")}</button>
 <h1>{t("Settings")}</h1>
 
 {#if saved}

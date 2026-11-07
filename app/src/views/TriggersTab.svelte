@@ -69,7 +69,7 @@
 <section class="field">
   <h2>{t("Interval")}</h2>
   {#if globals}
-    <p class="muted">{t("Every pair syncs on the same schedule: {interval}. It is set in Settings.", { interval: globals.interval })}</p>
+    <p class="muted">{t("Every sync runs on the same schedule: {interval}. It is set in Settings.", { interval: globals.interval })}</p>
   {/if}
 </section>
 

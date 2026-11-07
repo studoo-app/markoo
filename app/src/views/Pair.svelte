@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from "../lib/i18n.svelte";
-  import { api, arrow, errorText, kbLabel, type PairView } from "../lib/api";
+  import { api, errorText, type PairView } from "../lib/api";
+  import PairFlow from "../lib/PairFlow.svelte";
   import ChangesTab from "./ChangesTab.svelte";
   import ConflictsTab from "./ConflictsTab.svelte";
   import FiltersTab from "./FiltersTab.svelte";
@@ -28,7 +29,7 @@
     try {
       const pairs = await api.listPairs();
       pair = pairs.find((candidate) => candidate.name === name) ?? null;
-      error = pair ? null : t("The pair \"{name}\" no longer exists.", { name });
+      error = pair ? null : t("The sync \"{name}\" no longer exists.", { name });
     } catch (failure) {
       error = errorText(failure);
     }
@@ -83,11 +84,11 @@
 
 <div class="row spread title">
   <div>
-    <button class="back" type="button" onclick={onclose}>{t("‹ Pairs")}</button>
+    <button class="back" type="button" onclick={onclose}>{t("‹ Sync")}</button>
     <h1>{name}</h1>
     {#if pair}
-      <p class="muted path sub">
-        {kbLabel(pair.kb_type)} · {pair.kb} <strong>{arrow(pair.direction)}</strong> {pair.repo}
+      <p class="sub">
+        <PairFlow kbType={pair.kb_type} direction={pair.direction} kb={pair.kb} repo={pair.repo} />
       </p>
     {/if}
   </div>
@@ -148,8 +149,8 @@
   {:else}
     <GeneralTab {pair} onchange={changed} />
     <section class="remove card">
-      <h2>{t("Remove this pair")}</h2>
-      <p class="muted">{t("Files stay where they are on both sides. Markoo forgets the pair and its last sync.")}</p>
+      <h2>{t("Remove this sync")}</h2>
+      <p class="muted">{t("Files stay where they are on both sides. Markoo forgets this sync and its last run.")}</p>
       {#if confirmRemove}
         <div class="row">
           <button class="danger" type="button" onclick={remove}>{t("Yes, remove “{name}”", { name })}</button>

@@ -143,7 +143,7 @@
   }
 </script>
 
-<h1>{t("New pair")}</h1>
+<h1>{t("New sync")}</h1>
 <ol class="steps">
   {#each steps as label, index}
     <li class:current={index === step} class:done={index < step}>{index + 1}. {t(label)}</li>
@@ -182,7 +182,7 @@
       </select>
     </div>
     <div class="field">
-      <label for="name">{t("Name of the pair")}</label>
+      <label for="name">{t("Name of the sync")}</label>
       <input id="name" type="text" bind:value={name} oninput={() => (nameEdited = true)} spellcheck="false" />
       {#if name && !/^[a-z0-9-]+$/.test(name)}
         <div class="hint error">{t("Use lowercase letters, digits and hyphens.")}</div>
@@ -215,7 +215,7 @@
           <input type="checkbox" bind:group={hooks} value={hook} /> {hook}
         </label>
       {/each}
-      <p class="muted hint">{t("The interval is set for every pair in Settings.")}</p>
+      <p class="muted hint">{t("The interval is set for every sync in Settings.")}</p>
     </div>
     <div class="field">
       <label for="branches">{t("Branches covered, separated by commas (all if empty)")}</label>
