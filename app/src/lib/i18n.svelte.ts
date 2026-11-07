@@ -1,0 +1,241 @@
+// Interface strings. The English text is the key: a text missing from a
+// dictionary is shown in English, so a new string never breaks the interface.
+
+export type Locale = "en" | "fr";
+
+const fr: Record<string, string> = {
+  "Home": "Accueil",
+  "+ New sync": "+ Nouveau sync",
+  "Sync": "Sync",
+  "New sync": "Nouveau sync",
+  "‹ Sync": "‹ Sync",
+  "Name of the sync": "Nom du sync",
+  "Syncing": "Synchronisation",
+  "{count} to settle": "{count} à régler",
+  "No pending conflict": "Aucun conflit en attente",
+  "Last sync": "Dernière synchro",
+  "No sync yet": "Aucun sync pour l'instant",
+  "A sync keeps a folder of your knowledge base in sync with a folder of a Git repository.": "Un sync synchronise un dossier de votre base de connaissances avec un dossier d'un dépôt Git.",
+  "Remove this sync": "Supprimer ce sync",
+  "Files stay where they are on both sides. Markoo forgets this sync and its last run.": "Les fichiers restent à leur place des deux côtés. Markoo oublie ce sync et sa dernière exécution.",
+  "Every sync runs on the same schedule: {interval}. It is set in Settings.": "Tous les sync suivent le même rythme : {interval}. Il se règle dans Réglages.",
+  "The interval is set for every sync in Settings.": "L'intervalle se règle pour tous les sync dans Réglages.",
+  "repo": "dépôt",
+  "Settings": "Réglages",
+  "Pairs": "Sync",
+  "+ New pair": "+ Nouveau sync",
+  "New pair": "Nouveau sync",
+  "Loading…": "Chargement…",
+  "No pair yet": "Aucun sync pour l'instant",
+  "A pair keeps a folder of your knowledge base in sync with a folder of a Git repository.":
+    "Un sync synchronise un dossier de votre base de connaissances avec un dossier d'un dépôt Git.",
+  "Create the first one": "Créer la première",
+  "🔄 Syncing": "🔄 Synchronisation",
+  "⚠️ {count} to settle": "⚠️ {count} à régler",
+  "Paused": "En pause",
+  "✅ No pending conflict": "✅ Aucun conflit en attente",
+  "Syncing…": "Synchronisation…",
+  "Sync now": "Synchroniser",
+  "The sync \"{name}\" no longer exists.": "Le sync « {name} » n'existe plus.",
+  "Changes": "Modifications",
+  "Conflicts": "Conflits",
+  "General": "Général",
+  "Filters": "Filtres",
+  "Transformations": "Transformations",
+  "Triggers": "Déclencheurs",
+  "History": "Historique",
+  "Resume": "Reprendre",
+  "Pause": "Pause",
+  "Remove this pair": "Supprimer ce sync",
+  "Files stay where they are on both sides. Markoo forgets the pair and its last sync.":
+    "Les fichiers restent à leur place des deux côtés. Markoo oublie le sync et sa dernière synchro.",
+  "Yes, remove “{name}”": "Oui, supprimer « {name} »",
+  "Cancel": "Annuler",
+  "Remove…": "Supprimer…",
+  "‹ Pairs": "‹ Sync",
+  "Schedule": "Planification",
+  "Interval between syncs": "Intervalle entre les synchros",
+  "30s, 5m, 1h… or off.": "30s, 5m, 1h… ou off.",
+  "Sync when Markoo starts": "Synchroniser au démarrage de Markoo",
+  "Local API": "API locale",
+  "Serve the API on 127.0.0.1": "Servir l'API sur 127.0.0.1",
+  "Port": "Port",
+  "MCP": "MCP",
+  "Also serve MCP on the API": "Servir aussi MCP sur l'API",
+  "Let an AI agent change the configuration": "Autoriser un agent IA à modifier la configuration",
+  "Changing a direction or a folder can cause many writes at the next sync.":
+    "Changer un sens ou un dossier peut provoquer beaucoup d'écritures à la prochaine synchro.",
+  "Saved.": "Enregistré.",
+  "Restart Markoo to apply the API settings.": "Redémarrez Markoo pour appliquer les réglages de l'API.",
+  "Save": "Enregistrer",
+  "Configuration: {path}": "Configuration : {path}",
+  "Data: {path}": "Données : {path}",
+  "Language": "Langue",
+  "Language of the interface": "Langue de l'interface",
+  "Preview": "Aperçu",
+  "Nothing is saved yet. Saving lets Markoo sync with these settings.":
+    "Rien n'est encore enregistré. Enregistrer permet à Markoo de synchroniser avec ces réglages.",
+  "Back": "Retour",
+  "KB type": "Type de KB",
+  "Repo": "Dépôt",
+  "Sync direction": "Sens de synchronisation",
+  "Save and preview": "Enregistrer et prévisualiser",
+  "Comparing both sides…": "Comparaison des deux côtés…",
+  "No difference in the text.": "Aucune différence dans le texte.",
+  "at startup": "au démarrage",
+  "on schedule": "selon la planification",
+  "after a settings change": "après une modification des réglages",
+  "from the API": "depuis l'API",
+  "from an MCP client": "depuis un client MCP",
+  "from the app": "depuis l'application",
+  "from a Git hook": "depuis un hook Git",
+  "from the command line": "depuis la ligne de commande",
+  "settling a conflict": "en réglant un conflit",
+  "{count} to the repo": "{count} vers le dépôt",
+  "{count} to the KB": "{count} vers la KB",
+  "{count} to the trash": "{count} à la corbeille",
+  "{count} skipped": "{count} ignoré(s)",
+  "Failed": "Échec",
+  "Took {ms} ms.": "Durée : {ms} ms.",
+  "No sync has changed anything yet.": "Aucune synchro n'a encore rien modifié.",
+  "The latest 100 syncs that changed something, or failed.":
+    "Les 100 dernières synchros qui ont modifié quelque chose, ou échoué.",
+  "Include": "Inclure",
+  "Exclude": "Exclure",
+  "Remove this pattern": "Retirer ce motif",
+  "+ Add a pattern": "+ Ajouter un motif",
+  "file(s) tracked": "fichier(s) suivi(s)",
+  "excluded": "exclu(s)",
+  "The list is cut; the numbers above are complete.":
+    "La liste est tronquée ; les nombres ci-dessus sont complets.",
+  "Looking at the files…": "Analyse des fichiers…",
+  "Nothing to do: both sides agree.": "Rien à faire : les deux côtés sont identiques.",
+  "file(s) to the KB": "fichier(s) vers la KB",
+  "to the repo": "vers le dépôt",
+  "{count} of the files going to the KB are not tracked by Git in the repo.":
+    "{count} des fichiers destinés à la KB ne sont pas suivis par Git dans le dépôt.",
+  "They may have nothing to do with this repository, if an earlier sync left them there for example. Check them before going on.":
+    "Ils n'ont peut-être rien à voir avec ce dépôt, si une synchro précédente les y a laissés par exemple. Vérifiez-les avant de continuer.",
+  "… and {count} more.": "… et {count} de plus.",
+  "Attachments: {repo} to the repo, {kb} to the KB, {all} in all.":
+    "Pièces jointes : {repo} vers le dépôt, {kb} vers la KB, {all} au total.",
+  "{count} warning(s)": "{count} avertissement(s)",
+  "copy to the repo": "copie vers le dépôt",
+  "copy to the KB": "copie vers la KB",
+  "merge both sides": "fusion des deux côtés",
+  "move to the trash on the {side} side": "mise à la corbeille côté {side}",
+  "rename to {name}": "renommage en {name}",
+  "divergence: waits for you": "divergence : en attente de votre choix",
+  "conflict: waits for you": "conflit : en attente de votre choix",
+  "only in the target: left alone": "seulement dans la cible : laissé tel quel",
+  "Browse": "Parcourir",
+  "The KB is the reference": "La KB fait référence",
+  "Writing on both sides": "Écriture des deux côtés",
+  "The repo is the reference": "Le dépôt fait référence",
+  "If the target is changed": "Si la cible est modifiée",
+  "Protect: report a divergence, overwrite nothing": "Protéger : signaler une divergence, ne rien écraser",
+  "Overwrite: strict mirror of the source (with backup)": "Écraser : miroir strict de la source (avec sauvegarde)",
+  "Files that differ in the target will be replaced or moved to the trash. Check the preview.":
+    "Les fichiers qui diffèrent dans la cible seront remplacés ou mis à la corbeille. Vérifiez l'aperçu.",
+  "‹ All conflicts": "‹ Tous les conflits",
+  "No common version": "Aucune version commune",
+  "Deleted on this side": "Supprimé de ce côté",
+  "Base": "Base",
+  "Result": "Résultat",
+  "Copy the target to the source": "Copier la cible vers la source",
+  "Keep the source": "Garder la source",
+  "Keep the target, stop syncing this file": "Garder la cible, arrêter de synchroniser ce fichier",
+  "Use the result": "Utiliser le résultat",
+  "Keep the KB": "Garder la KB",
+  "Keep the repo": "Garder le dépôt",
+  "Keep both": "Garder les deux",
+  "What gets overwritten is kept in Markoo's backups.":
+    "Ce qui est écrasé est conservé dans les sauvegardes de Markoo.",
+  "Nothing to settle.": "Rien à régler.",
+  "Excluded from sync": "Exclus de la synchro",
+  "Sync it again": "Resynchroniser",
+  "Generic options": "Options générales",
+  "Links": "Liens",
+  "Convert to Markdown links": "Convertir en liens Markdown",
+  "Leave as they are": "Laisser tels quels",
+  "Attachments folder in the repo": "Dossier des pièces jointes dans le dépôt",
+  "Frontmatter in the repo": "Frontmatter dans le dépôt",
+  "Keep, except some keys": "Garder, sauf certaines clés",
+  "Keep all of it": "Tout garder",
+  "Remove all of it": "Tout retirer",
+  "Keys left out, separated by commas": "Clés exclues, séparées par des virgules",
+  "Obsidian options": "Options Obsidian",
+  "Callouts": "Callouts",
+  "Convert to GitHub alerts": "Convertir en alertes GitHub",
+  "Before and after": "Avant et après",
+  "In the KB": "Dans la KB",
+  "In the repo": "Dans le dépôt",
+  "No note to show yet.": "Aucune note à afficher pour l'instant.",
+  "Looking for a note…": "Recherche d'une note…",
+  "Interval": "Intervalle",
+  "Every pair syncs on the same schedule: {interval}. It is set in Settings.":
+    "Tous les sync suivent le même rythme : {interval}. Il se règle dans Réglages.",
+  "Git hooks": "Hooks Git",
+  "This folder is not in a Git repository.": "Ce dossier n'est pas dans un dépôt Git.",
+  "{manager} manages the hooks of this repository: Markoo gives the lines to add instead of writing them.":
+    "{manager} gère les hooks de ce dépôt : Markoo donne les lignes à ajouter au lieu de les écrire.",
+  "installed": "installé",
+  "Branches covered, separated by commas (all if empty)":
+    "Branches concernées, séparées par des virgules (toutes si vide)",
+  "Install": "Installer",
+  "Uninstall": "Désinstaller",
+  "Installing syncs nothing: hooks act the next time Git runs them.":
+    "Installer ne synchronise rien : les hooks agissent à la prochaine exécution de Git.",
+  "API and MCP": "API et MCP",
+  "API: {api} · MCP over HTTP: {mcp}": "API : {api} · MCP en HTTP : {mcp}",
+  "off": "inactive",
+  "Knowledge base": "Base de connaissances",
+  "Direction": "Direction",
+  "Summary": "Résumé",
+  "Known vaults": "Coffres connus",
+  "Folder of the knowledge base": "Dossier de la base de connaissances",
+  "Detect from the folder": "Détecter depuis le dossier",
+  "Name of the pair": "Nom du sync",
+  "This folder does not exist.": "Ce dossier n'existe pas.",
+  "✓ {label} {kind} detected": "✓ {kind} {label} détecté",
+  "vault": "coffre",
+  "folder": "dossier",
+  "Use lowercase letters, digits and hyphens.": "Utilisez des minuscules, des chiffres et des tirets.",
+  "Folder in the Git repository": "Dossier dans le dépôt Git",
+  "✓ Git repository, branch {branch}": "✓ Dépôt Git, branche {branch}",
+  "✓ Git repository": "✓ Dépôt Git",
+  "Markoo never commits or pushes: what it writes here stays for you to review.":
+    "Markoo ne fait jamais de commit ni de push : ce qu'il écrit ici reste à vérifier par vous.",
+  "Git hooks (optional)": "Hooks Git (facultatif)",
+  "The interval is set for every pair in Settings.": "L'intervalle se règle pour tous les sync dans Réglages.",
+  "Continue": "Continuer",
+  "Create and sync": "Créer et synchroniser",
+  "{count} file(s) exist on both sides with different content. They will wait for your decision.":
+    "{count} fichier(s) existent des deux côtés avec un contenu différent. Ils attendront votre décision.",
+};
+
+let current = $state<Locale>("en");
+
+/** The language the interface is shown in. */
+export function locale(): Locale {
+  return current;
+}
+
+/** Switches the interface language; any value other than "fr" means English. */
+export function setLocale(value: string) {
+  current = value === "fr" ? "fr" : "en";
+}
+
+/**
+ * The text in the current language, with `{name}` replaced by the given values.
+ * Reading it inside a template makes the template follow a language change.
+ */
+export function t(text: string, values?: Record<string, string | number>): string {
+  let out = current === "fr" ? (fr[text] ?? text) : text;
+  if (values) {
+    for (const [name, value] of Object.entries(values)) {
+      out = out.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return out;
+}

@@ -290,12 +290,15 @@ fn global_settings_can_be_read_and_changed() {
     let env = Env::new().with_saved_pair();
     service::update_global_settings(
         &env.paths,
-        &settings(&json!({"schedule.interval": "off", "api.port": "5000"})),
+        &settings(
+            &json!({"schedule.interval": "off", "api.port": "5000", "general.language": "fr"}),
+        ),
     )
     .unwrap();
     let view = service::global_settings(&env.paths).unwrap();
     assert_eq!(view["interval"], "off");
     assert_eq!(view["api_port"], 5000);
+    assert_eq!(view["language"], "fr");
 }
 
 #[test]

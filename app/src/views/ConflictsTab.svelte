@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../lib/i18n.svelte";
   import { api, errorText, type Conflict, type Conflicts, type Direction } from "../lib/api";
 
   let {
@@ -66,16 +67,16 @@
 {/if}
 
 {#if all === null}
-  <p class="muted">Comparing both sides…</p>
+  <p class="muted">{t("Comparing both sides…")}</p>
 {:else if current}
-  <button class="back" type="button" onclick={() => (current = null)}>‹ All conflicts</button>
+  <button class="back" type="button" onclick={() => (current = null)}>{t("‹ All conflicts")}</button>
   <h2 class="path">{current.path}</h2>
   <div class="columns">
     {#each [["KB", current.kb], ["Base", current.base], ["Repo", current.repo]] as [title, text]}
       <section>
-        <h3>{title}</h3>
+        <h3>{t(String(title))}</h3>
         {#if text === null || text === undefined}
-          <p class="muted">{title === "Base" ? "No common version" : "Deleted on this side"}</p>
+          <p class="muted">{title === "Base" ? t("No common version") : t("Deleted on this side")}</p>
         {:else}
           <pre>{text}</pre>
         {/if}
@@ -84,34 +85,26 @@
   </div>
 
   {#if !oneWay}
-    <label for="result">Result</label>
+    <label for="result">{t("Result")}</label>
     <textarea id="result" class="mono" rows="10" bind:value={result} spellcheck="false"></textarea>
   {/if}
 
   <div class="row buttons">
     {#if oneWay}
-      <button type="button" disabled={busy} onclick={() => settle({ pushToSource: true })}>
-        Copy the target to the source
-      </button>
-      <button type="button" disabled={busy} onclick={() => settle({ keep: sourceSide })}>
-        Keep the source
-      </button>
-      <button type="button" disabled={busy} onclick={() => settle({ keep: sourceSide === "kb" ? "repo" : "kb" })}>
-        Keep the target, stop syncing this file
-      </button>
+      <button type="button" disabled={busy} onclick={() => settle({ pushToSource: true })}>{t("Copy the target to the source")}</button>
+      <button type="button" disabled={busy} onclick={() => settle({ keep: sourceSide })}>{t("Keep the source")}</button>
+      <button type="button" disabled={busy} onclick={() => settle({ keep: sourceSide === "kb" ? "repo" : "kb" })}>{t("Keep the target, stop syncing this file")}</button>
     {:else}
-      <button class="primary" type="button" disabled={busy} onclick={() => settle({ content: result })}>
-        Use the result
-      </button>
-      <button type="button" disabled={busy} onclick={() => settle({ keep: "kb" })}>Keep the KB</button>
-      <button type="button" disabled={busy} onclick={() => settle({ keep: "repo" })}>Keep the repo</button>
-      <button type="button" disabled={busy} onclick={() => settle({ keep: "both" })}>Keep both</button>
+      <button class="primary" type="button" disabled={busy} onclick={() => settle({ content: result })}>{t("Use the result")}</button>
+      <button type="button" disabled={busy} onclick={() => settle({ keep: "kb" })}>{t("Keep the KB")}</button>
+      <button type="button" disabled={busy} onclick={() => settle({ keep: "repo" })}>{t("Keep the repo")}</button>
+      <button type="button" disabled={busy} onclick={() => settle({ keep: "both" })}>{t("Keep both")}</button>
     {/if}
   </div>
-  <p class="muted hint">What gets overwritten is kept in Markoo's backups.</p>
+  <p class="muted hint">{t("What gets overwritten is kept in Markoo's backups.")}</p>
 {:else}
   {#if all.conflicts.length === 0}
-    <p class="muted">Nothing to settle.</p>
+    <p class="muted">{t("Nothing to settle.")}</p>
   {:else}
     <ul>
       {#each all.conflicts as issue (issue.id)}
@@ -123,14 +116,12 @@
     </ul>
   {/if}
   {#if all.excluded.length > 0}
-    <h2 class="excluded">Excluded from sync</h2>
+    <h2 class="excluded">{t("Excluded from sync")}</h2>
     <ul>
       {#each all.excluded as item (item.id)}
         <li>
           <span class="muted path">{item.path}</span>
-          <button type="button" disabled={busy} onclick={() => settle({ keep: sourceSide }, item.id)}>
-            Sync it again
-          </button>
+          <button type="button" disabled={busy} onclick={() => settle({ keep: sourceSide }, item.id)}>{t("Sync it again")}</button>
         </li>
       {/each}
     </ul>

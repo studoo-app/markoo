@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../lib/i18n.svelte";
   import {
     api,
     errorText,
@@ -66,42 +67,38 @@
 </script>
 
 <section class="field">
-  <h2>Interval</h2>
+  <h2>{t("Interval")}</h2>
   {#if globals}
-    <p class="muted">Every sync runs on the same schedule: {globals.interval}. It is set in Settings.</p>
+    <p class="muted">{t("Every sync runs on the same schedule: {interval}. It is set in Settings.", { interval: globals.interval })}</p>
   {/if}
 </section>
 
 <section class="field">
-  <h2>Git hooks</h2>
+  <h2>{t("Git hooks")}</h2>
   {#if state_ && !state_.git}
-    <p class="warn">This folder is not in a Git repository.</p>
+    <p class="warn">{t("This folder is not in a Git repository.")}</p>
   {:else}
     {#if state_?.manager}
       <p class="warn">
-        {state_.manager} manages the hooks of this repository: Markoo gives the lines to add instead of writing them.
+        {t("{manager} manages the hooks of this repository: Markoo gives the lines to add instead of writing them.", { manager: state_.manager })}
       </p>
     {/if}
     {#each choices as hook}
       <label class="choice">
         <input type="checkbox" bind:group={wanted} value={hook} />
         {hook}
-        {#if state_?.installed.includes(hook)}<span class="ok">installed</span>{/if}
+        {#if state_?.installed.includes(hook)}<span class="ok">{t("installed")}</span>{/if}
       </label>
     {/each}
     <div class="branches">
-      <label for="branches">Branches covered, separated by commas (all if empty)</label>
+      <label for="branches">{t("Branches covered, separated by commas (all if empty)")}</label>
       <input id="branches" type="text" bind:value={branches} spellcheck="false" />
     </div>
     <div class="row">
-      <button class="primary" type="button" disabled={busy} onclick={() => run(() => api.installHooks(pair.name))}>
-        Install
-      </button>
-      <button type="button" disabled={busy || !state_?.installed.length} onclick={() => run(() => api.uninstallHooks(pair.name))}>
-        Uninstall
-      </button>
+      <button class="primary" type="button" disabled={busy} onclick={() => run(() => api.installHooks(pair.name))}>{t("Install")}</button>
+      <button type="button" disabled={busy || !state_?.installed.length} onclick={() => run(() => api.uninstallHooks(pair.name))}>{t("Uninstall")}</button>
     </div>
-    <p class="muted hint">Installing syncs nothing: hooks act the next time Git runs them.</p>
+    <p class="muted hint">{t("Installing syncs nothing: hooks act the next time Git runs them.")}</p>
   {/if}
   {#if error}
     <p class="error" role="alert">{error}</p>
@@ -115,11 +112,10 @@
 </section>
 
 <section class="field">
-  <h2>API and MCP</h2>
+  <h2>{t("API and MCP")}</h2>
   {#if globals}
     <p class="muted">
-      API: {globals.api_enabled ? `http://127.0.0.1:${globals.api_port}` : "off"} ·
-      MCP over HTTP: {globals.api_enabled && globals.mcp_http ? `http://127.0.0.1:${globals.api_port}/mcp` : "off"}
+      {t("API: {api} · MCP over HTTP: {mcp}", { api: globals.api_enabled ? `http://127.0.0.1:${globals.api_port}` : t("off"), mcp: globals.api_enabled && globals.mcp_http ? `http://127.0.0.1:${globals.api_port}/mcp` : t("off") })}
     </p>
   {/if}
   <pre>{mcpCommand}</pre>

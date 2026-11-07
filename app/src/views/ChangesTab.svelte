@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../lib/i18n.svelte";
   import { api, errorText, type Plan, type PlanEntry } from "../lib/api";
   import PlanList from "../lib/PlanList.svelte";
 
@@ -35,16 +36,16 @@
 {#if error}
   <p class="error" role="alert">{error}</p>
 {:else if plan === null}
-  <p class="muted">Comparing both sides…</p>
+  <p class="muted">{t("Comparing both sides…")}</p>
 {:else}
   <PlanList {plan} onselect={show} />
   {#if selected}
     <section>
       <h2 class="path">{selected}</h2>
       {#if patch === null}
-        <p class="muted">Loading…</p>
+        <p class="muted">{t("Loading…")}</p>
       {:else if patch === ""}
-        <p class="muted">No difference in the text.</p>
+        <p class="muted">{t("No difference in the text.")}</p>
       {:else}
         <pre>{patch}</pre>
       {/if}

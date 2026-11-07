@@ -401,6 +401,7 @@ pub fn global_settings(paths: &Paths) -> Result<Value, Error> {
         "api_port": config.api.port,
         "mcp_http": config.mcp.http,
         "mcp_allow_config_write": config.mcp.allow_config_write,
+        "language": config.language.code(),
     }))
 }
 

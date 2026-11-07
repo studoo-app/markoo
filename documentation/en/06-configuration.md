@@ -65,6 +65,7 @@ flowchart TD
 [general]
 log_level = "info"
 backups_keep = 20          # number of backups kept per file
+language = "en"            # en | fr: language of the configuration UI
 
 [schedule]
 interval = "5m"

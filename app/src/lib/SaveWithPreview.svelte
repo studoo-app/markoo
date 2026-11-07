@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "./i18n.svelte";
   import { api, errorText, type Plan, type Settings } from "./api";
   import PlanList from "./PlanList.svelte";
 
@@ -46,24 +47,22 @@
   <p class="error" role="alert">{error}</p>
 {/if}
 {#if saved && !dirty}
-  <p class="ok" role="status">Saved.</p>
+  <p class="ok" role="status">{t("Saved.")}</p>
 {/if}
 
 {#if preview}
   <section>
-    <h2>Preview</h2>
-    <p class="muted">Nothing is saved yet. Saving lets Markoo sync with these settings.</p>
+    <h2>{t("Preview")}</h2>
+    <p class="muted">{t("Nothing is saved yet. Saving lets Markoo sync with these settings.")}</p>
     <div class="card"><PlanList plan={preview} /></div>
     <div class="row end">
-      <button type="button" onclick={() => (preview = null)}>Back</button>
-      <button class="primary" type="button" disabled={busy} onclick={save}>Save</button>
+      <button type="button" onclick={() => (preview = null)}>{t("Back")}</button>
+      <button class="primary" type="button" disabled={busy} onclick={save}>{t("Save")}</button>
     </div>
   </section>
 {:else}
   <div class="row end">
-    <button class="primary" type="button" disabled={!dirty || busy} onclick={showPreview}>
-      Save and preview
-    </button>
+    <button class="primary" type="button" disabled={!dirty || busy} onclick={showPreview}>{t("Save and preview")}</button>
   </div>
 {/if}
 

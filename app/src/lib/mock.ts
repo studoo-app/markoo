@@ -121,7 +121,7 @@ export function installMock(): void {
       case "global_settings":
         return {
           interval: "300s", on_startup: true, api_enabled: true, api_port: 4848,
-          mcp_http: true, mcp_allow_config_write: false,
+          mcp_http: true, mcp_allow_config_write: false, language: "en",
         };
       case "hooks_state":
         return { git: true, installed: ["post-merge"], manager: null };

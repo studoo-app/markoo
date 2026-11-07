@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../lib/i18n.svelte";
   import { api, errorText, type PairView, type Settings, type TransformSample } from "../lib/api";
   import SaveWithPreview from "../lib/SaveWithPreview.svelte";
 
@@ -63,63 +64,63 @@
   });
 </script>
 
-<h2>Generic options</h2>
+<h2>{t("Generic options")}</h2>
 <div class="field top">
-  <label for="links">Links</label>
+  <label for="links">{t("Links")}</label>
   <select id="links" bind:value={links}>
-    <option value="markdown">Convert to Markdown links</option>
-    <option value="keep">Leave as they are</option>
+    <option value="markdown">{t("Convert to Markdown links")}</option>
+    <option value="keep">{t("Leave as they are")}</option>
   </select>
 </div>
 <div class="field">
-  <label for="assets">Attachments folder in the repo</label>
+  <label for="assets">{t("Attachments folder in the repo")}</label>
   <input id="assets" type="text" bind:value={assetsDir} spellcheck="false" />
 </div>
 <div class="field">
-  <label for="frontmatter">Frontmatter in the repo</label>
+  <label for="frontmatter">{t("Frontmatter in the repo")}</label>
   <select id="frontmatter" bind:value={frontmatter}>
-    <option value="filter">Keep, except some keys</option>
-    <option value="keep">Keep all of it</option>
-    <option value="drop">Remove all of it</option>
+    <option value="filter">{t("Keep, except some keys")}</option>
+    <option value="keep">{t("Keep all of it")}</option>
+    <option value="drop">{t("Remove all of it")}</option>
   </select>
 </div>
 {#if frontmatter === "filter"}
   <div class="field">
-    <label for="dropped">Keys left out, separated by commas</label>
+    <label for="dropped">{t("Keys left out, separated by commas")}</label>
     <input id="dropped" type="text" bind:value={dropped} spellcheck="false" />
   </div>
 {/if}
 
 {#if isObsidian}
-  <h2>Obsidian options</h2>
+  <h2>{t("Obsidian options")}</h2>
   <div class="field top">
-    <label for="callouts">Callouts</label>
+    <label for="callouts">{t("Callouts")}</label>
     <select id="callouts" bind:value={callouts}>
-      <option value="github">Convert to GitHub alerts</option>
-      <option value="keep">Leave as they are</option>
+      <option value="github">{t("Convert to GitHub alerts")}</option>
+      <option value="keep">{t("Leave as they are")}</option>
     </select>
   </div>
 {/if}
 
-<h2>Before and after</h2>
+<h2>{t("Before and after")}</h2>
 {#if error}
   <p class="error" role="alert">{error}</p>
 {:else if sample}
   <p class="muted path sample">{sample.path}</p>
   <div class="columns">
     <section>
-      <h3>In the KB</h3>
+      <h3>{t("In the KB")}</h3>
       <pre>{sample.before}</pre>
     </section>
     <section>
-      <h3>In the repo</h3>
+      <h3>{t("In the repo")}</h3>
       <pre>{sample.after}</pre>
     </section>
   </div>
 {:else if sampleLoaded}
-  <p class="muted">No note to show yet.</p>
+  <p class="muted">{t("No note to show yet.")}</p>
 {:else}
-  <p class="muted">Looking for a note…</p>
+  <p class="muted">{t("Looking for a note…")}</p>
 {/if}
 
 <SaveWithPreview pair={pair.name} {settings} onsaved={onchange} />
