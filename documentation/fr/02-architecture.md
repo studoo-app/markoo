@@ -129,7 +129,7 @@ Binaire `markoo` (`clap`) :
  \_\ /_/  |_| |_| |_|\__,_|_|  |_|\_\___/ \___/
 ```
 
-Si le terminal gère les couleurs, `<` est affiché en rose (`#FF0070`) et `>` en vert (`#00FF7F`), les couleurs du logo. Sinon (`NO_COLOR` défini, sortie qui n'est pas un terminal), la bannière est affichée en texte brut.
+Si le terminal gère les couleurs, `<` est affiché dans le rose du logo (`#FF0070`) et `>` en vert (`#00B35A`, plus foncé que le `#00FF7F` du logo pour rester lisible sur un terminal clair). Sinon (`NO_COLOR` défini, sortie qui n'est pas un terminal), la bannière est affichée en texte brut.
 
 ### `markoo-daemon`
 
@@ -141,7 +141,7 @@ Déclare les outils MCP et les relie au moteur via `service`. Le daemon l'héber
 
 ### `app/` — Tauri 2
 
-- **Barre de menus** : les deux flèches de l'ancre, qui suivent la couleur de chaque barre de menus, sous un rond qui montre l'état (🟢 à jour, 🔵 synchro en cours, 🟠 conflits ou erreurs), « Synchroniser maintenant ».
+- **Barre de menus** : les deux flèches du logo, qui suivent la couleur de chaque barre de menus, sous un rond qui montre l'état (🟢 à jour, 🔵 synchro en cours, 🟠 conflits ou erreurs), « Synchroniser maintenant ».
 - **Fenêtre principale** : liste des paires, des changements en attente, historique.
 - **Vue de conflit** : trois colonnes (KB · base · repo) et résultat éditable.
 - **Configuration** : assistant de création de paire, choix du sens (→ · ⇄ · ←), filtres avec aperçu, transformations, déclencheurs. Détail dans [Interface de configuration](08-interface-de-configuration.md).

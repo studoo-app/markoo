@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- New logo, drawn from the menu bar icon: a dot above two arrows. New colors in the app, its icon and the command line banner.
+
 ## [1.0.0-rc.3] - 2026-10-31
 
 ### Changed

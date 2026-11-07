@@ -7,8 +7,9 @@ const BANNER: &str = include_str!("../../../assets/cli-banner.txt");
 const CHEVRON_SPLIT: usize = 5;
 /// Column where the banner's `markoo` starts.
 const NAME_START: usize = 9;
-const ROSE: (u8, u8, u8) = (0xFF, 0x00, 0x70);
-const GREEN: (u8, u8, u8) = (0x00, 0xFF, 0x7F);
+const PINK: (u8, u8, u8) = (0xFF, 0x00, 0x70);
+/// Darker than the logo's `#00FF7F`, which cannot be read on a light terminal.
+const GREEN: (u8, u8, u8) = (0x00, 0xB3, 0x5A);
 
 /// Applies colors, or nothing when they are not wanted.
 #[derive(Debug, Clone, Copy)]
@@ -60,7 +61,7 @@ impl Style {
         self.paint(&format!("38;2;{r};{g};{b}"), text)
     }
 
-    /// The banner, with `<` in rose and `>` in green when colors are on.
+    /// The banner, with `<` in pink and `>` in green when colors are on.
     pub fn banner(self) -> String {
         let mut out = String::new();
         for line in BANNER.lines() {
@@ -72,7 +73,7 @@ impl Style {
                     .take(to.saturating_sub(from))
                     .collect()
             };
-            out.push_str(&self.rgb(ROSE, &part(0, CHEVRON_SPLIT)));
+            out.push_str(&self.rgb(PINK, &part(0, CHEVRON_SPLIT)));
             out.push_str(&self.rgb(GREEN, &part(CHEVRON_SPLIT, NAME_START)));
             out.push_str(&part(NAME_START, chars.len()));
             out.push('\n');
@@ -102,7 +103,7 @@ mod tests {
         let stripped = style
             .banner()
             .replace("\x1b[38;2;255;0;112m", "")
-            .replace("\x1b[38;2;0;255;127m", "")
+            .replace("\x1b[38;2;0;179;90m", "")
             .replace("\x1b[0m", "");
         assert_eq!(stripped.lines().collect::<Vec<_>>(), asset_lines());
     }

@@ -129,7 +129,7 @@ The `markoo` binary (`clap`):
  \_\ /_/  |_| |_| |_|\__,_|_|  |_|\_\___/ \___/
 ```
 
-When the terminal supports color, `<` is printed in rose (`#FF0070`) and `>` in green (`#00FF7F`), the logo's colors. Otherwise (`NO_COLOR` set, output not a terminal), the banner is printed as plain text.
+When the terminal supports color, `<` is printed in the logo's pink (`#FF0070`) and `>` in green (`#00B35A`, darker than the logo's `#00FF7F` so it can be read on a light terminal). Otherwise (`NO_COLOR` set, output not a terminal), the banner is printed as plain text.
 
 ### `markoo-daemon`
 
@@ -141,7 +141,7 @@ Declares the MCP tools and wires them to the engine through `service`. The daemo
 
 ### `app/` — Tauri 2
 
-- **Menu bar**: the two arrows of the anchor, which follow the color of each menu bar, under a dot showing the state (🟢 up to date, 🔵 syncing, 🟠 conflicts or errors); "Sync now".
+- **Menu bar**: the two arrows of the logo, which follow the color of each menu bar, under a dot showing the state (🟢 up to date, 🔵 syncing, 🟠 conflicts or errors); "Sync now".
 - **Main window**: list of pairs, pending changes, history.
 - **Conflict view**: three columns (KB · base · repo) and an editable result.
 - **Configuration**: pair creation wizard, direction choice (→ · ⇄ · ←), filters with preview, transformations, triggers. Details in [Configuration UI](08-configuration-ui.md).

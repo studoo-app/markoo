@@ -36,7 +36,7 @@
   <button class="home" type="button" onclick={() => (route = { name: "home" })} aria-label="Home">
     <picture>
       <source srcset={logoDark} media="(prefers-color-scheme: dark)" />
-      <img src={logo} alt="" width="26" height="24" />
+      <img src={logo} alt="" width="28" height="28" />
     </picture>
     <span>Markoo</span>
   </button>
