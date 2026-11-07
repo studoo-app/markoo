@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.4] - 2026-11-07
+
+### Added
+
+- The interface can be shown in French: choose the language in Settings. It is stored as `language` in the `[general]` section of `markoo.toml`.
+- The version number is shown next to the logo.
+- Markoo looks for a new version a few seconds after launch and shows a banner when one is out. Settings installs it, then restarts Markoo. Updates are signed with a key that the app checks before installing.
+
 ### Changed
 
 - New logo, drawn from the menu bar icon: a dot above two arrows. New colors in the app, its icon and the command line banner.
+- Each pair shows the Obsidian and Git logos, its folder names and a status dot. Screens say "Sync" instead of "Pairs".
+- The header shows the Markoo wordmark.
+
+### Known limits
+
+- No Homebrew formula yet, and no app for Linux or Windows.
+- No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
+- Updates are offered from published releases only, not from release candidates.
 
 ## [1.0.0-rc.3] - 2026-10-31
 
@@ -56,7 +72,8 @@ First release candidate. Keep a backup of your notes, and start on a copy.
 - No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
 - Not implemented, and ignored with a warning: `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, `schedule.pause_on_battery`, merging frontmatter by key.
 
-[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.3...HEAD
+[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.4...HEAD
+[1.0.0-rc.4]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/studoo-app/markoo/releases/tag/v1.0.0-rc.1
