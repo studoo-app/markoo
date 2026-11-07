@@ -1,5 +1,6 @@
 <script lang="ts">
   import { setLocale, t } from "../lib/i18n.svelte";
+  import { checkForUpdate, installUpdate, updates } from "../lib/updates.svelte";
   import { onMount } from "svelte";
   import { api, errorText, type AppInfo, type GlobalSettings, type Settings } from "../lib/api";
 
@@ -88,6 +89,29 @@
         <option value="en">English</option>
         <option value="fr">Français</option>
       </select>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>{t("Updates")}</h2>
+    <p class="muted">{t("Version {version}", { version: __APP_VERSION__ })}</p>
+    {#if updates.value.kind === "available"}
+      {@const update = updates.value.update}
+      <p class="ok" role="status">{t("Version {version} is available.", { version: update.version })}</p>
+      <div class="row end">
+        <button class="primary" type="button" onclick={() => installUpdate(update)}>{t("Install and restart")}</button>
+      </div>
+    {:else if updates.value.kind === "installing"}
+      <p class="muted" role="status">{t("Installing…")}</p>
+    {:else if updates.value.kind === "current"}
+      <p class="ok" role="status">{t("You have the latest version.")}</p>
+    {:else if updates.value.kind === "failed"}
+      <p class="error" role="alert">{t("Could not check for updates: {error}", { error: updates.value.message })}</p>
+    {/if}
+    <div class="row end">
+      <button type="button" disabled={updates.value.kind === "checking" || updates.value.kind === "installing"} onclick={() => checkForUpdate()}>
+        {updates.value.kind === "checking" ? t("Checking…") : t("Check for updates")}
+      </button>
     </div>
   </section>
 

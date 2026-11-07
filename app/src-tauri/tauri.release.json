@@ -4,10 +4,12 @@
       "binaries/markoo"
     ],
     "targets": [
-      "dmg"
+      "dmg",
+      "app"
     ],
     "macOS": {
       "signingIdentity": "-"
-    }
+    },
+    "createUpdaterArtifacts": true
   }
 }

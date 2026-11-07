@@ -532,6 +532,8 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 pub fn run() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let paths = Paths::resolve(&Overrides::default())?;
             let (daemon, note) = start_daemon(&paths);
