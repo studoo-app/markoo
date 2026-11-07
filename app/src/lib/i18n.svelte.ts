@@ -5,6 +5,16 @@ export type Locale = "en" | "fr";
 
 const fr: Record<string, string> = {
   "Home": "Accueil",
+  "Updates": "Mises à jour",
+  "Version {version}": "Version {version}",
+  "Check for updates": "Rechercher des mises à jour",
+  "Checking…": "Recherche…",
+  "You have the latest version.": "Vous avez la dernière version.",
+  "Version {version} is available.": "La version {version} est disponible.",
+  "Install and restart": "Installer et redémarrer",
+  "Installing…": "Installation…",
+  "Could not check for updates: {error}": "Impossible de rechercher les mises à jour : {error}",
+  "A new version ({version}) is available. Install it from Settings.": "Une nouvelle version ({version}) est disponible. Installez-la depuis les réglages.",
   "+ New sync": "+ Nouveau sync",
   "Sync": "Sync",
   "New sync": "Nouveau sync",
