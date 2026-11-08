@@ -142,7 +142,7 @@ Déclare les outils MCP et les relie au moteur via `service`. Le daemon l'héber
 ### `app/` — Tauri 2
 
 - **Barre de menus** : les deux flèches du logo, qui suivent la couleur de chaque barre de menus, sous un rond qui montre l'état (🟢 à jour, 🔵 synchro en cours, 🟠 conflits ou erreurs), « Synchroniser maintenant ».
-- **Fenêtre principale** : liste des paires, des changements en attente, historique.
+- **Fenêtre principale** : une barre latérale (Synchros, Activité, Réglages) ; la liste des paires regroupées par type de KB, avec synchroniser maintenant, réglages et suppression sur chaque carte ; changements en attente et historique par paire ; une vue Activité qui liste les exécutions enregistrées de toutes les paires.
 - **Vue de conflit** : trois colonnes (KB · base · repo) et résultat éditable.
 - **Configuration** : assistant de création de paire, choix du sens (→ · ⇄ · ←), filtres avec aperçu, transformations, déclencheurs. Détail dans [Interface de configuration](08-interface-de-configuration.md).
 - Le front (Svelte 5, Vite) communique avec le cœur Rust via les **commandes Tauri** et reçoit les événements via `emit`.

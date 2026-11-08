@@ -76,7 +76,7 @@ gantt
 **Status**: done, tried with Claude Code over stdio and HTTP on a sample pair. Other MCP clients have not been tried.
 
 ### M7 — Tauri app
-- Menu bar, list of pairs, pending changes, history.
+- Menu bar, sidebar, list of pairs, pending changes, history per pair and Activity across pairs.
 - Three-column conflict view with an editor.
 - [Configuration UI](08-configuration-ui.md): creation wizard, direction choice, filters with preview, transformations, triggers.
 
