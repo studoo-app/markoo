@@ -76,7 +76,7 @@ gantt
 **État** : terminé, essayé avec Claude Code en stdio et en HTTP sur une paire d'exemple. Les autres clients MCP n'ont pas été essayés.
 
 ### M7 — App Tauri
-- Barre de menus, liste des paires, changements en attente, historique.
+- Barre de menus, barre latérale, liste des paires, changements en attente, historique par paire et Activité sur toutes les paires.
 - Vue de conflit en trois colonnes avec éditeur.
 - [Interface de configuration](08-interface-de-configuration.md) : assistant de création, choix du sens, filtres avec aperçu, transformations, déclencheurs.
 

@@ -52,7 +52,12 @@ flowchart TD
     PAIR --> T4["Onglet Déclencheurs"]
     PAIR --> T5["Onglet Conflits<br/>et divergences"]
     PAIR --> T6["Onglet Historique"]
-    HOME -->|⚙️| GLOB["Réglages globaux<br/>intervalle, API, MCP, sauvegardes"]
+    SIDE["Barre latérale<br/>Synchros · Activité · Réglages"] -->|Synchros| HOME
+    SIDE -->|Activité| ACT["Activité<br/>exécutions de toutes les paires"]
+    ACT -->|clic sur une exécution| T6
+    SIDE -->|Réglages| GLOB["Réglages globaux<br/>intervalle, API, MCP, sauvegardes"]
+    HOME -->|carte : réglages| T1
+    HOME -->|carte : synchroniser| SYNC
     WIZ -->|Créer| PREV["Aperçu (dry-run)"]
     T1 & T2 & T3 -->|Enregistrer| PREV
     PREV -->|Confirmer| SYNC
@@ -63,22 +68,31 @@ flowchart TD
 ### Accueil : liste des paires
 
 ```text
-┌─ Markoo ──────────────────────────────────────────────────── ⚙️ ─┐
-│                                                                  │
-│  Paires                                        [ + Nouvelle ]    │
-│                                                                  │
-│  ● clara      Obsidian  Projets/Clara  ⇄  clara/docs             │
-│               ✅ À jour · il y a 2 min · toutes les 5 min        │
-│                                                                  │
-│  ● markoo     Obsidian  Projets/Markoo  ←  markoo/documentation  │
-│               ⚠️ 1 divergence · il y a 1 h · hook post-merge     │
-│                                                                  │
-│  ○ notes-api  Markdown  ~/notes/api  →  api/docs     (en pause)  │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
+┌─ Markoo — v1.0.0 ────────────────────────────────────────────────────────┐
+│ MARKOO      │  Vos sync.                                 3 sync │ 1 à régler │
+│ ─────────── │  ───────────────────────────────────────────────────────── │
+│ ▣ Sync      │  [ 🔍 Rechercher dans vos sync…                        ]   │
+│             │                                                            │
+│             │  Coffres Obsidian  wikilinks, intégrations et callouts…    │
+│             │  ┌──────────────────────────────────────────────────────┐  │
+│             │  │ 📁 clara             il y a 2 min  [À RÉGLER] ⟳ ⚙ 🗑  │  │
+│             │  │    Clara ⇄ docs – 1 à régler   dernière synchro      │  │
+│             │  └──────────────────────────────────────────────────────┘  │
+│             │  ┌──────────────────────────────────────────────────────┐  │
+│             │  │ 📁 markoo            il y a 1 h      [À JOUR] ⟳ ⚙ 🗑  │  │
+│             │  │    Markoo ← documentation – à jour                    │  │
+│             │  └──────────────────────────────────────────────────────┘  │
+│             │  [ + ajouter un sync ]                                     │
+│ ∿ Activité  │                                                            │
+│ ⚙ Réglages  │  Dossiers Markdown  Markdown simple, copié tel quel        │
+└─────────────┴────────────────────────────────────────────────────────────┘
 ```
 
-Chaque paire affiche le **type de sa KB** (icône ou libellé : Obsidian, Markdown…), puis le dossier de la KB et celui du repo. La flèche entre les deux dossiers indique toujours le sens : `⇄` bidirectionnel, `→` KB vers repo, `←` repo vers KB.
+Les paires sont regroupées par **type de KB** (coffres Obsidian, dossiers Markdown…). Chaque carte montre le dossier de la KB et celui du repo, l'heure de la dernière synchro enregistrée, un état (À jour, Synchronisation, À régler, En pause, Erreur) et trois actions : synchroniser maintenant, ouvrir les réglages de la paire (onglet Général) et supprimer la synchro après confirmation (les fichiers restent en place). La flèche entre les deux dossiers indique toujours le sens : `⇄` bidirectionnel, `→` KB vers repo, `←` repo vers KB. Le titre de la fenêtre affiche la version.
+
+### Activité
+
+La vue **Activité** de la barre latérale liste les dernières synchros enregistrées de toutes les paires (jusqu'à 200), de la plus récente à la plus ancienne et regroupées par jour. Une synchro est enregistrée quand elle a écrit, déplacé ou signalé un fichier, ou quand elle a échoué. Chaque exécution montre sa paire, son heure, sa durée, ce qui l'a déclenchée et son résultat (Synchronisé, À régler, Échec). Des pastilles filtrent la liste par paire, et un clic sur une exécution ouvre l'onglet Historique de sa paire.
 
 ### Onglet Général : KB, repo et sens
 
