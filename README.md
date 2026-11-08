@@ -37,6 +37,13 @@ Knowledge base tools are supported through **adapters**. **Obsidian is the first
 - **Desktop app**: menu bar status, pair setup wizard, side-by-side conflict view.
 - **Cross-platform**: the app runs on macOS; the command line also runs on Linux and Windows.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/app-interface.png">
+    <img src="assets/app-interface-light.png" alt="interface app" width="900">
+  </picture>
+</p>
+
 ## How it works
 
 For every file, Markoo compares three versions: the knowledge base, the repo, and the **base** — the content at the last successful sync. The base tells which side changed, so Markoo can copy, merge or flag a conflict without guessing.

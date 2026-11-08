@@ -36,6 +36,13 @@ Les outils de base de connaissance sont pris en charge par des **adaptateurs**. 
 - **Application desktop** : état dans la barre de menus, assistant de création de paire, vue de conflit côte à côte.
 - **Multi-plateforme** : l'app tourne sur macOS ; la ligne de commande tourne aussi sur Linux et Windows.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/app-interface.png">
+    <img src="assets/app-interface-light.png" alt="interface app" width="900">
+  </picture>
+</p>
+
 ## Fonctionnement
 
 Pour chaque fichier, Markoo compare trois versions : la base de connaissance, le repo et la **base**, c'est-à-dire le contenu lors de la dernière synchro réussie. La base indique quel côté a changé : Markoo peut ainsi copier, fusionner ou signaler un conflit sans deviner.
