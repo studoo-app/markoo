@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.6] - 2026-11-08
+
 ### Added
 
 - Projects: syncs are grouped by project, for example the project "Markoo" holds the syncs "documentation" and "skill". A project is named when its first sync is created; the next syncs pick it or name a new one. It is stored as `project` in each `[[pair]]` of `markoo.toml`, and the spelling already in use is kept regardless of case.
@@ -23,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Creating a pair now requires a project: `markoo pair add` needs `--project`, the app asks for one, and `POST /pairs` answers `400` without `project`. Syncs created before projects keep working without one and are listed after the projects.
 - Sync names no longer need to be unique across all projects, only within their project, regardless of case. Names and project names cannot contain `/`.
 - The `"pair"` fields of JSON outputs (`--json`, API, MCP: plans, status, job reports, conflicts, history) and the pairs listed by `GET /projects` are ids, not names. `markoo hook install` writes the id in the hook scripts.
+
+### Known limits
+
+- No Homebrew formula yet, and no app for Linux or Windows.
+- No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
+- Updates are offered from published releases only, not from release candidates.
 
 ## [1.0.0-rc.5] - 2026-11-08
 
@@ -110,7 +118,8 @@ First release candidate. Keep a backup of your notes, and start on a copy.
 - No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
 - Not implemented, and ignored with a warning: `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, `schedule.pause_on_battery`, merging frontmatter by key.
 
-[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.5...HEAD
+[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.6...HEAD
+[1.0.0-rc.6]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.5...v1.0.0-rc.6
 [1.0.0-rc.5]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.4...v1.0.0-rc.5
 [1.0.0-rc.4]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.2...v1.0.0-rc.3
