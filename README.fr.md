@@ -102,7 +102,6 @@ Commencez par le [guide utilisateur](documentation/fr/10-guide-utilisateur.md). 
 
 Les contributions sont les bienvenues. Avant de contribuer :
 
-- lisez [AGENTS.md](AGENTS.md) : il liste les règles et conventions du projet (elles valent aussi pour les humains) ;
 - la documentation est bilingue : toute modification dans `documentation/fr/` doit être reportée dans `documentation/en/` dans le même commit, et inversement.
 
 ## Licence

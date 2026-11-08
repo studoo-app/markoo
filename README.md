@@ -103,7 +103,6 @@ Start with the [user guide](documentation/en/10-user-guide.md). The design docum
 
 Contributions are welcome. Before contributing:
 
-- read [AGENTS.md](AGENTS.md): it lists the project's invariants and conventions (they apply to humans too);
 - documentation is bilingual: any change in `documentation/en/` must be mirrored in `documentation/fr/` in the same commit, and vice versa.
 
 ## License
