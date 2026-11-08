@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "./i18n.svelte";
 
 export type Direction = "both" | "kb-to-repo" | "repo-to-kb";
 export type TargetChanges = "protect" | "overwrite";
@@ -74,6 +75,7 @@ export interface GlobalSettings {
   api_port: number;
   mcp_http: boolean;
   mcp_allow_config_write: boolean;
+  language: string;
 }
 
 export interface PlanEntry {
@@ -205,18 +207,28 @@ export function describeEntry(entry: PlanEntry): { mark: string; text: string } 
   switch (entry.kind) {
     case "copy":
       return entry.side === "repo"
-        ? { mark: "→", text: "copy to the repo" }
-        : { mark: "←", text: "copy to the KB" };
+        ? { mark: "→", text: t("copy to the repo") }
+        : { mark: "←", text: t("copy to the KB") };
     case "merge":
-      return { mark: "⇄", text: "merge both sides" };
+      return { mark: "⇄", text: t("merge both sides") };
     case "trash":
-      return { mark: "🗑", text: `move to the trash on the ${entry.side === "repo" ? "repo" : "KB"} side` };
+      return {
+        mark: "🗑",
+        text: t("move to the trash on the {side} side", {
+          side: entry.side === "repo" ? t("repo") : "KB",
+        }),
+      };
     case "rename":
-      return { mark: "↪", text: `rename to ${entry.to ?? "?"}` };
+      return { mark: "↪", text: t("rename to {name}", { name: entry.to ?? "?" }) };
     case "pending":
-      return { mark: "⚠", text: entry.issue === "divergence" ? "divergence: waits for you" : "conflict: waits for you" };
+      return {
+        mark: "⚠",
+        text: entry.issue === "divergence"
+          ? t("divergence: waits for you")
+          : t("conflict: waits for you"),
+      };
     case "not-in-source":
-      return { mark: "·", text: "only in the target: left alone" };
+      return { mark: "·", text: t("only in the target: left alone") };
     default:
       return { mark: "·", text: entry.kind };
   }

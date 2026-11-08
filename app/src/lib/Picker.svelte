@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "./i18n.svelte";
   import { open } from "@tauri-apps/plugin-dialog";
 
   let { value = $bindable(), id }: { value: string; id: string } = $props();
@@ -11,5 +12,5 @@
 
 <div class="row">
   <input {id} type="text" bind:value spellcheck="false" />
-  <button type="button" onclick={browse}>Browse</button>
+  <button type="button" onclick={browse}>{t("Browse")}</button>
 </div>

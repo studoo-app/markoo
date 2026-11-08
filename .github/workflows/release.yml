@@ -138,12 +138,27 @@ jobs:
             echo "APPLE_PASSWORD=$APPLE_PASSWORD"
             echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
           } >> "$GITHUB_ENV"
+      # The updater checks a signature made with this key: see the updater
+      # section of the app configuration.
       - run: npx tauri build --target ${{ matrix.target }} --config src-tauri/tauri.release.json
         working-directory: app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      # Both architectures make an archive with the same name: each one gets
+      # its target in the name, so that the release keeps them apart. All the
+      # files go in one flat folder, so that the release job finds them as is.
+      - name: Gather the files of the release by architecture
+        run: |
+          bundle="app/src-tauri/target/${{ matrix.target }}/release/bundle"
+          mkdir dist
+          cp "$bundle"/dmg/*.dmg dist/
+          cp "$bundle"/macos/*.app.tar.gz "dist/Markoo-${{ matrix.target }}.app.tar.gz"
+          cp "$bundle"/macos/*.app.tar.gz.sig "dist/Markoo-${{ matrix.target }}.app.tar.gz.sig"
       - uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.target }}
-          path: app/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+          path: dist/*
           if-no-files-found: error
 
   release:
@@ -171,6 +186,25 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           awk -v heading="## [$version]" 'index($0, heading) == 1 { found = 1; next } /^## \[/ { found = 0 } found' CHANGELOG.md > notes.md
           test -s notes.md
+          python3 - "$version" "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" < notes.md > artifacts/latest.json <<'EOF'
+          import datetime, json, pathlib, sys
+          version, tag, repo = sys.argv[1:4]
+          platforms = {}
+          for arch, target in [("aarch64", "aarch64-apple-darwin"), ("x86_64", "x86_64-apple-darwin")]:
+              name = f"Markoo-{target}.app.tar.gz"
+              platforms[f"darwin-{arch}"] = {
+                  "signature": pathlib.Path("artifacts", name + ".sig").read_text().strip(),
+                  "url": f"https://github.com/{repo}/releases/download/{tag}/{name}",
+              }
+          notes = sys.stdin.read().strip()
+          document = {
+              "version": version,
+              "notes": notes,
+              "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "platforms": platforms,
+          }
+          print(json.dumps(document, indent=2, ensure_ascii=False))
+          EOF
           prerelease=""
           case "$version" in *-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" artifacts/* --draft $prerelease --verify-tag --title "Markoo $version" --notes-file notes.md

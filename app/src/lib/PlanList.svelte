@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "./i18n.svelte";
   import { describeEntry, type Plan, type PlanEntry } from "./api";
 
   let {
@@ -14,30 +15,29 @@
 {#if plan.summary}
   {@const summary = plan.summary}
   <p class="totals">
-    <strong>{summary.to_kb}</strong> file(s) to the KB ·
-    <strong>{summary.to_repo}</strong> to the repo
+    <strong>{summary.to_kb}</strong> {t("file(s) to the KB")} ·
+    <strong>{summary.to_repo}</strong> {t("to the repo")}
   </p>
   {#if summary.untracked_to_kb > 0}
     <div class="untracked" role="alert">
       <strong>
-        {summary.untracked_to_kb} of the files going to the KB are not tracked by Git in the repo.
+        {t("{count} of the files going to the KB are not tracked by Git in the repo.", { count: summary.untracked_to_kb })}
       </strong>
-      They may have nothing to do with this repository, if an earlier sync left them there for
-      example. Check them before going on.
+      {t("They may have nothing to do with this repository, if an earlier sync left them there for example. Check them before going on.")}
       <ul>
         {#each summary.untracked_examples as path}
           <li class="path">{path}</li>
         {/each}
       </ul>
       {#if summary.untracked_to_kb > summary.untracked_examples.length}
-        <p class="more">… and {summary.untracked_to_kb - summary.untracked_examples.length} more.</p>
+        <p class="more">{t("… and {count} more.", { count: summary.untracked_to_kb - summary.untracked_examples.length })}</p>
       {/if}
     </div>
   {/if}
 {/if}
 
 {#if plan.entries.length === 0 && plan.attachments.length === 0}
-  <p class="muted">Nothing to do: both sides agree.</p>
+  <p class="muted">{t("Nothing to do: both sides agree.")}</p>
 {:else}
   <ul>
     {#each plan.entries as entry}
@@ -55,15 +55,14 @@
   </ul>
   {#if plan.attachments.length > 0}
     <p class="muted hint">
-      Attachments: {attachmentsTo("repo")} to the repo, {attachmentsTo("kb")} to the KB,
-      {plan.attachments.length} in all.
+      {t("Attachments: {repo} to the repo, {kb} to the KB, {all} in all.", { repo: attachmentsTo("repo"), kb: attachmentsTo("kb"), all: plan.attachments.length })}
     </p>
   {/if}
 {/if}
 
 {#if plan.scan_issues.length > 0}
   <details>
-    <summary class="warn">{plan.scan_issues.length} warning(s)</summary>
+    <summary class="warn">{t("{count} warning(s)", { count: plan.scan_issues.length })}</summary>
     <ul class="issues">
       {#each plan.scan_issues as issue}
         <li><span class="path">{issue.path}</span>: {issue.message}</li>

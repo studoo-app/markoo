@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale, t } from "../lib/i18n.svelte";
   import { api, errorText, type ActivityEntry, type RunRecord } from "../lib/api";
   import Icon, { type IconName } from "../lib/Icon.svelte";
 
@@ -47,13 +48,13 @@
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
-    if (day.toDateString() === today.toDateString()) return "Today";
-    if (day.toDateString() === yesterday.toDateString()) return "Yesterday";
-    return day.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+    if (day.toDateString() === today.toDateString()) return t("Today");
+    if (day.toDateString() === yesterday.toDateString()) return t("Yesterday");
+    return day.toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" });
   }
 
   function time(milliseconds: number): string {
-    return new Date(milliseconds).toLocaleTimeString(undefined, { timeStyle: "short" });
+    return new Date(milliseconds).toLocaleTimeString(locale(), { timeStyle: "short" });
   }
 
   function duration(milliseconds: number): string {
@@ -62,38 +63,38 @@
 
   // What the run did, and whether it went well.
   function outcome(run: RunRecord): { label: string; text: string; tone: string; icon: IconName } {
-    if (run.error) return { label: "Failed", text: run.error, tone: "error", icon: "alert" };
+    if (run.error) return { label: t("Failed"), text: run.error, tone: "error", icon: "alert" };
     const report = run.report;
     const parts = report
       ? [
-          report.written.length > 0 && `${report.written.length} written`,
-          report.trashed.length > 0 && `${report.trashed.length} to the trash`,
-          report.pending.length > 0 && `${report.pending.length} to settle`,
-          report.skipped.length > 0 && `${report.skipped.length} skipped`,
+          report.written.length > 0 && t("{count} written", { count: report.written.length }),
+          report.trashed.length > 0 && t("{count} to the trash", { count: report.trashed.length }),
+          report.pending.length > 0 && t("{count} to settle", { count: report.pending.length }),
+          report.skipped.length > 0 && t("{count} skipped", { count: report.skipped.length }),
         ].filter((part): part is string => typeof part === "string")
       : [];
-    if (parts.length === 0) return { label: "No change", text: "nothing to do", tone: "muted", icon: "minus" };
+    if (parts.length === 0) return { label: t("No change"), text: t("nothing to do"), tone: "muted", icon: "minus" };
     if (report && report.pending.length > 0) {
-      return { label: "To settle", text: parts.join(" · "), tone: "warn", icon: "clock" };
+      return { label: t("To settle"), text: parts.join(" · "), tone: "warn", icon: "clock" };
     }
-    return { label: "Synced", text: parts.join(" · "), tone: "ok", icon: "check" };
+    return { label: t("Synced"), text: parts.join(" · "), tone: "ok", icon: "check" };
   }
 </script>
 
 <header class="intro">
   <div class="lead">
-    <h1>Activity.</h1>
-    <p>Every sync that ran, across all your syncs, the latest first. Open one to see its history.</p>
+    <h1>{t("Activity.")}</h1>
+    <p>{t("Every sync that ran, across all your syncs, the latest first. Open one to see its history.")}</p>
   </div>
   {#if entries?.length}
     <dl class="stats">
       <div>
         <dt>{visible.length}</dt>
-        <dd>{visible.length === 1 ? "run" : "runs"}</dd>
+        <dd>{visible.length === 1 ? t("run") : t("runs")}</dd>
       </div>
       <div>
         <dt>{failures}</dt>
-        <dd>{failures === 1 ? "failure" : "failures"}</dd>
+        <dd>{failures === 1 ? t("failure") : t("failures")}</dd>
       </div>
     </dl>
   {/if}
@@ -104,8 +105,8 @@
 {/if}
 
 {#if pairNames.length > 1}
-  <div class="filters" role="group" aria-label="Filter by sync">
-    <button type="button" class:active={filter === ""} onclick={() => (filter = "")}>All syncs</button>
+  <div class="filters" role="group" aria-label={t("Filter by sync")}>
+    <button type="button" class:active={filter === ""} onclick={() => (filter = "")}>{t("All syncs")}</button>
     {#each pairNames as name (name)}
       <button type="button" class:active={filter === name} onclick={() => (filter = name)}>{name}</button>
     {/each}
@@ -113,19 +114,19 @@
 {/if}
 
 {#if entries === null}
-  <p class="muted">Loading…</p>
+  <p class="muted">{t("Loading…")}</p>
 {:else if visible.length === 0}
   <div class="empty">
     <span class="tile big" aria-hidden="true"><Icon name="activity" size={28} stroke={1.25} /></span>
-    <h2>Nothing yet</h2>
-    <p class="muted">Syncs appear here once they have written, moved or flagged a file.</p>
+    <h2>{t("Nothing yet")}</h2>
+    <p class="muted">{t("Syncs appear here once they have written, moved or flagged a file.")}</p>
   </div>
 {:else}
   {#each days as day (day.key)}
     <section>
       <h2 class="group">
         <span class="group-title">{day.label}</span>
-        <span class="group-hint">{day.runs.length} {day.runs.length === 1 ? "run" : "runs"}</span>
+        <span class="group-hint">{day.runs.length} {day.runs.length === 1 ? t("run") : t("runs")}</span>
         <span class="rule" aria-hidden="true"></span>
       </h2>
       <ul>
@@ -141,7 +142,7 @@
             </button>
             <span class="meta">
               <strong>{time(entry.run.started_at)}</strong>
-              <em>{duration(entry.run.duration_ms)} · via {entry.run.trigger}</em>
+              <em>{duration(entry.run.duration_ms)} · {t("via {trigger}", { trigger: entry.run.trigger })}</em>
             </span>
             <span class="pill {result.tone}"><span class="dot" aria-hidden="true"></span>{result.label}</span>
           </li>

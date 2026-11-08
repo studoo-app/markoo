@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale, t } from "../lib/i18n.svelte";
   import { api, arrow, errorText, kbLabel, type PairView } from "../lib/api";
   import Icon from "../lib/Icon.svelte";
   import type { Tab } from "./Pair.svelte";
@@ -45,7 +46,8 @@
   };
 
   function group(type: string): { title: string; hint: string } {
-    return groupText[type] ?? { title: kbLabel(type), hint: "" };
+    const text = groupText[type];
+    return text ? { title: t(text.title), hint: t(text.hint) } : { title: kbLabel(type), hint: "" };
   }
 
   async function load() {
@@ -106,7 +108,7 @@
 
   /** "3 min ago", "yesterday"… */
   function ago(milliseconds: number): string {
-    const format = new Intl.RelativeTimeFormat("en", { numeric: "auto", style: "short" });
+    const format = new Intl.RelativeTimeFormat(locale(), { numeric: "auto", style: "short" });
     const seconds = Math.round((milliseconds - Date.now()) / 1000);
     const steps: [Intl.RelativeTimeFormatUnit, number][] = [
       ["second", 60],
@@ -125,38 +127,37 @@
   }
 
   function status(pair: PairView): { text: string; tone: string } {
-    if (pair.errors.length > 0) return { text: "Error", tone: "error" };
-    if (pair.active || syncing === pair.name) return { text: "Syncing", tone: "muted" };
-    if (pair.pending > 0) return { text: "To settle", tone: "warn" };
-    if (pair.paused) return { text: "Paused", tone: "muted" };
-    return { text: "Up to date", tone: "ok" };
+    if (pair.errors.length > 0) return { text: t("Error"), tone: "error" };
+    if (pair.active || syncing === pair.name) return { text: t("Syncing"), tone: "muted" };
+    if (pair.pending > 0) return { text: t("To settle"), tone: "warn" };
+    if (pair.paused) return { text: t("Paused"), tone: "muted" };
+    return { text: t("Up to date"), tone: "ok" };
   }
 
   function detail(pair: PairView): string {
     if (pair.errors.length > 0) return pair.errors[0];
-    if (pair.pending > 0) return `${pair.pending} to settle`;
-    if (pair.paused) return "paused";
-    return "in step";
+    if (pair.pending > 0) return t("{count} to settle", { count: pair.pending });
+    if (pair.paused) return t("paused");
+    return t("in step");
   }
 </script>
 
 <header class="intro">
   <div class="lead">
-    <h1>Your syncs.</h1>
+    <h1>{t("Your syncs.")}</h1>
     <p>
-      Folders Markoo keeps in step between your knowledge base and your Git repositories.
-      It only asks you when both sides changed.
+      {t("Folders Markoo keeps in step between your knowledge base and your Git repositories. It only asks you when both sides changed.")}
     </p>
   </div>
   {#if pairs?.length}
     <dl class="stats">
       <div>
         <dt>{pairs.length}</dt>
-        <dd>{pairs.length === 1 ? "sync" : "syncs"}</dd>
+        <dd>{pairs.length === 1 ? t("sync") : t("syncs")}</dd>
       </div>
       <div>
         <dt>{toSettle}</dt>
-        <dd>to settle</dd>
+        <dd>{t("to settle")}</dd>
       </div>
     </dl>
   {/if}
@@ -167,22 +168,22 @@
 {/if}
 
 {#if pairs === null}
-  <p class="muted">Loading…</p>
+  <p class="muted">{t("Loading…")}</p>
 {:else if pairs.length === 0}
   <div class="empty">
     <span class="tile big" aria-hidden="true"><Icon name="folder" size={28} stroke={1.25} /></span>
-    <h2>No sync yet</h2>
-    <p class="muted">A sync keeps a folder of your knowledge base in step with a folder of a Git repository.</p>
-    <button class="add" type="button" onclick={onnew}><Icon name="plus" size={14} stroke={2.5} />add a sync</button>
+    <h2>{t("No sync yet")}</h2>
+    <p class="muted">{t("A sync keeps a folder of your knowledge base in sync with a folder of a Git repository.")}</p>
+    <button class="add" type="button" onclick={onnew}><Icon name="plus" size={14} stroke={2.5} />{t("add a sync")}</button>
   </div>
 {:else}
   <label class="search">
     <Icon name="search" />
-    <input type="search" placeholder="Search your syncs…" aria-label="Search your syncs" bind:value={query} />
+    <input type="search" placeholder={t("Search your syncs…")} aria-label={t("Search your syncs…")} bind:value={query} />
   </label>
 
   {#if visible.length === 0}
-    <p class="muted">No sync matches “{query}”.</p>
+    <p class="muted">{t("No sync matches “{query}”.", { query })}</p>
   {/if}
 
   {#each groups as { type, members }, index (type)}
@@ -211,27 +212,27 @@
             <span class="meta">
               {#if lastRuns[pair.name] !== undefined}
                 <strong>{ago(lastRuns[pair.name])}</strong>
-                <em>last sync</em>
+                <em>{t("last sync")}</em>
               {:else}
                 <strong>—</strong>
-                <em>never synced</em>
+                <em>{t("never synced")}</em>
               {/if}
             </span>
 
             <span class="pill {state.tone}"><span class="dot" aria-hidden="true"></span>{state.text}</span>
 
             {#if confirming === pair.name}
-              <span class="confirm" role="group" aria-label="Remove {pair.name}">
-                <button class="danger small" type="button" onclick={() => remove(pair.name)}>Remove</button>
-                <button class="small" type="button" onclick={() => (confirming = null)}>Cancel</button>
+              <span class="confirm" role="group" aria-label={t("Remove {name}", { name: pair.name })}>
+                <button class="danger small" type="button" onclick={() => remove(pair.name)}>{t("Remove")}</button>
+                <button class="small" type="button" onclick={() => (confirming = null)}>{t("Cancel")}</button>
               </span>
             {:else}
               <span class="actions">
                 <button
                   class="icon-button"
                   type="button"
-                  title="Sync now"
-                  aria-label="Sync {pair.name} now"
+                  title={t("Sync now")}
+                  aria-label={t("Sync {name} now", { name: pair.name })}
                   disabled={pair.paused || pair.active || syncing !== null || pair.errors.length > 0}
                   onclick={() => sync(pair.name)}
                 >
@@ -240,8 +241,8 @@
                 <button
                   class="icon-button"
                   type="button"
-                  title="Settings"
-                  aria-label="Settings of {pair.name}"
+                  title={t("Settings")}
+                  aria-label={t("Settings of {name}", { name: pair.name })}
                   onclick={() => onopen(pair.name, "general")}
                 >
                   <Icon name="settings" />
@@ -249,8 +250,8 @@
                 <button
                   class="icon-button"
                   type="button"
-                  title="Remove this sync (files stay where they are)"
-                  aria-label="Remove {pair.name}"
+                  title={t("Remove this sync (files stay where they are)")}
+                  aria-label={t("Remove {name}", { name: pair.name })}
                   onclick={() => (confirming = pair.name)}
                 >
                   <Icon name="trash" />
@@ -262,7 +263,7 @@
       </ul>
 
       {#if index === 0}
-        <button class="add" type="button" onclick={onnew}><Icon name="plus" size={14} stroke={2.5} />add a sync</button>
+        <button class="add" type="button" onclick={onnew}><Icon name="plus" size={14} stroke={2.5} />{t("add a sync")}</button>
       {/if}
     </section>
   {/each}

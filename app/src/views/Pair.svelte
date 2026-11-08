@@ -10,6 +10,7 @@
 </script>
 
 <script lang="ts">
+  import { t } from "../lib/i18n.svelte";
   import { api, errorText, type PairView } from "../lib/api";
   import PairFlow from "../lib/PairFlow.svelte";
   import ChangesTab from "./ChangesTab.svelte";
@@ -40,7 +41,7 @@
     try {
       const pairs = await api.listPairs();
       pair = pairs.find((candidate) => candidate.name === name) ?? null;
-      error = pair ? null : `The sync "${name}" no longer exists.`;
+      error = pair ? null : t("The sync \"{name}\" no longer exists.", { name });
     } catch (failure) {
       error = errorText(failure);
     }
@@ -95,7 +96,7 @@
 
 <div class="row spread title">
   <div>
-    <button class="back" type="button" onclick={onclose}>‹ Syncs</button>
+    <button class="back" type="button" onclick={onclose}>{t("‹ Syncs")}</button>
     <h1>{name}</h1>
     {#if pair}
       <p class="sub">
@@ -109,7 +110,7 @@
         type="button"
         onclick={() => act(() => api.updateSettings(name, { paused: !pair!.paused }))}
       >
-        {pair.paused ? "Resume" : "Pause"}
+        {pair.paused ? t("Resume") : t("Pause")}
       </button>
       <button
         class="primary"
@@ -117,7 +118,7 @@
         disabled={syncing || pair.active || pair.paused || pair.errors.length > 0}
         onclick={sync}
       >
-        {syncing || pair.active ? "Syncing…" : "Sync now"}
+        {syncing || pair.active ? t("Syncing…") : t("Sync now")}
       </button>
     </div>
   {/if}
@@ -140,7 +141,7 @@
         class:selected={tab === item.id}
         onclick={() => (tab = item.id)}
       >
-        {item.label}{#if item.id === "conflicts" && pair.pending > 0}&nbsp;<span class="count">{pair.pending}</span>{/if}
+        {t(item.label)}{#if item.id === "conflicts" && pair.pending > 0}&nbsp;<span class="count">{pair.pending}</span>{/if}
       </button>
     {/each}
   </div>
@@ -160,15 +161,15 @@
   {:else}
     <GeneralTab {pair} onchange={changed} />
     <section class="remove card">
-      <h2>Remove this sync</h2>
-      <p class="muted">Files stay where they are on both sides. Markoo forgets this sync and its last run.</p>
+      <h2>{t("Remove this sync")}</h2>
+      <p class="muted">{t("Files stay where they are on both sides. Markoo forgets this sync and its last run.")}</p>
       {#if confirmRemove}
         <div class="row">
-          <button class="danger" type="button" onclick={remove}>Yes, remove “{name}”</button>
-          <button type="button" onclick={() => (confirmRemove = false)}>Cancel</button>
+          <button class="danger" type="button" onclick={remove}>{t("Yes, remove “{name}”", { name })}</button>
+          <button type="button" onclick={() => (confirmRemove = false)}>{t("Cancel")}</button>
         </div>
       {:else}
-        <button class="danger" type="button" onclick={() => (confirmRemove = true)}>Remove…</button>
+        <button class="danger" type="button" onclick={() => (confirmRemove = true)}>{t("Remove…")}</button>
       {/if}
     </section>
   {/if}

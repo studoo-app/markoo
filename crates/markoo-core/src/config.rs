@@ -127,9 +127,16 @@ enum FrontmatterMode {
 struct RawConfig {
     #[serde(default)]
     pair: Vec<RawPair>,
+    general: Option<RawGeneral>,
     schedule: Option<RawSchedule>,
     api: Option<RawApi>,
     mcp: Option<RawMcp>,
+}
+
+/// `[general]`
+#[derive(Debug, Deserialize)]
+struct RawGeneral {
+    language: Option<String>,
 }
 
 /// `[mcp]`
@@ -230,11 +237,42 @@ pub struct PairEntry {
     pub unknown_options: Vec<String>,
 }
 
+/// Language of the configuration UI (`[general] language`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Language {
+    /// English, the default.
+    #[default]
+    En,
+    /// French.
+    Fr,
+}
+
+impl Language {
+    /// The value written in the file.
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::En => "en",
+            Self::Fr => "fr",
+        }
+    }
+
+    /// Reads a value of the file; `None` if the language is not supported.
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "en" => Some(Self::En),
+            "fr" => Some(Self::Fr),
+            _ => None,
+        }
+    }
+}
+
 /// A parsed configuration.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Config {
     /// Pairs, in file order.
     pub pairs: Vec<PairEntry>,
+    /// Language of the configuration UI.
+    pub language: Language,
     /// When the daemon syncs on its own.
     pub schedule: Schedule,
     /// The daemon's local HTTP API.
@@ -312,6 +350,11 @@ impl Config {
             }
             pairs.push(PairEntry::from_raw(raw)?);
         }
+        let mut language = Language::default();
+        if let Some(text) = raw.general.and_then(|general| general.language) {
+            language = Language::parse(&text)
+                .ok_or_else(|| ConfigError::Invalid(format!("unsupported language: {text}")))?;
+        }
         let mut schedule = Schedule::default();
         let mut not_implemented = Vec::new();
         if let Some(raw) = raw.schedule {
@@ -335,6 +378,7 @@ impl Config {
         }
         Ok(Self {
             pairs,
+            language,
             schedule,
             api,
             mcp,
@@ -660,6 +704,7 @@ impl ConfigFile {
                 value(new_value.parse::<bool>().map_err(|_| invalid())?)
             }
             "api.port" => value(i64::from(new_value.parse::<u16>().map_err(|_| invalid())?)),
+            "general.language" => value(Language::parse(new_value).ok_or_else(invalid)?.code()),
             _ => return Err(ConfigError::UnknownKey(key.to_owned())),
         };
         let (section, option) = key.split_once('.').ok_or_else(invalid)?;
@@ -817,6 +862,16 @@ mod tests {
         assert_eq!(config.api.port, 5000);
         assert!(config.mcp.allow_config_write);
         assert_eq!(config.pairs.len(), 1);
+    }
+
+    #[test]
+    fn the_language_is_read_and_changed() {
+        let (_dir, mut file) = pair_file();
+        assert_eq!(file.preview().unwrap().language, Language::En);
+        file.set_global("general.language", "fr").unwrap();
+        assert_eq!(file.preview().unwrap().language, Language::Fr);
+        assert!(file.set_global("general.language", "de").is_err());
+        assert!(Config::parse("[general]\nlanguage = \"de\"\n").is_err());
     }
 
     #[test]

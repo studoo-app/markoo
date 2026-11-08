@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { setLocale, t } from "../lib/i18n.svelte";
+  import { checkForUpdate, installUpdate, updates } from "../lib/updates.svelte";
   import { onMount } from "svelte";
   import { api, errorText, type AppInfo, type GlobalSettings, type Settings } from "../lib/api";
 
@@ -6,6 +8,7 @@
 
   let saved = $state<GlobalSettings | null>(null);
   let interval = $state("");
+  let language = $state("en");
   let onStartup = $state(true);
   let apiEnabled = $state(true);
   let apiPort = $state("");
@@ -18,6 +21,8 @@
   function apply(value: GlobalSettings) {
     saved = value;
     interval = value.interval;
+    language = value.language;
+    setLocale(value.language);
     onStartup = value.on_startup;
     apiEnabled = value.api_enabled;
     apiPort = String(value.api_port);
@@ -32,6 +37,7 @@
   function changes(): Settings {
     if (!saved) return {};
     const edited: Settings = {};
+    if (language !== saved.language) edited["general.language"] = language;
     if (interval.trim() !== saved.interval) edited["schedule.interval"] = interval.trim();
     if (onStartup !== saved.on_startup) edited["schedule.on_startup"] = String(onStartup);
     if (apiEnabled !== saved.api_enabled) edited["api.enabled"] = String(apiEnabled);
@@ -71,35 +77,69 @@
   let restarted = $state(false);
 </script>
 
-<button class="back" type="button" onclick={onclose}>‹ Sync</button>
-<h1>Settings</h1>
+<button class="back" type="button" onclick={onclose}>{t("‹ Sync")}</button>
+<h1>{t("Settings")}</h1>
 
 {#if saved}
   <section class="card">
-    <h2>Schedule</h2>
+    <h2>{t("Language")}</h2>
     <div class="field">
-      <label for="interval">Interval between syncs</label>
-      <input id="interval" type="text" bind:value={interval} spellcheck="false" />
-      <p class="muted hint">30s, 5m, 1h… or off.</p>
+      <label for="language">{t("Language of the interface")}</label>
+      <select id="language" bind:value={language}>
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
     </div>
-    <label class="choice"><input type="checkbox" bind:checked={onStartup} /> Sync when Markoo starts</label>
   </section>
 
   <section class="card">
-    <h2>Local API</h2>
-    <label class="choice"><input type="checkbox" bind:checked={apiEnabled} /> Serve the API on 127.0.0.1</label>
+    <h2>{t("Updates")}</h2>
+    <p class="muted">{t("Version {version}", { version: __APP_VERSION__ })}</p>
+    {#if updates.value.kind === "available"}
+      {@const update = updates.value.update}
+      <p class="ok" role="status">{t("Version {version} is available.", { version: update.version })}</p>
+      <div class="row end">
+        <button class="primary" type="button" onclick={() => installUpdate(update)}>{t("Install and restart")}</button>
+      </div>
+    {:else if updates.value.kind === "installing"}
+      <p class="muted" role="status">{t("Installing…")}</p>
+    {:else if updates.value.kind === "current"}
+      <p class="ok" role="status">{t("You have the latest version.")}</p>
+    {:else if updates.value.kind === "failed"}
+      <p class="error" role="alert">{t("Could not check for updates: {error}", { error: updates.value.message })}</p>
+    {/if}
+    <div class="row end">
+      <button type="button" disabled={updates.value.kind === "checking" || updates.value.kind === "installing"} onclick={() => checkForUpdate()}>
+        {updates.value.kind === "checking" ? t("Checking…") : t("Check for updates")}
+      </button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>{t("Schedule")}</h2>
+    <div class="field">
+      <label for="interval">{t("Interval between syncs")}</label>
+      <input id="interval" type="text" bind:value={interval} spellcheck="false" />
+      <p class="muted hint">{t("30s, 5m, 1h… or off.")}</p>
+    </div>
+    <label class="choice"><input type="checkbox" bind:checked={onStartup} />{t("Sync when Markoo starts")}</label>
+  </section>
+
+  <section class="card">
+    <h2>{t("Local API")}</h2>
+    <label class="choice"><input type="checkbox" bind:checked={apiEnabled} />{t("Serve the API on 127.0.0.1")}</label>
     <div class="field port">
-      <label for="port">Port</label>
+      <label for="port">{t("Port")}</label>
       <input id="port" type="text" inputmode="numeric" bind:value={apiPort} disabled={!apiEnabled} />
     </div>
   </section>
 
   <section class="card">
-    <h2>MCP</h2>
-    <label class="choice"><input type="checkbox" bind:checked={mcpHttp} /> Also serve MCP on the API</label>
-    <label class="choice"><input type="checkbox" bind:checked={allowWrite} /> Let an AI agent change the configuration</label>
+    <h2>{t("MCP")}</h2>
+    <label class="choice"><input type="checkbox" bind:checked={mcpHttp} />{t("Also serve MCP on the API")}</label>
+    <label class="choice"><input type="checkbox" bind:checked={allowWrite} />{t("Let an AI agent change the configuration")}</label>
     {#if allowWrite}
-      <p class="warn hint">Changing a direction or a folder can cause many writes at the next sync.</p>
+      <p class="warn hint">{t("Changing a direction or a folder can cause many writes at the next sync.")}</p>
     {/if}
   </section>
 
@@ -107,21 +147,21 @@
     <p class="error" role="alert">{error}</p>
   {/if}
   {#if done && !dirty}
-    <p class="ok" role="status">Saved.{restarted ? " Restart Markoo to apply the API settings." : ""}</p>
+    <p class="ok" role="status">{t("Saved.")}{restarted ? ` ${t("Restart Markoo to apply the API settings.")}` : ""}</p>
   {/if}
   <div class="row end">
-    <button class="primary" type="button" disabled={!dirty || busy} onclick={save}>Save</button>
+    <button class="primary" type="button" disabled={!dirty || busy} onclick={save}>{t("Save")}</button>
   </div>
 {:else if error}
   <p class="error" role="alert">{error}</p>
 {:else}
-  <p class="muted">Loading…</p>
+  <p class="muted">{t("Loading…")}</p>
 {/if}
 
 {#if info}
   <section class="files muted">
-    <p class="path">Configuration: {info.config_file}</p>
-    <p class="path">Data: {info.data_dir}</p>
+    <p class="path">{t("Configuration: {path}", { path: info.config_file })}</p>
+    <p class="path">{t("Data: {path}", { path: info.data_dir })}</p>
   </section>
 {/if}
 

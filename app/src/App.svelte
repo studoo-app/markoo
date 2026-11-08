@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { setLocale, t } from "./lib/i18n.svelte";
+  import { checkForUpdate, updates } from "./lib/updates.svelte";
   import { onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import logoName from "../../assets/logo-mark-name.svg";
@@ -40,10 +42,14 @@
 
   onMount(() => {
     api.appInfo().then((value) => (info = value));
+    api.globalSettings().then((value) => setLocale(value.language)).catch(() => {});
+    // A few seconds after the start, so that the window opens first.
+    const updateTimer = setTimeout(() => checkForUpdate(true), 5000);
     const unlisten = listen("markoo-changed", () => revision++);
     const onFocus = () => revision++;
     window.addEventListener("focus", onFocus);
     return () => {
+      clearTimeout(updateTimer);
       unlisten.then((stop) => stop());
       window.removeEventListener("focus", onFocus);
     };
@@ -58,28 +64,29 @@
     onclick={() => (route = entry.go)}
   >
     <Icon name={entry.icon} />
-    <span>{entry.label}</span>
+    <span>{t(entry.label)}</span>
   </button>
 {/snippet}
 
 <div class="shell">
   <aside>
     <div class="brand">
-      <button class="home" type="button" onclick={() => (route = { name: "home" })} aria-label="Home">
+      <button class="home" type="button" onclick={() => (route = { name: "home" })} aria-label={t("Home")}>
         <picture>
           <source srcset={logoNameDark} media="(prefers-color-scheme: dark)" />
           <img src={logoName} alt="Markoo" height="26" />
         </picture>
       </button>
+      <span class="version">v{__APP_VERSION__}</span>
     </div>
 
-    <nav aria-label="Main">
+    <nav aria-label={t("Main")}>
       {#each top as entry (entry.id)}
         {@render item(entry)}
       {/each}
     </nav>
 
-    <nav class="bottom" aria-label="More">
+    <nav class="bottom" aria-label={t("More")}>
       {#each bottom as entry (entry.id)}
         {@render item(entry)}
       {/each}
@@ -87,6 +94,11 @@
   </aside>
 
   <div class="content">
+    {#if updates.value.kind === "available"}
+      <p class="note" role="status">
+        {t("A new version ({version}) is available. Install it from Settings.", { version: updates.value.update.version })}
+      </p>
+    {/if}
     {#if info?.note}
       <p class="note warn" role="status">{info.note}</p>
     {/if}
@@ -136,6 +148,9 @@
     overflow-y: auto;
   }
   .brand {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
     padding: 0 4px 20px;
     margin: 0 8px 20px;
     border-bottom: 1px solid var(--line);
@@ -145,6 +160,10 @@
     padding: 0;
     border: 0;
     background: none;
+  }
+  .version {
+    font-size: 12px;
+    color: var(--muted);
   }
   picture {
     display: flex;

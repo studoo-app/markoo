@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "./i18n.svelte";
   import { errorText, type FilterPreview } from "./api";
 
   let {
@@ -46,22 +47,22 @@
     {#each list as _, index}
       <div class="row line">
         <input id={`${id}-${index}`} type="text" bind:value={list[index]} spellcheck="false" />
-        <button type="button" aria-label="Remove this pattern" onclick={() => list.splice(index, 1)}>−</button>
+        <button type="button" aria-label={t("Remove this pattern")} onclick={() => list.splice(index, 1)}>−</button>
       </div>
     {/each}
-    <button type="button" onclick={() => list.push("")}>+ Add a pattern</button>
+    <button type="button" onclick={() => list.push("")}>{t("+ Add a pattern")}</button>
   </div>
 {/snippet}
 
-{@render patterns("Include", "include", include)}
-{@render patterns("Exclude", "exclude", exclude)}
+{@render patterns(t("Include"), "include", include)}
+{@render patterns(t("Exclude"), "exclude", exclude)}
 
 {#if error}
   <p class="error" role="alert">{error}</p>
 {:else if preview}
   <p>
-    <strong>{preview.tracked_count}</strong> file(s) tracked ·
-    <strong>{preview.excluded_count}</strong> excluded
+    <strong>{preview.tracked_count}</strong> {t("file(s) tracked")} ·
+    <strong>{preview.excluded_count}</strong> {t("excluded")}
   </p>
   <ul>
     {#each preview.excluded as path}
@@ -72,10 +73,10 @@
     {/each}
   </ul>
   {#if preview.tracked_count + preview.excluded_count > preview.tracked.length + preview.excluded.length}
-    <p class="muted hint">The list is cut; the numbers above are complete.</p>
+    <p class="muted hint">{t("The list is cut; the numbers above are complete.")}</p>
   {/if}
 {:else}
-  <p class="muted">Looking at the files…</p>
+  <p class="muted">{t("Looking at the files…")}</p>
 {/if}
 
 <style>
