@@ -1,5 +1,8 @@
-.claude/worktrees/**
-.claude/settings.local.json
+.claude/**
+.vibe/**
+.agents/**
+AGENTS.md
+CLAUDE.md
 
 # --- Rust ---------------------------------------------------------------
 # Cargo.lock is committed on purpose (workspace ships binaries).
