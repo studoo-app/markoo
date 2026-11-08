@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.5] - 2026-11-08
+
+### Added
+
+- Activity: a new section that lists the latest syncs that changed something or failed, across all your syncs, the newest first. Runs are grouped by day and can be filtered by sync; opening one shows that sync's history.
+- Search field on the Syncs screen, by name or folder.
+- Each sync card has quick actions: sync now, settings, and remove (asked to confirm; files stay where they are).
+
+### Changed
+
+- New interface: a sidebar (Syncs, Activity, Settings), serif titles, a cream palette, and rounded cards showing the folders, the last sync that changed something and a status label. Syncs are grouped by knowledge base type.
+- The version is shown in the window title instead of next to the logo.
+- Texts that show a status are darker in light mode, so they stay readable, and the card or field in use is outlined when you move with the keyboard.
+- The README shows the overview as a picture, in light and dark versions.
+
+### Known limits
+
+- No Homebrew formula yet, and no app for Linux or Windows.
+- No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
+- Updates are offered from published releases only, not from release candidates.
+
 ## [1.0.0-rc.4] - 2026-11-07
 
 ### Added
@@ -72,7 +93,8 @@ First release candidate. Keep a backup of your notes, and start on a copy.
 - No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
 - Not implemented, and ignored with a warning: `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, `schedule.pause_on_battery`, merging frontmatter by key.
 
-[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.4...HEAD
+[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.5...HEAD
+[1.0.0-rc.5]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.4...v1.0.0-rc.5
 [1.0.0-rc.4]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.1...v1.0.0-rc.2
