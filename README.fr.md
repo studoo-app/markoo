@@ -17,20 +17,12 @@ Les outils de base de connaissance sont pris en charge par des **adaptateurs**. 
 > [!WARNING]
 > **Version candidate.** Markoo a été essayé sur de vrais vaults, mais il reste jeune : gardez une sauvegarde de vos notes et commencez sur une copie. Linux et Windows n'ont que la ligne de commande pour l'instant.
 
-```mermaid
-flowchart LR
-    subgraph KB["🧠 Base de connaissance<br/>Obsidian d'abord"]
-        V["Projets/Clara/*.md<br/>[[wikilinks]], ![[images]]"]
-    end
-    subgraph Markoo["⚙️ Markoo"]
-        E["Moteur de synchro 3-way<br/>+ conversion des liens"]
-    end
-    subgraph Repo["📦 Dépôt Git"]
-        R["docs/*.md<br/>[liens](./standards.md)"]
-    end
-    V <-->|diff / fusion| E
-    E <-->|diff / fusion| R
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/sync-overview.svg">
+    <img src="assets/sync-overview-light.svg" alt="Markoo se place entre la base de connaissance (Obsidian) et le dépôt Git, et synchronise les deux par diff / merge à 3 voies" width="900">
+  </picture>
+</p>
 
 ## Fonctionnalités
 

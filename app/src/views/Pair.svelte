@@ -1,3 +1,14 @@
+<script lang="ts" module>
+  export type Tab =
+    | "changes"
+    | "conflicts"
+    | "general"
+    | "filters"
+    | "transformations"
+    | "triggers"
+    | "history";
+</script>
+
 <script lang="ts">
   import { t } from "../lib/i18n.svelte";
   import { api, errorText, type PairView } from "../lib/api";
@@ -13,13 +24,14 @@
   let {
     name,
     revision,
+    initialTab,
     onclose,
-  }: { name: string; revision: number; onclose: () => void } = $props();
-
-  type Tab = "changes" | "conflicts" | "general" | "filters" | "transformations" | "triggers" | "history";
+  }: { name: string; revision: number; initialTab?: Tab; onclose: () => void } = $props();
 
   let pair = $state<PairView | null>(null);
-  let tab = $state<Tab>("changes");
+  // The view is keyed on the pair, so the tab it opens on is read once.
+  // svelte-ignore state_referenced_locally
+  let tab = $state<Tab>(initialTab ?? "changes");
   let error = $state<string | null>(null);
   let syncing = $state(false);
   let confirmRemove = $state(false);
@@ -84,7 +96,7 @@
 
 <div class="row spread title">
   <div>
-    <button class="back" type="button" onclick={onclose}>{t("‹ Sync")}</button>
+    <button class="back" type="button" onclick={onclose}>{t("‹ Syncs")}</button>
     <h1>{name}</h1>
     {#if pair}
       <p class="sub">

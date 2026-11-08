@@ -267,6 +267,15 @@ async fn pair_history(backend: State<'_, Backend>, pair: String) -> CommandResul
     blocking(move || service::history(&paths, &pair, HISTORY_LENGTH)).await
 }
 
+/// How many syncs the Activity view lists, across every pair.
+const ACTIVITY_LENGTH: u32 = 200;
+
+#[tauri::command]
+async fn activity(backend: State<'_, Backend>) -> CommandResult {
+    let paths = backend.paths.clone();
+    blocking(move || service::activity(&paths, ACTIVITY_LENGTH)).await
+}
+
 #[tauri::command]
 async fn global_settings(backend: State<'_, Backend>) -> CommandResult {
     let paths = backend.paths.clone();
@@ -549,6 +558,10 @@ pub fn run() {
                 queue,
                 note,
             });
+            // The title bar shows the version next to the name: "Markoo — v1.0.0".
+            if let Some(window) = app.get_webview_window(WINDOW) {
+                let _ = window.set_title(&format!("Markoo — v{}", app.package_info().version));
+            }
             build_tray(app)?;
             Ok(())
         })
@@ -577,6 +590,7 @@ pub fn run() {
             preview_new_pair_filters,
             preview_transform,
             pair_history,
+            activity,
             global_settings,
             update_global_settings,
             hooks_state,

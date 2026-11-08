@@ -118,6 +118,40 @@ export function installMock(): void {
             error: 'pair "clara": the kb folder is unavailable',
           },
         ];
+      case "activity":
+        return [
+          {
+            pair: "clara",
+            run: {
+              id: 2, trigger: "interval", started_at: Date.now() - 120000, duration_ms: 84, error: null,
+              report: {
+                written: [{ path: "adr/001-stack.md", side: "repo" }, { path: "guide/install.md", side: "kb" }],
+                trashed: [{ path: "old.md", side: "kb" }],
+                skipped: [],
+                pending: [],
+              },
+            },
+          },
+          {
+            pair: "markoo",
+            run: {
+              id: 1, trigger: "hook", started_at: Date.now() - 900000, duration_ms: 1240, error: null,
+              report: {
+                written: [{ path: "README.md", side: "repo" }],
+                trashed: [],
+                skipped: [{ path: "draft.md", reason: "changed during the sync" }],
+                pending: [{}],
+              },
+            },
+          },
+          {
+            pair: "notes-api",
+            run: {
+              id: 1, trigger: "interval", started_at: Date.now() - 3600000, duration_ms: 12, report: null,
+              error: 'pair "notes-api": the kb folder is unavailable',
+            },
+          },
+        ];
       case "global_settings":
         return {
           interval: "300s", on_startup: true, api_enabled: true, api_port: 4848,
