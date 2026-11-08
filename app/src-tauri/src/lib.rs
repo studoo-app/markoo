@@ -558,6 +558,10 @@ pub fn run() {
                 queue,
                 note,
             });
+            // The title bar shows the version next to the name: "Markoo — v1.0.0".
+            if let Some(window) = app.get_webview_window(WINDOW) {
+                let _ = window.set_title(&format!("Markoo — v{}", app.package_info().version));
+            }
             build_tray(app)?;
             Ok(())
         })

@@ -77,7 +77,6 @@
           <img src={logoName} alt="Markoo" height="26" />
         </picture>
       </button>
-      <span class="version">v{__APP_VERSION__}</span>
     </div>
 
     <nav aria-label={t("Main")}>
@@ -148,9 +147,6 @@
     overflow-y: auto;
   }
   .brand {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
     padding: 0 4px 20px;
     margin: 0 8px 20px;
     border-bottom: 1px solid var(--line);
@@ -160,10 +156,6 @@
     padding: 0;
     border: 0;
     background: none;
-  }
-  .version {
-    font-size: 12px;
-    color: var(--muted);
   }
   picture {
     display: flex;
