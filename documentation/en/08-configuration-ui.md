@@ -52,7 +52,12 @@ flowchart TD
     PAIR --> T4["Triggers tab"]
     PAIR --> T5["Conflicts<br/>and divergences tab"]
     PAIR --> T6["History tab"]
-    HOME -->|⚙️| GLOB["Global settings<br/>interval, API, MCP, backups"]
+    SIDE["Sidebar<br/>Syncs · Activity · Settings"] -->|Syncs| HOME
+    SIDE -->|Activity| ACT["Activity<br/>runs of every pair"]
+    ACT -->|click on a run| T6
+    SIDE -->|Settings| GLOB["Global settings<br/>interval, API, MCP, backups"]
+    HOME -->|card: settings| T1
+    HOME -->|card: sync now| SYNC
     WIZ -->|Create| PREV["Preview (dry-run)"]
     T1 & T2 & T3 -->|Save| PREV
     PREV -->|Confirm| SYNC
@@ -63,22 +68,31 @@ flowchart TD
 ### Home: list of pairs
 
 ```text
-┌─ Markoo ──────────────────────────────────────────────────── ⚙️ ─┐
-│                                                                  │
-│  Pairs                                         [ + New ]         │
-│                                                                  │
-│  ● clara      Obsidian  Projets/Clara  ⇄  clara/docs             │
-│               ✅ Up to date · 2 min ago · every 5 min            │
-│                                                                  │
-│  ● markoo     Obsidian  Projets/Markoo  ←  markoo/documentation  │
-│               ⚠️ 1 divergence · 1 h ago · post-merge hook        │
-│                                                                  │
-│  ○ notes-api  Markdown  ~/notes/api  →  api/docs       (paused)  │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
+┌─ Markoo — v1.0.0 ────────────────────────────────────────────────────────┐
+│ MARKOO      │  Your syncs.                              3 syncs │ 1 to settle │
+│ ─────────── │  ───────────────────────────────────────────────────────── │
+│ ▣ Syncs     │  [ 🔍 Search your syncs…                               ]   │
+│             │                                                            │
+│             │  Obsidian vaults  wikilinks, embeds and callouts…          │
+│             │  ┌──────────────────────────────────────────────────────┐  │
+│             │  │ 📁 clara                2 min ago  [TO SETTLE] ⟳ ⚙ 🗑 │  │
+│             │  │    Clara ⇄ docs – 1 to settle   last sync            │  │
+│             │  └──────────────────────────────────────────────────────┘  │
+│             │  ┌──────────────────────────────────────────────────────┐  │
+│             │  │ 📁 markoo               1 h ago   [UP TO DATE] ⟳ ⚙ 🗑 │  │
+│             │  │    Markoo ← documentation – in step                   │  │
+│             │  └──────────────────────────────────────────────────────┘  │
+│             │  [ + add a sync ]                                          │
+│ ∿ Activity  │                                                            │
+│ ⚙ Settings  │  Markdown folders  plain Markdown, copied as it is          │
+└─────────────┴────────────────────────────────────────────────────────────┘
 ```
 
-Each pair shows the **type of its KB** (icon or label: Obsidian, Markdown…), then the KB folder and the repo folder. The arrow between the two folders always shows the direction: `⇄` bidirectional, `→` KB to repo, `←` repo to KB.
+Pairs are grouped by **KB type** (Obsidian vaults, Markdown folders…). Each card shows the KB folder and the repo folder, the time of the last recorded sync, a status (Up to date, Syncing, To settle, Paused, Error) and three actions: sync now, open the pair's settings (General tab), and remove the sync after a confirmation (the files stay where they are). The arrow between the two folders always shows the direction: `⇄` bidirectional, `→` KB to repo, `←` repo to KB. The window title shows the version.
+
+### Activity
+
+The **Activity** view in the sidebar lists the latest recorded syncs of every pair (up to 200), the newest first and grouped by day. A sync is recorded when it wrote, moved or flagged a file, or when it failed. Each run shows its pair, its time, how long it took, what started it, and its result (Synced, To settle, Failed). Chips filter the list by pair, and clicking a run opens the History tab of its pair.
 
 ### General tab: KB, repo and direction
 
