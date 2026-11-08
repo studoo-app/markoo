@@ -410,6 +410,27 @@ impl State {
         Ok(())
     }
 
+    /// The most recent syncs of every pair, the latest first, each with its pair.
+    pub fn recent_runs(&self, limit: u32) -> Result<Vec<(String, RunRecord)>, StateError> {
+        let mut statement = self.conn.prepare(
+            "SELECT pair, id, source, started_at, duration_ms, report, error FROM runs
+             ORDER BY started_at DESC, id DESC LIMIT ?1",
+        )?;
+        let rows = statement.query_map(params![limit], |row| {
+            let report: Option<String> = row.get(5)?;
+            let run = RunRecord {
+                id: row.get(1)?,
+                trigger: row.get(2)?,
+                started_at: u64::try_from(row.get::<_, i64>(3)?).unwrap_or(0),
+                duration_ms: u64::try_from(row.get::<_, i64>(4)?).unwrap_or(0),
+                report: report.and_then(|text| serde_json::from_str(&text).ok()),
+                error: row.get(6)?,
+            };
+            Ok((row.get::<_, String>(0)?, run))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     /// The most recent syncs of a pair, the latest first.
     pub fn runs(&self, pair: &str, limit: u32) -> Result<Vec<RunRecord>, StateError> {
         let mut statement = self.conn.prepare(
@@ -507,6 +528,19 @@ mod tests {
         let runs = state.runs("p", 10).unwrap();
         assert_eq!(runs.len(), 2);
         assert_eq!(runs[0].error.as_deref(), Some("second"));
+    }
+
+    #[test]
+    fn recent_runs_cover_every_pair_latest_first() {
+        let state = State::open_in_memory().unwrap();
+        state.add_run("p", &run("first")).unwrap();
+        state.add_run("other", &run("second")).unwrap();
+        state.add_run("p", &run("third")).unwrap();
+        let runs = state.recent_runs(2).unwrap();
+        assert_eq!(runs.len(), 2);
+        assert_eq!(runs[0].0, "p");
+        assert_eq!(runs[0].1.error.as_deref(), Some("third"));
+        assert_eq!(runs[1].0, "other");
     }
 
     #[test]

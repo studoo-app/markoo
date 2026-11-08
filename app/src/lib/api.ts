@@ -49,6 +49,11 @@ export type HookChange = { hook: string } & (
   | { status: "manual"; reason: string; snippet: string }
 );
 
+export interface ActivityEntry {
+  pair: string;
+  run: RunRecord;
+}
+
 export interface RunRecord {
   id: number;
   trigger: string;
@@ -171,6 +176,7 @@ export const api = {
   previewTransform: (pair: string, settings: Settings) =>
     invoke<TransformSample | null>("preview_transform", { pair, settings }),
   pairHistory: (pair: string) => invoke<RunRecord[]>("pair_history", { pair }),
+  activity: () => invoke<ActivityEntry[]>("activity"),
   globalSettings: () => invoke<GlobalSettings>("global_settings"),
   updateGlobalSettings: (settings: Settings) =>
     invoke<void>("update_global_settings", { settings }),
