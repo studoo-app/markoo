@@ -52,6 +52,16 @@ impl Env {
         )
     }
 
+    /// Folders for a second pair, created on disk.
+    fn second_folders(&self) -> (PathBuf, PathBuf) {
+        let kb = self.dir.path().join("kb2");
+        let repo = self.dir.path().join("repo2/docs");
+        std::fs::create_dir_all(&kb).unwrap();
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(self.dir.path().join("repo2/.git")).unwrap();
+        (kb, repo)
+    }
+
     fn kb(&self) -> PathBuf {
         self.dir.path().join("kb")
     }
@@ -416,10 +426,109 @@ async fn creating_a_pair_saves_it() {
     std::fs::create_dir_all(&kb).unwrap();
     std::fs::create_dir_all(&repo).unwrap();
     std::fs::create_dir_all(env.dir.path().join("repo2/.git")).unwrap();
-    let body = json!({"name": "second", "kb": kb, "repo": repo});
+    let body = json!({"name": "second", "project": "Markoo", "kb": kb, "repo": repo});
     let (status, created) = client.send("POST", "/pairs", body).await;
     assert_eq!(status, 201, "{created}");
-    assert_eq!(client.get("/pairs/second/config").await.1["name"], "second");
+    assert_eq!(created["project"], "Markoo");
+    assert_eq!(created["id"], "markoo-second");
+    assert_eq!(created["label"], "Markoo/second");
+    let config = client.get("/pairs/markoo-second/config").await.1;
+    assert_eq!(config["name"], "second");
+    client.stop().await;
+}
+
+#[tokio::test]
+async fn creating_a_pair_without_a_project_is_refused() {
+    let env = Env::new();
+    let client = env.start().await;
+    let (kb, repo) = env.second_folders();
+    for project in [json!(null), json!("  ")] {
+        let body = json!({"name": "second", "project": project, "kb": kb, "repo": repo});
+        let (status, answer) = client.send("POST", "/pairs", body).await;
+        assert_eq!(status, 400, "{answer}");
+        assert!(answer["error"].as_str().unwrap().contains("project"));
+    }
+    client.stop().await;
+}
+
+#[tokio::test]
+async fn a_pair_joins_a_project_spelled_differently() {
+    let env = Env::new();
+    let client = env.start().await;
+    client
+        .send("PATCH", "/pairs/clara/config", json!({"project": "Markoo"}))
+        .await;
+    let (kb, repo) = env.second_folders();
+    let body = json!({"name": "second", "project": "markoo", "kb": kb, "repo": repo});
+    let (status, created) = client.send("POST", "/pairs", body).await;
+    assert_eq!(status, 201, "{created}");
+    assert_eq!(created["project"], "Markoo");
+    client.stop().await;
+}
+
+#[tokio::test]
+async fn projects_list_their_pairs_and_the_pairs_without_one_last() {
+    let env = Env::new();
+    let client = env.start().await;
+    let (kb, repo) = env.second_folders();
+    let body = json!({"name": "second", "project": "Markoo", "kb": kb, "repo": repo});
+    client.send("POST", "/pairs", body).await;
+    let (status, projects) = client.get("/projects").await;
+    assert_eq!(status, 200);
+    assert_eq!(
+        projects,
+        json!([
+            {"project": "Markoo", "pairs": ["markoo-second"]},
+            {"project": null, "pairs": ["clara"]},
+        ])
+    );
+    client.stop().await;
+}
+
+#[tokio::test]
+async fn syncing_a_project_queues_each_pair_that_can_sync() {
+    let env = Env::new();
+    let client = env.start().await;
+    client
+        .send("PATCH", "/pairs/clara/config", json!({"project": "Markoo"}))
+        .await;
+    let (kb, repo) = env.second_folders();
+    let body = json!({"name": "second", "project": "Markoo", "kb": kb, "repo": repo});
+    client.send("POST", "/pairs", body).await;
+    client
+        .send(
+            "PATCH",
+            "/pairs/markoo-second/config",
+            json!({"paused": true}),
+        )
+        .await;
+    write(&env.kb().join("note.md"), "hello\n");
+    let (status, accepted) = client
+        .raw("POST", "/projects/markoo/sync", Some(&client.token), None)
+        .await;
+    assert_eq!(status, 202, "{accepted}");
+    assert_eq!(accepted["jobs"][0]["pair"], "clara");
+    assert_eq!(accepted["jobs"].as_array().unwrap().len(), 1);
+    assert_eq!(accepted["skipped"], json!(["markoo-second"]));
+    let job = client
+        .wait_job(accepted["jobs"][0]["job"].as_str().unwrap())
+        .await;
+    assert_eq!(job["status"], "done", "{job}");
+    assert!(env.repo().join("note.md").exists());
+    client.stop().await;
+}
+
+#[tokio::test]
+async fn syncing_an_unknown_project_is_not_found() {
+    let env = Env::new();
+    let client = env.start().await;
+    assert_eq!(
+        client
+            .send("POST", "/projects/nope/sync", json!({}))
+            .await
+            .0,
+        404
+    );
     client.stop().await;
 }
 
@@ -439,11 +548,62 @@ async fn creating_a_pair_refuses_unsafe_folders() {
 }
 
 #[tokio::test]
-async fn creating_a_pair_twice_is_a_conflict() {
+async fn creating_a_pair_twice_in_a_project_is_a_conflict() {
     let env = Env::new();
     let client = env.start().await;
-    let body = json!({"name": "clara", "kb": env.kb(), "repo": env.repo()});
-    assert_eq!(client.send("POST", "/pairs", body).await.0, 409);
+    let (kb, repo) = env.second_folders();
+    let body = json!({"name": "docs", "project": "Markoo", "kb": kb, "repo": repo});
+    assert_eq!(client.send("POST", "/pairs", body).await.0, 201);
+    let body = json!({"name": "Docs", "project": "markoo", "kb": kb, "repo": repo});
+    let (status, answer) = client.send("POST", "/pairs", body).await;
+    assert_eq!(status, 409, "{answer}");
+    client.stop().await;
+}
+
+/// Adds `docs` to the projects `Clara` and `Markoo`, with their own folders.
+async fn two_projects_with_docs(env: &Env, client: &Client) {
+    for project in ["Clara", "Markoo"] {
+        let kb = env.dir.path().join(format!("kb-{project}"));
+        let repo = env.dir.path().join(format!("repo-{project}"));
+        std::fs::create_dir_all(&kb).unwrap();
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        let body = json!({"name": "docs", "project": project, "kb": kb, "repo": repo});
+        let (status, created) = client.send("POST", "/pairs", body).await;
+        assert_eq!(status, 201, "{created}");
+    }
+}
+
+#[tokio::test]
+async fn two_projects_can_each_have_a_pair_with_the_same_name() {
+    let env = Env::new();
+    let client = env.start().await;
+    two_projects_with_docs(&env, &client).await;
+    let (_, pairs) = client.get("/pairs").await;
+    let ids: Vec<&Value> = pairs.as_array().unwrap().iter().map(|p| &p["id"]).collect();
+    assert_eq!(
+        ids,
+        [&json!("clara"), &json!("clara-docs"), &json!("markoo-docs")]
+    );
+    let (status, config) = client.get("/pairs/Markoo%2Fdocs/config").await;
+    assert_eq!(status, 200, "{config}");
+    assert_eq!(config["id"], "markoo-docs");
+    let (status, accepted) = client
+        .raw("POST", "/pairs/clara-docs/sync", Some(&client.token), None)
+        .await;
+    assert_eq!(status, 202, "{accepted}");
+    assert_eq!(accepted["pair"], "clara-docs");
+    client.wait_job(accepted["job"].as_str().unwrap()).await;
+    client.stop().await;
+}
+
+#[tokio::test]
+async fn an_ambiguous_pair_name_is_a_conflict() {
+    let env = Env::new();
+    let client = env.start().await;
+    two_projects_with_docs(&env, &client).await;
+    let (status, answer) = client.get("/pairs/docs/status").await;
+    assert_eq!(status, 409, "{answer}");
+    assert!(answer["error"].as_str().unwrap().contains("Markoo/docs"));
     client.stop().await;
 }
 
@@ -480,13 +640,54 @@ async fn updating_a_pair_keeps_the_comments_of_the_file() {
 }
 
 #[tokio::test]
-async fn updating_a_pair_refuses_a_rename() {
+async fn renaming_a_pair_keeps_its_id_and_history() {
     let env = Env::new();
     let client = env.start().await;
-    let (status, _) = client
-        .send("PATCH", "/pairs/clara/config", json!({"name": "x"}))
+    write(&env.kb().join("note.md"), "x\n");
+    client.sync_and_wait(json!({})).await;
+    let (status, updated) = client
+        .send(
+            "PATCH",
+            "/pairs/clara/config",
+            json!({"name": "Notes de Clara (prod)"}),
+        )
         .await;
-    assert_eq!(status, 400);
+    assert_eq!(status, 200, "{updated}");
+    assert_eq!(updated["pair"]["id"], "clara");
+    assert_eq!(updated["pair"]["name"], "Notes de Clara (prod)");
+    let history = Engine::open(DiskFs, &env.paths)
+        .unwrap()
+        .history("clara", 10)
+        .unwrap();
+    assert_eq!(history.len(), 1);
+    // Nothing changed on disk: the second sync has nothing to write.
+    let job = client.sync_and_wait(json!({})).await;
+    assert_eq!(job["status"], "done", "{job}");
+    client.stop().await;
+}
+
+#[tokio::test]
+async fn renaming_a_pair_refuses_an_invalid_name() {
+    let env = Env::new();
+    let client = env.start().await;
+    for name in ["", "a/b"] {
+        let (status, answer) = client
+            .send("PATCH", "/pairs/clara/config", json!({"name": name}))
+            .await;
+        assert_eq!(status, 400, "{name}: {answer}");
+    }
+    client.stop().await;
+}
+
+#[tokio::test]
+async fn the_id_of_a_pair_cannot_be_changed() {
+    let env = Env::new();
+    let client = env.start().await;
+    let (status, answer) = client
+        .send("PATCH", "/pairs/clara/config", json!({"id": "other"}))
+        .await;
+    assert_eq!(status, 400, "{answer}");
+    assert_eq!(client.get("/pairs/clara/config").await.0, 200);
     client.stop().await;
 }
 

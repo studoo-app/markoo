@@ -5,7 +5,14 @@ export type Direction = "both" | "kb-to-repo" | "repo-to-kb";
 export type TargetChanges = "protect" | "overwrite";
 
 export interface PairView {
+  /** Stable identifier: what every call about this sync names it by. */
+  id: string;
+  /** Name shown to the user, free text, unique within its project. */
   name: string;
+  /** "Project/Name", or the name alone for a sync without a project. */
+  label: string;
+  /** The project the sync belongs to; null for a sync made before projects. */
+  project: string | null;
   kb: string;
   kb_type: string;
   repo: string;
@@ -50,6 +57,7 @@ export type HookChange = { hook: string } & (
 );
 
 export interface ActivityEntry {
+  /** Identifier of the sync. */
   pair: string;
   run: RunRecord;
 }
@@ -126,6 +134,7 @@ export interface Conflicts {
 
 export interface NewPair {
   name: string;
+  project: string;
   kb: string;
   kb_type: string | null;
   repo: string;
@@ -150,7 +159,9 @@ export const api = {
   pairDiff: (pair: string, path: string) =>
     invoke<{ diffs: { path: string; patch: string }[] }>("pair_diff", { pair, path }),
   previewNewPair: (fresh: NewPair) => invoke<Plan>("preview_new_pair", { new: fresh }),
-  addPair: (fresh: NewPair) => invoke<string[]>("add_pair", { new: fresh }),
+  /** Creates a sync and returns its identifier. */
+  addPair: async (fresh: NewPair) =>
+    (await invoke<{ id: string; warnings: string[] }>("add_pair", { new: fresh })).id,
   previewSettings: (pair: string, settings: Settings) =>
     invoke<Plan>("preview_pair_settings", { pair, settings }),
   updateSettings: (pair: string, settings: Settings) =>
@@ -191,6 +202,62 @@ export const api = {
     ),
   knownKbs: () => invoke<string[]>("known_kbs"),
 };
+
+/** Longest project or sync name the configuration accepts. */
+export const MAX_PROJECT_LEN = 64;
+
+/**
+ * Whether a project or sync name is accepted as written: not blank, one line,
+ * no surrounding spaces, no "/", not too long.
+ */
+export function isValidLabel(text: string): boolean {
+  return (
+    text !== "" &&
+    [...text].length <= MAX_PROJECT_LEN &&
+    text.trim() === text &&
+    !/[\p{Cc}]/u.test(text) &&
+    !text.includes("/")
+  );
+}
+
+/** Whether a project name is accepted once trimmed. */
+export function isValidProject(project: string): boolean {
+  return isValidLabel(project.trim());
+}
+
+/**
+ * Whether another sync of `project` already has `name`, ignoring case. The
+ * sync `except` (an identifier) is left out, so that a sync keeps its own name.
+ */
+export function nameTaken(
+  pairs: PairView[],
+  project: string | null,
+  name: string,
+  except?: string,
+): boolean {
+  const wanted = name.trim().toLowerCase();
+  const inProject = project?.trim().toLowerCase() ?? null;
+  return pairs.some(
+    (pair) =>
+      pair.id !== except &&
+      (pair.project?.toLowerCase() ?? null) === inProject &&
+      pair.name.toLowerCase() === wanted,
+  );
+}
+
+/** Label of the sync `id`, or the identifier itself if the sync is gone. */
+export function labelOf(pairs: PairView[], id: string): string {
+  return pairs.find((pair) => pair.id === id)?.label ?? id;
+}
+
+/** Names of the projects of the syncs, in the order they first appear. */
+export function projectsOf(pairs: PairView[]): string[] {
+  const names: string[] = [];
+  for (const pair of pairs) {
+    if (pair.project !== null && !names.includes(pair.project)) names.push(pair.project);
+  }
+  return names;
+}
 
 /** The arrow of a direction, as the documentation draws it. */
 export function arrow(direction: Direction): string {

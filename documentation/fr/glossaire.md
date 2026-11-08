@@ -11,6 +11,8 @@
 | **Dialecte** | Variante de Markdown propre à un côté (wikilinks et callouts Obsidian, `gfm` côté repo…), convertie vers et depuis la forme canonique par `to_canonical` / `from_canonical`. |
 | **Repo** | Le côté dépôt Git d'une paire : un dossier dans un clone local. |
 | **Paire** | Association d'un dossier de la KB et d'un dossier du repo, synchronisés ensemble. |
+| **Projet** | Groupe nommé de paires qui vont ensemble, par ex. le projet `Markoo` avec les paires `Documentation` et `Skill Claude`. Enregistré dans la clé `project` de chaque paire ; nommé à la création de sa première paire. Voir [Projets](06-configuration.md#projets). |
+| **Identifiant** | Identifiant stable d'une paire, comme `markoo-documentation` : tiré de son projet et de son nom à sa création, puis jamais modifié. L'état, l'historique, les conflits et les hooks Git s'y rattachent, si bien que le **nom** de la paire, texte libre unique dans son projet, peut changer à tout moment. Voir [Identifiant et nom](06-configuration.md#identifiant-et-nom). |
 | **Base** | Contenu d'un fichier lors de la dernière synchro réussie, stocké dans `state.db`. Sert d'ancêtre commun à la fusion ; stockée en forme canonique. |
 | **Forme canonique** | GitHub Flavored Markdown standard avec liens relatifs, plus des commentaires invisibles `<!--markoo:…-->` pour ce que GFM ne sait pas représenter. Chaque adaptateur convertit son dialecte vers et depuis cette forme ; c'est sur elle qu'on compare, qu'on fusionne et qu'on stocke la base. |
 | **Transformation** | Paire de fonctions `to_canonical` / `from_canonical` qui convertit une construction Markdown (liens, callouts…) d'un dialecte vers la forme canonique et retour. |

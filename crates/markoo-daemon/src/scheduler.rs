@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use markoo_core::config::Config;
+use markoo_core::config::{Config, PairEntry};
 use markoo_core::paths::Paths;
 use tokio::sync::watch;
 use tokio::time::{Instant, sleep};
@@ -76,13 +76,28 @@ async fn apply_change(old: &Config, new: &Config, queue: &Queue) {
     let changed: Vec<String> = new
         .pairs
         .iter()
-        .filter(|entry| old.pair(&entry.pair.name).ok() != Some(*entry))
-        .map(|entry| entry.pair.name.clone())
+        .filter(|entry| {
+            let before = old.pairs.iter().find(|old| old.pair.id == entry.pair.id);
+            before.is_none_or(|before| syncs_differently(before, entry))
+        })
+        .map(|entry| entry.pair.id.clone())
         .collect();
     let runnable = runnable(new).await;
     for name in changed.iter().filter(|name| runnable.contains(*name)) {
         queue.submit(name, false, Trigger::Config);
     }
+}
+
+/// Whether two versions of a pair sync differently: its name and project
+/// only change how it is shown.
+fn syncs_differently(old: &PairEntry, new: &PairEntry) -> bool {
+    let settings = |entry: &PairEntry| {
+        let mut entry = entry.clone();
+        entry.pair.name.clear();
+        entry.pair.project = None;
+        entry
+    };
+    settings(old) != settings(new)
 }
 
 async fn submit_all(config: &Config, queue: &Queue, trigger: Trigger) {
@@ -100,8 +115,8 @@ async fn runnable(config: &Config) -> Vec<String> {
             .pairs
             .iter()
             .map(|entry| &entry.pair)
-            .filter(|pair| !pair.paused && validation.is_ok(&pair.name))
-            .map(|pair| pair.name.clone())
+            .filter(|pair| !pair.paused && validation.is_ok(&pair.id))
+            .map(|pair| pair.id.clone())
             .collect()
     })
     .await

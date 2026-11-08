@@ -1,6 +1,13 @@
 <script lang="ts">
   import { locale, t } from "../lib/i18n.svelte";
-  import { api, errorText, type ActivityEntry, type RunRecord } from "../lib/api";
+  import {
+    api,
+    errorText,
+    labelOf,
+    type ActivityEntry,
+    type PairView,
+    type RunRecord,
+  } from "../lib/api";
   import Icon, { type IconName } from "../lib/Icon.svelte";
 
   let {
@@ -9,11 +16,17 @@
   }: { revision: number; onopen: (pair: string) => void } = $props();
 
   let entries = $state<ActivityEntry[] | null>(null);
+  // The syncs, to show runs by their label rather than their identifier.
+  let pairs = $state<PairView[]>([]);
   let error = $state<string | null>(null);
-  // "" means every sync.
+  // Identifier of the sync shown; "" means every sync.
   let filter = $state("");
 
-  const pairNames = $derived([...new Set((entries ?? []).map((entry) => entry.pair))].sort());
+  const pairIds = $derived(
+    [...new Set((entries ?? []).map((entry) => entry.pair))].sort((a, b) =>
+      labelOf(pairs, a).localeCompare(labelOf(pairs, b), locale()),
+    ),
+  );
   const visible = $derived(
     (entries ?? []).filter((entry) => filter === "" || entry.pair === filter),
   );
@@ -31,7 +44,9 @@
 
   async function load() {
     try {
-      entries = await api.activity();
+      const [runs, listed] = await Promise.all([api.activity(), api.listPairs().catch(() => pairs)]);
+      entries = runs;
+      pairs = listed;
       error = null;
     } catch (failure) {
       error = errorText(failure);
@@ -104,11 +119,11 @@
   <p class="error banner" role="alert">{error}</p>
 {/if}
 
-{#if pairNames.length > 1}
+{#if pairIds.length > 1}
   <div class="filters" role="group" aria-label={t("Filter by sync")}>
     <button type="button" class:active={filter === ""} onclick={() => (filter = "")}>{t("All syncs")}</button>
-    {#each pairNames as name (name)}
-      <button type="button" class:active={filter === name} onclick={() => (filter = name)}>{name}</button>
+    {#each pairIds as id (id)}
+      <button type="button" class:active={filter === id} onclick={() => (filter = id)}>{labelOf(pairs, id)}</button>
     {/each}
   </div>
 {/if}
@@ -136,7 +151,7 @@
             <button class="open" type="button" onclick={() => onopen(entry.pair)}>
               <span class="tile {result.tone}" aria-hidden="true"><Icon name={result.icon} size={22} stroke={1.6} /></span>
               <span class="text">
-                <span class="name">{entry.pair}</span>
+                <span class="name">{labelOf(pairs, entry.pair)}</span>
                 <span class="sub" class:error={result.tone === "error"} title={result.text}>{result.text}</span>
               </span>
             </button>

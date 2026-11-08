@@ -47,7 +47,7 @@
     let current = true;
     const timer = setTimeout(async () => {
       try {
-        const value = await api.previewTransform(pair.name, edited);
+        const value = await api.previewTransform(pair.id, edited);
         if (current) {
           sample = value;
           sampleLoaded = true;
@@ -123,7 +123,7 @@
   <p class="muted">{t("Looking for a note…")}</p>
 {/if}
 
-<SaveWithPreview pair={pair.name} {settings} onsaved={onchange} />
+<SaveWithPreview pair={pair.id} {settings} onsaved={onchange} />
 
 <style>
   .top {

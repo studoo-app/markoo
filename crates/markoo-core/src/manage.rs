@@ -20,19 +20,42 @@ fn with_new_pair(paths: &Paths, new: &NewPair) -> Result<(ConfigFile, String), E
     if DiskFs.meta(config_file)?.is_none() {
         ConfigFile::create(config_file)?;
     }
+    let project = new
+        .project
+        .as_deref()
+        .map(str::trim)
+        .filter(|project| !project.is_empty())
+        .ok_or_else(|| ConfigError::MissingProject(new.name.clone()))?;
+    let config = Config::load(config_file)?;
+    let project = config.known_project(project).unwrap_or(project).to_owned();
+    new.name = new.name.trim().to_owned();
+    let id = config.new_id(Some(&project), &new.name);
+    new.project = Some(project);
+    new.id = Some(id.clone());
     let mut file = ConfigFile::open(config_file)?;
     file.add_pair(&new)?;
     for (key, value) in &new.settings {
-        file.set(&new.name, key, value)?;
+        file.set(&id, key, value)?;
     }
-    Ok((file, new.name))
+    Ok((file, id))
 }
 
-/// Adds a pair and returns the warnings about it. Its folders must already be
-/// absolute (or start with `~`); only the caller knows what a relative one means.
-pub fn add_pair(paths: &Paths, new: &NewPair) -> Result<Vec<Problem>, Error> {
-    let (file, name) = with_new_pair(paths, new)?;
-    Ok(save_if_valid(&file, &name)?)
+/// A pair just added.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Added {
+    /// Its identifier, generated from its project and name.
+    pub id: String,
+    /// What is worth telling the user about it.
+    pub warnings: Vec<Problem>,
+}
+
+/// Adds a pair and returns its id and the warnings about it. Its folders must
+/// already be absolute (or start with `~`); only the caller knows what a
+/// relative one means.
+pub fn add_pair(paths: &Paths, new: &NewPair) -> Result<Added, Error> {
+    let (file, id) = with_new_pair(paths, new)?;
+    let warnings = save_if_valid(&file, &id)?;
+    Ok(Added { id, warnings })
 }
 
 /// The pair `add_pair` would create, checked but not saved: a daemon syncs a
@@ -42,15 +65,15 @@ pub fn preview_new_pair(paths: &Paths, new: &NewPair) -> Result<Pair, Error> {
     Ok(checked_pair(&file, &name)?)
 }
 
-/// Changes settings of a pair, all at once, and returns the warnings about it.
+/// Changes settings of a pair (given by id, `project/name` or name), all at once, and returns the warnings about it.
 /// Leaving `both` for a one-way direction is refused while issues are pending.
 pub fn set_pair(
     paths: &Paths,
     name: &str,
     changes: &[(String, String)],
 ) -> Result<Vec<Problem>, Error> {
-    let file = with_changes(paths, name, changes)?;
-    Ok(save_if_valid(&file, name)?)
+    let (file, id) = with_changes(paths, name, changes)?;
+    Ok(save_if_valid(&file, &id)?)
 }
 
 /// The pair `set_pair` would leave, checked but not saved.
@@ -59,20 +82,34 @@ pub fn preview_set_pair(
     name: &str,
     changes: &[(String, String)],
 ) -> Result<Pair, Error> {
-    let file = with_changes(paths, name, changes)?;
-    Ok(checked_pair(&file, name)?)
+    let (file, id) = with_changes(paths, name, changes)?;
+    Ok(checked_pair(&file, &id)?)
 }
 
 /// The configuration file with changes to a pair, not saved yet.
 fn with_changes(
     paths: &Paths,
-    name: &str,
+    reference: &str,
     changes: &[(String, String)],
-) -> Result<ConfigFile, Error> {
+) -> Result<(ConfigFile, String), Error> {
     let config = Config::load(paths.config_file())?;
-    let current = &config.pair(name)?.pair;
+    let current = &config.pair(reference)?.pair;
+    let name = current.id.as_str();
     let mut file = ConfigFile::open(paths.config_file())?;
     for (key, value) in changes {
+        let value = if key == "project" {
+            // Joins another pair's project spelled differently, if any; the
+            // pair's own project is left out so that it can be recased.
+            config
+                .pairs
+                .iter()
+                .filter(|entry| entry.pair.id != name)
+                .filter_map(|entry| entry.pair.project.as_deref())
+                .find(|project| project.to_lowercase() == value.trim().to_lowercase())
+                .unwrap_or(value)
+        } else {
+            value
+        };
         file.set(name, key, value)?;
     }
     let preview = file.preview()?;
@@ -86,7 +123,7 @@ fn with_changes(
             });
         }
     }
-    Ok(file)
+    Ok((file, name.to_owned()))
 }
 
 /// Changes settings that apply to every pair, all at once.
@@ -100,7 +137,13 @@ pub fn set_global(paths: &Paths, changes: &[(String, String)]) -> Result<(), Err
 }
 
 /// Removes a pair and forgets its state. Its files are not touched.
-pub fn remove_pair(paths: &Paths, name: &str) -> Result<(), Error> {
+pub fn remove_pair(paths: &Paths, reference: &str) -> Result<(), Error> {
+    let id = Config::load(paths.config_file())?
+        .pair(reference)?
+        .pair
+        .id
+        .clone();
+    let name = id.as_str();
     let mut file = ConfigFile::open(paths.config_file())?;
     file.remove_pair(name)?;
     let engine = Engine::open(DiskFs, paths)?;

@@ -1,6 +1,18 @@
 <script lang="ts">
   import { t } from "../lib/i18n.svelte";
-  import { api, errorText, type PairView, type Plan, type Settings } from "../lib/api";
+  import { onMount } from "svelte";
+  import {
+    api,
+    errorText,
+    isValidLabel,
+    isValidProject,
+    MAX_PROJECT_LEN,
+    nameTaken,
+    projectsOf,
+    type PairView,
+    type Plan,
+    type Settings,
+  } from "../lib/api";
   import DirectionCards from "../lib/DirectionCards.svelte";
   import Picker from "../lib/Picker.svelte";
   import PlanList from "../lib/PlanList.svelte";
@@ -8,6 +20,8 @@
   let { pair, onchange }: { pair: PairView; onchange: () => void } = $props();
 
   // Edited copies: a refresh of the pair must not overwrite what is being typed.
+  let name = $state("");
+  let project = $state("");
   // svelte-ignore state_referenced_locally
   let kb = $state(pair.kb);
   // svelte-ignore state_referenced_locally
@@ -23,9 +37,47 @@
   let error = $state<string | null>(null);
   let saved = $state(false);
   let busy = $state(false);
+  let others = $state<PairView[]>([]);
+  const projects = $derived(projectsOf(others));
+
+  function loadPairs() {
+    api.listPairs().then((pairs) => (others = pairs)).catch(() => {});
+  }
+
+  onMount(loadPairs);
+
+  // Follows the saved name: a rename keeps the identifier, so this page stays.
+  const savedName = $derived(pair.name);
+  $effect(() => {
+    name = savedName;
+  });
+
+  // Follows the saved project, which may take the spelling of an existing one.
+  const savedProject = $derived(pair.project ?? "");
+  $effect(() => {
+    project = savedProject;
+  });
+
+  const projectChanged = $derived(project.trim() !== savedProject);
+  // A sync made before projects may stay without one, but a project is never emptied.
+  const projectOk = $derived(!projectChanged || isValidProject(project));
+
+  const nameChanged = $derived(name.trim() !== savedName);
+  // Why the name cannot be saved, if it cannot.
+  const nameError = $derived(
+    !nameChanged && !projectChanged
+      ? null
+      : !isValidLabel(name.trim())
+        ? t("Use one line of at most {max} characters, without “/”.", { max: MAX_PROJECT_LEN })
+        : nameTaken(others, project.trim() || pair.project, name, pair.id)
+          ? t("A sync of this project already has this name.")
+          : null,
+  );
 
   function settings(): Settings {
     const changes: Settings = {};
+    if (nameChanged) changes.name = name.trim();
+    if (projectChanged) changes.project = project.trim();
     if (kb !== pair.kb) changes.kb = kb;
     if (repo !== pair.repo) changes.repo = repo;
     if (kbType !== pair.kb_type) changes.kb_type = kbType;
@@ -35,7 +87,9 @@
   }
 
   const dirty = $derived(
-    kb !== pair.kb ||
+    nameChanged ||
+      projectChanged ||
+      kb !== pair.kb ||
       repo !== pair.repo ||
       kbType !== pair.kb_type ||
       direction !== pair.direction ||
@@ -43,10 +97,16 @@
   );
 
   async function showPreview() {
+    // Renaming a sync or moving it to another project changes no file:
+    // nothing to preview.
+    if (Object.keys(settings()).every((key) => key === "name" || key === "project")) {
+      await confirm();
+      return;
+    }
     busy = true;
     saved = false;
     try {
-      preview = await api.previewSettings(pair.name, settings());
+      preview = await api.previewSettings(pair.id, settings());
       error = null;
     } catch (failure) {
       error = errorText(failure);
@@ -58,11 +118,12 @@
   async function confirm() {
     busy = true;
     try {
-      await api.updateSettings(pair.name, settings());
+      await api.updateSettings(pair.id, settings());
       preview = null;
       error = null;
       saved = true;
       onchange();
+      loadPairs();
     } catch (failure) {
       error = errorText(failure);
     } finally {
@@ -83,6 +144,36 @@
     <button class="primary" type="button" disabled={busy} onclick={confirm}>{t("Save")}</button>
   </div>
 {:else}
+  <div class="field">
+    <label for="name">{t("Name of the sync")}</label>
+    <input id="name" type="text" bind:value={name} maxlength={MAX_PROJECT_LEN} spellcheck="false" />
+    {#if nameError}
+      <div class="hint error">{nameError}</div>
+    {:else}
+      <div class="hint muted">
+        {t("Identifier")}: <code>{pair.id}</code> — {t("used by the CLI and the Git hooks; it never changes.")}
+      </div>
+    {/if}
+  </div>
+  <div class="field">
+    <label for="project">{t("Project")}</label>
+    <input
+      id="project"
+      type="text"
+      list="known-projects"
+      bind:value={project}
+      maxlength={MAX_PROJECT_LEN}
+      spellcheck="false"
+    />
+    <datalist id="known-projects">
+      {#each projects as known}
+        <option value={known}></option>
+      {/each}
+    </datalist>
+    {#if !projectOk}
+      <div class="hint error">{t("Name the project of this sync.")}</div>
+    {/if}
+  </div>
   <div class="field">
     <label for="kb-type">{t("KB type")}</label>
     <select id="kb-type" bind:value={kbType}>
@@ -109,7 +200,7 @@
     <p class="ok" role="status">{t("Saved.")}</p>
   {/if}
   <div class="row end">
-    <button class="primary" type="button" disabled={!dirty || busy} onclick={showPreview}>{t("Save and preview")}</button>
+    <button class="primary" type="button" disabled={!dirty || !projectOk || nameError !== null || busy} onclick={showPreview}>{t("Save and preview")}</button>
   </div>
 {/if}
 

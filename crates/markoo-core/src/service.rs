@@ -64,14 +64,14 @@ pub fn usable_pair(paths: &Paths, name: &str) -> Result<Pair, Error> {
     let errors: Vec<String> = validation
         .errors
         .into_iter()
-        .filter(|problem| problem.pair == name)
+        .filter(|problem| problem.pair == pair.id)
         .map(|problem| problem.message)
         .collect();
     if errors.is_empty() {
         return Ok(pair);
     }
     Err(ConfigError::InvalidPair {
-        pair: name.to_owned(),
+        pair: pair.id,
         message: errors.join("; "),
     }
     .into())
@@ -81,7 +81,10 @@ pub fn usable_pair(paths: &Paths, name: &str) -> Result<Pair, Error> {
 pub fn pair_view(entry: &PairEntry) -> Value {
     let pair = &entry.pair;
     json!({
+        "id": pair.id,
         "name": pair.name,
+        "label": pair.label(),
+        "project": pair.project,
         "kb": pair.kb,
         "kb_type": pair.kb_type,
         "repo": pair.repo,
@@ -119,7 +122,7 @@ pub fn list_pairs(paths: &Paths) -> Result<Vec<Value>, Error> {
     let engine = open_engine(paths)?;
     let mut views = Vec::with_capacity(config.pairs.len());
     for entry in &config.pairs {
-        let name = entry.pair.name.as_str();
+        let name = entry.pair.id.as_str();
         let mut view = pair_view(entry);
         view["pending"] = json!(engine.pending_count(&entry.pair)?);
         view["errors"] = json!(
@@ -133,6 +136,44 @@ pub fn list_pairs(paths: &Paths) -> Result<Vec<Value>, Error> {
         views.push(view);
     }
     Ok(views)
+}
+
+/// The projects and the ids of their pairs, in file order; pairs created
+/// before projects existed come last, under `"project": null`.
+pub fn projects(paths: &Paths) -> Result<Vec<Value>, Error> {
+    let config = Config::load(paths.config_file())?;
+    let members = |project: Option<&str>| -> Vec<&str> {
+        config
+            .pairs
+            .iter()
+            .filter(|entry| entry.pair.project.as_deref() == project)
+            .map(|entry| entry.pair.id.as_str())
+            .collect()
+    };
+    let mut views: Vec<Value> = config
+        .projects()
+        .into_iter()
+        .map(|project| json!({"project": project, "pairs": members(Some(project))}))
+        .collect();
+    let orphans = members(None);
+    if !orphans.is_empty() {
+        views.push(json!({"project": null, "pairs": orphans}));
+    }
+    Ok(views)
+}
+
+/// Ids of the pairs of a project, in file order.
+pub fn project_pairs(paths: &Paths, project: &str) -> Result<Vec<String>, Error> {
+    let config = Config::load(paths.config_file())?;
+    let project = config
+        .known_project(project)
+        .ok_or_else(|| Error::InvalidRequest(format!("no project named \"{project}\"")))?;
+    Ok(config
+        .pairs
+        .iter()
+        .filter(|entry| entry.pair.project.as_deref() == Some(project))
+        .map(|entry| entry.pair.id.clone())
+        .collect())
 }
 
 /// Settings of a pair.
@@ -151,7 +192,7 @@ fn plan_view(engine: &Engine<DiskFs>, pair: &Pair) -> Result<Value, Error> {
         .map(crate::plan::PlannedEntry::view)
         .collect();
     Ok(json!({
-        "pair": pair.name,
+        "pair": pair.id,
         "direction": pair.direction,
         "paused": pair.paused,
         "entries": entries,
@@ -173,7 +214,7 @@ pub fn status_of_all(paths: &Paths) -> Result<Vec<Value>, Error> {
         .pairs
         .iter()
         .map(|entry| {
-            let name = entry.pair.name.as_str();
+            let name = entry.pair.id.as_str();
             status(paths, name)
                 .unwrap_or_else(|error| json!({"pair": name, "error": error.to_string()}))
         })
@@ -192,7 +233,7 @@ pub fn diff(paths: &Paths, name: &str, path: Option<&str>) -> Result<Value, Erro
     let only = path.map(entry_path).transpose()?;
     let pair = usable_pair(paths, name)?;
     let diffs = open_engine(paths)?.diffs(&pair, only.as_ref())?;
-    Ok(json!({"pair": name, "diffs": diffs}))
+    Ok(json!({"pair": pair.id, "diffs": diffs}))
 }
 
 /// Whether a folder can be written to the configuration by a remote client.
@@ -233,10 +274,6 @@ pub fn warnings_view(warnings: &[Problem]) -> Vec<&str> {
 fn setting_changes(settings: &Map<String, Value>) -> Result<Vec<(String, String)>, Error> {
     let mut changes = Vec::with_capacity(settings.len());
     for (key, value) in settings {
-        // The state is stored under the name: renaming would lose the base.
-        if key == "name" {
-            return Err(Error::InvalidRequest("a pair cannot be renamed".to_owned()));
-        }
         let text = setting_text(key, value)?;
         if key == "kb" || key == "repo" {
             check_folder(key, &text)?;
@@ -253,12 +290,18 @@ pub fn update_config(
     settings: &Map<String, Value>,
 ) -> Result<Value, Error> {
     let changes = setting_changes(settings)?;
+    // Resolved first: a new name may no longer match what the client sent.
+    let id = Config::load(paths.config_file())?
+        .pair(name)?
+        .pair
+        .id
+        .clone();
     let warnings = {
         let _edit = config_edit();
-        manage::set_pair(paths, name, &changes)?
+        manage::set_pair(paths, &id, &changes)?
     };
     let config = Config::load(paths.config_file())?;
-    let entry = config.pair(name)?;
+    let entry = config.pair(&id)?;
     let preview = plan_view(&open_engine(paths)?, &entry.pair);
     Ok(json!({
         "pair": pair_view(entry),
@@ -422,7 +465,7 @@ pub fn hooks_state(paths: &Paths, name: &str) -> Result<Value, Error> {
     let Ok(repo) = GitRepo::open(&pair.repo) else {
         return Ok(json!({"git": false, "installed": [], "manager": null}));
     };
-    let installed: Vec<String> = hooks::files_with_block(&DiskFs, &repo, name)
+    let installed: Vec<String> = hooks::files_with_block(&DiskFs, &repo, &pair.id)
         .map_err(hook_error)?
         .iter()
         .filter_map(|file| file.file_name())
@@ -469,7 +512,7 @@ fn edit_hooks(
     let pair = &config.pair(name)?.pair;
     let repo = GitRepo::open(&pair.repo).map_err(hook_error)?;
     let target = HookTarget {
-        pair: name,
+        pair: &pair.id,
         program,
         config_file: paths.config_file(),
         data_dir: paths.data_dir(),
@@ -514,15 +557,16 @@ pub fn conflict_draft(paths: &Paths, id: &str) -> Result<String, Error> {
 /// KB, base and repo versions.
 pub fn conflicts(paths: &Paths, only: Option<&str>) -> Result<Value, Error> {
     let config = Config::load(paths.config_file())?;
-    if let Some(name) = only {
-        config.pair(name)?;
-    }
+    let only = only
+        .map(|reference| config.pair(reference).map(|entry| entry.pair.id.clone()))
+        .transpose()?;
+    let only = only.as_deref();
     let validation = config.validate();
     let engine = open_engine(paths)?;
     let (mut conflicts, mut excluded, mut errors) = (Vec::new(), Vec::new(), Vec::new());
     for entry in &config.pairs {
         let pair = &entry.pair;
-        if only.is_some_and(|name| name != pair.name) || !validation.is_ok(&pair.name) {
+        if only.is_some_and(|name| name != pair.id) || !validation.is_ok(&pair.id) {
             continue;
         }
         match engine.issues(pair) {
@@ -530,8 +574,8 @@ pub fn conflicts(paths: &Paths, only: Option<&str>) -> Result<Value, Error> {
                 let bases = engine.bases(pair)?;
                 conflicts.extend(issues.iter().map(|issue| {
                     json!({
-                        "id": issue_id(&pair.name, &issue.path),
-                        "pair": pair.name,
+                        "id": issue_id(&pair.id, &issue.path),
+                        "pair": pair.id,
                         "path": issue.path,
                         "kind": issue.kind,
                         "kb": issue.kb,
@@ -540,12 +584,12 @@ pub fn conflicts(paths: &Paths, only: Option<&str>) -> Result<Value, Error> {
                     })
                 }));
             }
-            Err(error) => errors.push(json!({"pair": pair.name, "error": error.to_string()})),
+            Err(error) => errors.push(json!({"pair": pair.id, "error": error.to_string()})),
         }
         for path in engine.ignored(pair)? {
             excluded.push(json!({
-                "id": issue_id(&pair.name, &path),
-                "pair": pair.name,
+                "id": issue_id(&pair.id, &path),
+                "pair": pair.id,
                 "path": path,
             }));
         }
@@ -595,7 +639,7 @@ fn find_issue(paths: &Paths, id: &str) -> Result<(Pair, EntryPath), Error> {
     let engine = open_engine(paths)?;
     for entry in &config.pairs {
         let pair = &entry.pair;
-        if !validation.is_ok(&pair.name) {
+        if !validation.is_ok(&pair.id) {
             continue;
         }
         // An unavailable pair cannot hold the issue we can act on.
@@ -607,7 +651,7 @@ fn find_issue(paths: &Paths, id: &str) -> Result<(Pair, EntryPath), Error> {
             .map(|issue| issue.path)
             .chain(engine.ignored(pair)?);
         for path in known {
-            if issue_id(&pair.name, &path) == id {
+            if issue_id(&pair.id, &path) == id {
                 return Ok((pair.clone(), path));
             }
         }
@@ -619,13 +663,14 @@ fn find_issue(paths: &Paths, id: &str) -> Result<(Pair, EntryPath), Error> {
 pub fn resolve(paths: &Paths, id: &str, resolution: Resolution) -> Result<Value, Error> {
     let (pair, path) = find_issue(paths, id)?;
     let report = open_engine(paths)?.resolve(&pair, &path, resolution)?;
-    Ok(json!({"pair": pair.name, "path": path, "report": report}))
+    Ok(json!({"pair": pair.id, "path": path, "report": report}))
 }
 
 /// The most recent syncs of a pair, the latest first.
 pub fn history(paths: &Paths, name: &str, limit: u32) -> Result<Value, Error> {
-    Config::load(paths.config_file())?.pair(name)?;
-    Ok(json!(open_engine(paths)?.history(name, limit)?))
+    let config = Config::load(paths.config_file())?;
+    let id = &config.pair(name)?.pair.id;
+    Ok(json!(open_engine(paths)?.history(id, limit)?))
 }
 
 /// The most recent syncs of every pair, the latest first, as `{pair, run}` entries.
@@ -645,8 +690,8 @@ pub fn runnable_pairs(paths: &Paths) -> Result<Vec<String>, Error> {
     Ok(config
         .pairs
         .iter()
-        .filter(|entry| !entry.pair.paused && validation.is_ok(&entry.pair.name))
-        .map(|entry| entry.pair.name.clone())
+        .filter(|entry| !entry.pair.paused && validation.is_ok(&entry.pair.id))
+        .map(|entry| entry.pair.id.clone())
         .collect())
 }
 
@@ -660,7 +705,7 @@ pub fn run_sync(
 ) -> Result<SyncOutcome, Error> {
     let pair = usable_pair(paths, name)?;
     if pair.paused {
-        return Err(Error::Paused(name.to_owned()));
+        return Err(Error::Paused(pair.id));
     }
     let outcome = open_engine(paths)?.run_recorded(&pair, dry_run, trigger)?;
     let plan = &outcome.planned.plan;
@@ -669,7 +714,7 @@ pub fn run_sync(
         .iter()
         .filter_map(|entry| match &entry.action {
             Action::Pending { issue, .. } => Some(json!({
-                "id": issue_id(name, &entry.path),
+                "id": issue_id(&pair.id, &entry.path),
                 "path": entry.path,
                 "kind": issue,
             })),

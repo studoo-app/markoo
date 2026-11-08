@@ -65,8 +65,14 @@ impl From<ConfigError> for ApiError {
     fn from(error: ConfigError) -> Self {
         let status = match &error {
             ConfigError::UnknownPair(_) => StatusCode::NOT_FOUND,
-            ConfigError::DuplicatePair(_) => StatusCode::CONFLICT,
+            ConfigError::DuplicatePair(_)
+            | ConfigError::DuplicateName { .. }
+            | ConfigError::AmbiguousPair { .. } => StatusCode::CONFLICT,
             ConfigError::InvalidName(_)
+            | ConfigError::InvalidLabel(_)
+            | ConfigError::ImmutableId
+            | ConfigError::InvalidProject(_)
+            | ConfigError::MissingProject(_)
             | ConfigError::UnknownKey(_)
             | ConfigError::InvalidPair { .. }
             | ConfigError::UnsupportedKbType { .. }
@@ -136,6 +142,8 @@ pub(crate) fn router(paths: Paths, queue: Queue, mcp: bool) -> (Router, Option<M
         queue,
         started: Instant::now(),
     };
+    // `{pair}` is the id of a pair (stable), its `project/name`, or its name
+    // when no other project has a pair with that name. Answers name it by id.
     let mut routes = Router::new()
         .route("/health", get(health))
         .route("/pairs", get(list_pairs).post(create_pair))
@@ -145,6 +153,8 @@ pub(crate) fn router(paths: Paths, queue: Queue, mcp: bool) -> (Router, Option<M
         .route("/pairs/{pair}/sync", post(sync))
         .route("/pairs/{pair}/config", get(get_config).patch(patch_config))
         .route("/jobs/{id}", get(job))
+        .route("/projects", get(projects))
+        .route("/projects/{project}/sync", post(sync_project))
         .route("/conflicts", get(conflicts))
         .route("/conflicts/{id}/resolve", post(resolve))
         .route("/events", get(events));
@@ -194,7 +204,7 @@ async fn list_pairs(State(app): State<App>) -> ApiResult {
         let mut views = service::list_pairs(&app.paths)?;
         let active = app.queue.active_pairs();
         for view in &mut views {
-            view["active"] = json!(active.iter().any(|pair| view["name"] == pair.as_str()));
+            view["active"] = json!(active.iter().any(|pair| view["id"] == pair.as_str()));
         }
         Ok(Json(Value::Array(views)))
     })
@@ -204,7 +214,10 @@ async fn list_pairs(State(app): State<App>) -> ApiResult {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreatePair {
+    /// Free text, unique within the project; the id is generated from it.
     name: String,
+    /// An existing project, or a new one named by this pair.
+    project: Option<String>,
     kb: String,
     repo: String,
     kb_type: Option<String>,
@@ -212,6 +225,7 @@ struct CreatePair {
     target_changes: Option<String>,
 }
 
+/// Adds a pair; the answer is its view, with its generated `id`.
 async fn create_pair(
     State(app): State<App>,
     Json(body): Json<CreatePair>,
@@ -220,7 +234,9 @@ async fn create_pair(
     service::check_folder("repo", &body.repo)?;
     blocking(move || {
         let new = NewPair {
+            id: None,
             name: body.name,
+            project: body.project,
             kb: body.kb,
             kb_type: body.kb_type,
             repo: body.repo,
@@ -228,13 +244,13 @@ async fn create_pair(
             target_changes: body.target_changes,
             settings: Vec::new(),
         };
-        let warnings = {
+        let added = {
             let _edit = service::config_edit();
             manage::add_pair(&app.paths, &new)?
         };
         let config = Config::load(app.paths.config_file()).map_err(ApiError::from)?;
-        let mut view = service::pair_view(config.pair(&new.name).map_err(ApiError::from)?);
-        view["warnings"] = json!(service::warnings_view(&warnings));
+        let mut view = service::pair_view(config.pair(&added.id).map_err(ApiError::from)?);
+        view["warnings"] = json!(service::warnings_view(&added.warnings));
         Ok((StatusCode::CREATED, Json(view)))
     })
     .await
@@ -243,8 +259,10 @@ async fn create_pair(
 async fn delete_pair(State(app): State<App>, Path(name): Path<String>) -> ApiResult {
     blocking(move || {
         let _edit = service::config_edit();
-        manage::remove_pair(&app.paths, &name)?;
-        Ok(Json(json!({"removed": name})))
+        let config = Config::load(app.paths.config_file())?;
+        let id = config.pair(&name)?.pair.id.clone();
+        manage::remove_pair(&app.paths, &id)?;
+        Ok(Json(json!({"removed": id})))
     })
     .await
 }
@@ -282,36 +300,77 @@ struct SyncBody {
     trigger: Option<String>,
 }
 
+/// Reads the optional body of a sync request.
+fn sync_options(body: &Bytes) -> ApiResult<(bool, Trigger)> {
+    // The body is optional, whatever the Content-Type says.
+    if body.is_empty() {
+        return Ok((false, Trigger::Api));
+    }
+    let body = serde_json::from_slice::<SyncBody>(body)
+        .map_err(|error| ApiError::bad_request(error.to_string()))?;
+    let trigger = match body.trigger.as_deref() {
+        None => Trigger::Api,
+        Some("hook") => Trigger::Hook,
+        Some(other) => {
+            return Err(ApiError::bad_request(format!("unknown trigger {other}")));
+        }
+    };
+    Ok((body.dry_run, trigger))
+}
+
 async fn sync(
     State(app): State<App>,
     Path(name): Path<String>,
     body: Bytes,
 ) -> ApiResult<(StatusCode, Json<Value>)> {
-    // The body is optional, whatever the Content-Type says.
-    let (dry_run, trigger) = if body.is_empty() {
-        (false, Trigger::Api)
-    } else {
-        let body = serde_json::from_slice::<SyncBody>(&body)
-            .map_err(|error| ApiError::bad_request(error.to_string()))?;
-        let trigger = match body.trigger.as_deref() {
-            None => Trigger::Api,
-            Some("hook") => Trigger::Hook,
-            Some(other) => {
-                return Err(ApiError::bad_request(format!("unknown trigger {other}")));
-            }
-        };
-        (body.dry_run, trigger)
-    };
+    let (dry_run, trigger) = sync_options(&body)?;
     let paths = app.paths.clone();
-    let lookup = name.clone();
-    let pair = blocking(move || Ok(service::usable_pair(&paths, &lookup)?)).await?;
+    let pair = blocking(move || Ok(service::usable_pair(&paths, &name)?)).await?;
     if pair.paused {
-        return Err(markoo_core::Error::Paused(name).into());
+        return Err(markoo_core::Error::Paused(pair.id).into());
     }
-    let job = app.queue.submit(&name, dry_run, trigger);
+    // Queued by id: the same lock whatever reference the client used.
+    let job = app.queue.submit(&pair.id, dry_run, trigger);
     Ok((
         StatusCode::ACCEPTED,
-        Json(json!({"job": job, "pair": name})),
+        Json(json!({"job": job, "pair": pair.id})),
+    ))
+}
+
+async fn projects(State(app): State<App>) -> ApiResult {
+    blocking(move || Ok(Json(Value::Array(service::projects(&app.paths)?)))).await
+}
+
+/// Queues a sync of every pair of a project that can sync; the paused or
+/// invalid ones are reported as skipped.
+async fn sync_project(
+    State(app): State<App>,
+    Path(project): Path<String>,
+    body: Bytes,
+) -> ApiResult<(StatusCode, Json<Value>)> {
+    let (dry_run, trigger) = sync_options(&body)?;
+    let paths = app.paths.clone();
+    let lookup = project.clone();
+    let (members, runnable) = blocking(move || {
+        let members = service::project_pairs(&paths, &lookup).map_err(|error| match error {
+            markoo_core::Error::InvalidRequest(message) => {
+                ApiError::new(StatusCode::NOT_FOUND, message)
+            }
+            other => other.into(),
+        })?;
+        Ok((members, service::runnable_pairs(&paths)?))
+    })
+    .await?;
+    let (ready, skipped): (Vec<String>, Vec<String>) = members
+        .into_iter()
+        .partition(|pair| runnable.contains(pair));
+    let jobs: Vec<Value> = ready
+        .iter()
+        .map(|pair| json!({"pair": pair, "job": app.queue.submit(pair, dry_run, trigger)}))
+        .collect();
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(json!({"project": project, "jobs": jobs, "skipped": skipped})),
     ))
 }
 

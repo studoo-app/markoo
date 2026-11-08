@@ -36,6 +36,8 @@ flowchart LR
 | HTTP API | ✅ `GET /pairs/{pair}/config` | ✅ `POST /pairs`, `PATCH /pairs/{pair}/config`, `DELETE /pairs/{pair}` |
 | MCP | ✅ `get_pair_config` | ❌ by default; can be enabled with `mcp.allow_config_write = true` (`update_pair_config` tool) |
 
+Pair listings of the API and MCP include each pair's id, name and project, and a whole project can be synced. Every access designates a pair by its id, by `Project/Name` or by a name no other project uses, see [Designate a pair](06-configuration.md#designate-a-pair).
+
 Configuration writes by an AI agent are disabled by default: changing a direction or a folder can cause massive writes on the next sync.
 
 ## App navigation
@@ -44,7 +46,7 @@ Configuration writes by an AI agent are disabled by default: changing a directio
 flowchart TD
     MB["Menu bar<br/>🟢 / 🔵 / 🟠"] -->|Open Markoo| HOME
     MB -->|Sync now| SYNC((sync))
-    HOME["Home<br/>list of pairs"] -->|+ New pair| WIZ["Creation wizard<br/>(6 steps)"]
+    HOME["Home<br/>pairs by project"] -->|+ add a sync / project: Add a sync| WIZ["Creation wizard<br/>(6 steps)"]
     HOME -->|click on a pair| PAIR["Pair details"]
     PAIR --> T1["General tab<br/>KB, repo + direction"]
     PAIR --> T2["Filters tab"]
@@ -58,6 +60,7 @@ flowchart TD
     SIDE -->|Settings| GLOB["Global settings<br/>interval, API, MCP, backups"]
     HOME -->|card: settings| T1
     HOME -->|card: sync now| SYNC
+    HOME -->|project: Sync project| SYNC
     WIZ -->|Create| PREV["Preview (dry-run)"]
     T1 & T2 & T3 -->|Save| PREV
     PREV -->|Confirm| SYNC
@@ -65,7 +68,7 @@ flowchart TD
 
 ## Screens
 
-### Home: list of pairs
+### Home: pairs by project
 
 ```text
 ┌─ Markoo — v1.0.0 ────────────────────────────────────────────────────────┐
@@ -73,22 +76,28 @@ flowchart TD
 │ ─────────── │  ───────────────────────────────────────────────────────── │
 │ ▣ Syncs     │  [ 🔍 Search your syncs…                               ]   │
 │             │                                                            │
-│             │  Obsidian vaults  wikilinks, embeds and callouts…          │
+│             │  Clara  1 sync          [⟳ Sync project] [+ Add a sync]    │
 │             │  ┌──────────────────────────────────────────────────────┐  │
 │             │  │ 📁 clara                2 min ago  [TO SETTLE] ⟳ ⚙ 🗑 │  │
 │             │  │    Clara ⇄ docs – 1 to settle   last sync            │  │
 │             │  └──────────────────────────────────────────────────────┘  │
+│             │                                                            │
+│             │  Markoo  2 syncs        [⟳ Sync project] [+ Add a sync]    │
 │             │  ┌──────────────────────────────────────────────────────┐  │
-│             │  │ 📁 markoo               1 h ago   [UP TO DATE] ⟳ ⚙ 🗑 │  │
+│             │  │ 📁 documentation        1 h ago   [UP TO DATE] ⟳ ⚙ 🗑 │  │
 │             │  │    Markoo ← documentation – in step                   │  │
+│             │  └──────────────────────────────────────────────────────┘  │
+│             │  ┌──────────────────────────────────────────────────────┐  │
+│             │  │ 📁 skill                1 h ago   [UP TO DATE] ⟳ ⚙ 🗑 │  │
+│             │  │    Skill ⇄ skill – in step                            │  │
 │             │  └──────────────────────────────────────────────────────┘  │
 │             │  [ + add a sync ]                                          │
 │ ∿ Activity  │                                                            │
-│ ⚙ Settings  │  Markdown folders  plain Markdown, copied as it is          │
+│ ⚙ Settings  │                                                             │
 └─────────────┴────────────────────────────────────────────────────────────┘
 ```
 
-Pairs are grouped by **KB type** (Obsidian vaults, Markdown folders…). Each card shows the KB folder and the repo folder, the time of the last recorded sync, a status (Up to date, Syncing, To settle, Paused, Error) and three actions: sync now, open the pair's settings (General tab), and remove the sync after a confirmation (the files stay where they are). The arrow between the two folders always shows the direction: `⇄` bidirectional, `→` KB to repo, `←` repo to KB. The window title shows the version.
+Pairs are grouped by **project**, in the order of `markoo.toml`; pairs created before projects existed have none and are listed last. Each project shows how many syncs it holds and two actions: **Sync project** syncs its pairs that can sync (those paused, already syncing or in error are left out), and **Add a sync** opens the creation wizard with the project already chosen. The **+ add a sync** button below all the projects opens the wizard without a project chosen: the new sync can join any project or start a new one. Each card shows the KB folder and the repo folder, the time of the last recorded sync, a status (Up to date, Syncing, To settle, Paused, Error) and three actions: sync now, open the pair's settings (General tab), and remove the sync after a confirmation (the files stay where they are). The arrow between the two folders always shows the direction: `⇄` bidirectional, `→` KB to repo, `←` repo to KB. The window title shows the version.
 
 ### Activity
 
@@ -99,7 +108,8 @@ The **Activity** view in the sidebar lists the latest recorded syncs of every pa
 ```text
 ┌─ clara › General ────────────────────────────────────────────────┐
 │                                                                  │
-│  Name           [ clara                     ]                    │
+│  Name           [ Documentation Clara       ]                    │
+│                 Identifier: clara (never changes)                │
 │                                                                  │
 │  KB type        [ Obsidian (detected)   ▾ ]                      │
 │  KB             [ ~/Obsidian/Knowledge/Projets/Clara ] [Browse]  │
@@ -126,6 +136,7 @@ The **Activity** view in the sidebar lists the latest recorded syncs of every pa
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+- **Name** is free text, up to 64 characters, unique within the project. Saving a new name renames the pair without a preview, since no file changes: its history, pending conflicts and Git hooks stay with it. The **identifier** below it is read-only: it is the key used by the CLI, the API, the Git hooks and the state, and it never changes, see [Id and name](06-configuration.md#id-and-name).
 - The **KB type** is detected from the chosen folder (see [Knowledge bases](09-knowledge-bases.md#supported-knowledge-base-types)); it can be forced from the list. The message under the KB field comes from the adapter: Obsidian vault recognized, plain Markdown folder…
 - The options shown depend on the direction: “If the target is changed” only appears for a one-way mode, and “Conflicts” only for bidirectional mode.
 - The **Save and preview** button opens the preview (dry-run) instead of saving directly when the change affects folders, KB type, direction or filters.
@@ -169,7 +180,7 @@ A **before / after** panel shows the effect on a real note from the pair.
 
 ```mermaid
 flowchart LR
-    S1["1. Knowledge base<br/>KB type + folder"] --> S2["2. Repo<br/>pick repository + folder"]
+    S1["1. Knowledge base<br/>project + folder + KB type + name"] --> S2["2. Repo<br/>pick repository + folder"]
     S2 --> S3["3. Direction<br/>→ · ⇄ · ←"]
     S3 --> S4["4. Filters<br/>live preview"]
     S4 --> S5["5. Triggers<br/>interval, hooks"]
@@ -177,7 +188,7 @@ flowchart LR
     S6 -->|Create| OK(["Pair created,<br/>first sync"])
 ```
 
-- **Step 1**: first the **KB type** is chosen (auto-detected when possible), then the folder. Known KBs are suggested by the adapter: the Obsidian one reads the app's `obsidian.json` file (`~/Library/Application Support/obsidian/` on macOS, `~/.config/obsidian/` on Linux, `%APPDATA%\obsidian\` on Windows); other adapters may suggest nothing and just offer a folder picker. A folder can always be picked by hand.
+- **Step 1**: the first field is the **project**. When projects exist, a list offers them, plus **New project…**, which shows a field to name one; for the very first pair, only the **Project name** field is shown. A name that differs from an existing one only by case joins that project. When the wizard is opened from a project's **Add a sync**, that project is already chosen. Then the folder is chosen, and the **KB type** (auto-detected when possible). The step ends with the **name of the sync**: free text such as "Technical documentation", suggested from the KB folder's name until you type one, and changeable later in the General tab. Markoo derives the pair's id from the project and this name (`Markoo` + `Documentation` gives `markoo-documentation`) and never changes it afterwards. Known KBs are suggested by the adapter: the Obsidian one reads the app's `obsidian.json` file (`~/Library/Application Support/obsidian/` on macOS, `~/.config/obsidian/` on Linux, `%APPDATA%\obsidian\` on Windows); other adapters may suggest nothing and just offer a folder picker. A folder can always be picked by hand.
 - **Step 2**: the picker checks that the folder is inside a Git repository and shows the current branch.
 - **Step 3**: the three direction cards, with bidirectional mode preselected.
 - **Step 6, first sync of a new pair**: if both folders already contain files, the preview highlights files present on both sides with different content (case 5 of the [classification](03-sync-algorithm.md#classification)) so the user can deal with them before starting. It also counts the files going to each side, and warns about those going to the KB that Git does not track in the repo: they may have nothing to do with the repository.
@@ -209,7 +220,8 @@ sequenceDiagram
 
 The [load-time validation](06-configuration.md#load-time-validation) rules apply while typing, plus:
 
-- pair name unique and URL-safe (`[a-z0-9-]+`);
+- pair name required, free text of 1 to 64 characters on one line without `/`, unique within its project regardless of case (another project may use it);
+- project name required for a new pair, 1 to 64 characters on one line;
 - switching from `both` to a one-way direction is **refused** while conflicts are still pending (see [Changing direction](03-sync-algorithm.md#changing-direction));
 - choosing `overwrite`: explicit warning, with the number of target files that would be modified or moved to the trash.
 
@@ -218,7 +230,7 @@ The [load-time validation](06-configuration.md#load-time-validation) rules apply
 Everything the UI does can be done from the command line:
 
 ```bash
-markoo pair add clara --kb ~/Obsidian/Knowledge/Projets/Clara --kb-type obsidian --repo ~/Projets/lerebours/clara/docs --direction both
+markoo pair add clara --project Clara --kb ~/Obsidian/Knowledge/Projets/Clara --kb-type obsidian --repo ~/Projets/lerebours/clara/docs --direction both
 ```
 
 ```bash
@@ -226,7 +238,19 @@ markoo pair set clara direction kb-to-repo --target-changes protect
 ```
 
 ```bash
+markoo pair set clara project Clara
+```
+
+```bash
+markoo pair set clara name "Documentation Clara"
+```
+
+```bash
 markoo pair list
 ```
 
-`--kb-type` is optional: without it, the type is detected from the folder. Without arguments, `markoo pair add` runs the same wizard interactively in the terminal.
+```bash
+markoo sync --project Clara
+```
+
+`--project` is required: it names a new project or joins an existing one, whatever its case. The name may hold spaces when quoted (`markoo pair add "Technical documentation" --project Markoo …`); the id is generated from the project and the name. `markoo pair set <pair> name "…"` renames a pair; `id` cannot be set. `--kb-type` is optional: without it, the type is detected from the folder. Without arguments, `markoo pair add` runs the same wizard interactively in the terminal, asking the project first. `markoo pair list` shows the pairs project by project, and `--project` on `markoo sync` and `markoo status` acts on every pair of a project.

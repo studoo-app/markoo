@@ -2,7 +2,7 @@
   import { locale, t } from "../lib/i18n.svelte";
   import { api, errorText, type RunRecord } from "../lib/api";
 
-  let { name, revision }: { name: string; revision: number } = $props();
+  let { id, revision }: { id: string; revision: number } = $props();
 
   let runs = $state<RunRecord[] | null>(null);
   let error = $state<string | null>(null);
@@ -10,7 +10,7 @@
   $effect(() => {
     void revision;
     api
-      .pairHistory(name)
+      .pairHistory(id)
       .then((value) => {
         runs = value;
         error = null;

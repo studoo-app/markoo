@@ -32,13 +32,17 @@ cargo install --path crates/markoo-cli --locked
 
 Une **paire** relie un dossier de la KB à un dossier du dépôt. Choisissez des dossiers précis : une paire suit tout ce qu'ils contiennent.
 
-**Dans l'app**, cliquez sur **New pair** et suivez les étapes. **Lisez la dernière avant de créer la paire** : elle liste ce qui sera copié et dans quel sens. Elle signale les fichiers envoyés vers la KB que Git ne suit pas dans le dépôt : ils peuvent n'avoir aucun rapport avec le projet, par exemple si une paire précédente les y a laissés.
+Les paires sont regroupées par **projet** : le projet `Markoo`, par exemple, peut contenir une paire `documentation` et une paire `skill`. Vous nommez le projet à la création de sa première paire ; les suivantes le choisissent, ou en nomment un nouveau.
+
+**Dans l'app**, cliquez sur **Ajouter un sync** et suivez les étapes. La première demande le projet : nommez-le pour votre première paire, puis choisissez-le dans la liste. **Lisez la dernière avant de créer la paire** : elle liste ce qui sera copié et dans quel sens. Elle signale les fichiers envoyés vers la KB que Git ne suit pas dans le dépôt : ils peuvent n'avoir aucun rapport avec le projet, par exemple si une paire précédente les y a laissés.
 
 **En ligne de commande** :
 
 ```bash
-markoo pair add clara --kb ~/Obsidian/Knowledge/Projets/Clara --repo ~/code/clara/docs
+markoo pair add clara --project Clara --kb ~/Obsidian/Knowledge/Projets/Clara --repo ~/code/clara/docs
 ```
+
+Sans arguments, `markoo pair add` pose les mêmes questions dans le terminal, en commençant par le projet.
 
 Regardez ensuite le plan, qui n'écrit rien :
 
@@ -51,6 +55,38 @@ Si c'est ce que vous attendez, synchronisez :
 ```bash
 markoo sync --pair clara
 ```
+
+## Regrouper les paires par projet
+
+Ajoutez les paires suivantes d'un projet avec le même `--project`. L'orthographe déjà utilisée est conservée, donc `--project clara` rejoint `Clara` :
+
+```bash
+markoo pair add Skill --project Clara --kb ~/Obsidian/Knowledge/Skills/Clara --repo ~/code/clara/skill
+```
+
+`markoo pair list` affiche les paires projet par projet. Pour agir sur toutes les paires d'un projet d'un coup :
+
+```bash
+markoo status --project Clara
+```
+
+```bash
+markoo sync --project Clara
+```
+
+Dans l'app, l'accueil affiche un bloc par projet, avec **Synchroniser le projet** et **Ajouter un sync**. Les paires créées avant les projets n'en ont pas et sont listées en dernier ; `markoo pair set clara project Clara` leur en donne un, ou change une paire de projet.
+
+## Nommer et renommer une paire
+
+Le nom d'une paire est un texte libre, comme `"Documentation technique"` ou `"Skill Claude (prod)"`, et deux projets peuvent avoir chacun une paire `Documentation`. Renommez une paire quand vous le souhaitez, dans son onglet **Général** ou avec :
+
+```bash
+markoo pair set clara name "Documentation Clara"
+```
+
+Renommer conserve l'historique, les conflits en attente et les hooks Git. Ils sont liés à l'**identifiant** de la paire, écrit une fois pour toutes à sa création : `clara` ici, `clara-skill` pour la paire `Skill` ci-dessus, `markoo-documentation` pour la paire `Documentation` de `Markoo`. `markoo pair show` et l'onglet **Général** l'affichent.
+
+Dans une commande, désignez une paire par son identifiant, par `Projet/Nom` (`"Clara/Documentation Clara"`), ou par son nom seul quand aucun autre projet n'a de paire de ce nom ; sinon Markoo refuse et liste les paires concernées. **Utilisez l'identifiant dans les scripts** : il ne change pas quand la paire est renommée. Voir [Désigner une paire](06-configuration.md#désigner-une-paire).
 
 > Tout ce que contient le dossier de la KB finit dans le dépôt, y compris les pièces jointes et les notes privées. Utilisez des motifs `exclude`, dans l'onglet **Filters** ou avec `markoo pair set`, avant de synchroniser vers un dépôt partagé.
 
@@ -101,8 +137,8 @@ L'intervalle se règle dans les **Settings** de l'app, ou dans `[schedule]` de `
 
 | Dans le dossier de données | Contenu |
 |----------------------------|---------|
-| `backups/<paire>/` | Ce que Markoo a écrasé, par synchro |
-| `trash/<paire>/` | Ce que Markoo a supprimé, par synchro |
+| `backups/<identifiant>/` | Ce que Markoo a écrasé, par synchro |
+| `trash/<identifiant>/` | Ce que Markoo a supprimé, par synchro |
 | `hooks.log` | Erreurs des hooks Git |
 | `daemon.log` | Sortie du service `launchd` |
 

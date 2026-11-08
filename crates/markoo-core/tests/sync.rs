@@ -987,7 +987,7 @@ fn resolving_is_refused_while_the_pair_is_locked() {
     t.put(Side::Kb, "a.md", "kb\n");
     t.put(Side::Repo, "a.md", "repo\n");
     t.sync();
-    let _lock = t.engine.lock_pair(&t.pair.name).unwrap();
+    let _lock = t.engine.lock_pair(&t.pair.id).unwrap();
     assert!(matches!(
         t.engine
             .resolve(&t.pair, &entry("a.md"), Resolution::Keep(Side::Kb)),

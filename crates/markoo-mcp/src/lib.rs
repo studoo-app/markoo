@@ -74,19 +74,31 @@ impl Syncer for DirectSyncer {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct OptionalPair {
-    /// Name of a pair; all of them when omitted.
+    /// A pair: its id (preferred), `Project/Name`, or a name no other
+    /// project uses; all of them when omitted.
     pair: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+struct StatusParams {
+    /// A pair: its id (preferred), `Project/Name`, or a name no other
+    /// project uses; all of them when both `pair` and `project` are omitted.
+    pair: Option<String>,
+    /// Name of a project, to cover its pairs; not with `pair`.
+    project: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 struct RequiredPair {
-    /// Name of the pair.
+    /// The pair: its id (preferred), `Project/Name`, or a name no other
+    /// project uses.
     pair: String,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct DiffParams {
-    /// Name of the pair.
+    /// The pair: its id (preferred), `Project/Name`, or a name no other
+    /// project uses.
     pair: String,
     /// The file, relative to the pair's folders.
     path: String,
@@ -94,8 +106,13 @@ struct DiffParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct RunParams {
-    /// Name of a pair; every pair that can sync when omitted.
+    /// A pair: its id (preferred), `Project/Name`, or a name no other
+    /// project uses; every pair that can sync when both `pair` and `project`
+    /// are omitted.
     pair: Option<String>,
+    /// Name of a project, to sync those of its pairs that can sync; not with
+    /// `pair`.
+    project: Option<String>,
     /// Compute the plan without writing anything.
     #[serde(default)]
     dry_run: bool,
@@ -116,9 +133,11 @@ struct ResolveParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct UpdateParams {
-    /// Name of the pair.
+    /// The pair: its id (preferred), `Project/Name`, or a name no other
+    /// project uses.
     pair: String,
-    /// Settings to change: `direction`, `target_changes`, `kb`, `repo`,
+    /// Settings to change: `name` (free text shown to the user; the id never
+    /// changes), `project`, `direction`, `target_changes`, `kb`, `repo`,
     /// `kb_type`, `include`, `exclude`, `paused`, `transform.links`,
     /// `transform.assets_dir`, `transform.frontmatter`, `kb_options.callouts`,
     /// `kb_options.frontmatter_drop`, `hooks.install`, `hooks.branches`.
@@ -141,6 +160,19 @@ fn answer(value: &Value) -> Result<CallToolResult, ErrorData> {
 /// A failure the model can read and act on, such as a pair being busy.
 fn failure(message: impl Into<String>) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message.into())])
+}
+
+/// Refuses a request naming both a pair and a project.
+fn pair_or_project(
+    pair: Option<&String>,
+    project: Option<&String>,
+) -> Result<(), markoo_core::Error> {
+    if pair.is_some() && project.is_some() {
+        return Err(markoo_core::Error::InvalidRequest(
+            "give either a pair or a project, not both".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 #[tool_router]
@@ -166,7 +198,7 @@ impl MarkooServer {
     }
 
     #[tool(
-        description = "List the configured pairs with their knowledge base type, direction, pending issues and errors.",
+        description = "List the configured pairs with their id, name, label (Project/Name), project, knowledge base type, direction, pending issues and errors. The id is stable and unique: prefer it to refer to a pair in other tools. The name is free text, unique within its project only, and can change. project is null for a pair created before projects existed.",
         annotations(read_only_hint = true)
     )]
     async fn list_pairs(&self) -> Result<CallToolResult, ErrorData> {
@@ -175,16 +207,28 @@ impl MarkooServer {
     }
 
     #[tool(
-        description = "Show the current plan: what a sync would do. Nothing is written.",
+        description = "Show the current plan of a pair, of the pairs of a project, or of every pair: what a sync would do. Nothing is written.",
         annotations(read_only_hint = true)
     )]
     async fn sync_status(
         &self,
-        Parameters(params): Parameters<OptionalPair>,
+        Parameters(params): Parameters<StatusParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        self.blocking(move |paths| match params.pair {
-            Some(pair) => service::status(paths, &pair),
-            None => Ok(Value::Array(service::status_of_all(paths)?)),
+        self.blocking(move |paths| {
+            pair_or_project(params.pair.as_ref(), params.project.as_ref())?;
+            if let Some(pair) = params.pair {
+                return service::status(paths, &pair);
+            }
+            let Some(project) = params.project else {
+                return Ok(Value::Array(service::status_of_all(paths)?));
+            };
+            Ok(service::project_pairs(paths, &project)?
+                .iter()
+                .map(|pair| {
+                    service::status(paths, pair)
+                        .unwrap_or_else(|error| json!({"pair": pair, "error": error.to_string()}))
+                })
+                .collect())
         })
         .await
     }
@@ -202,23 +246,49 @@ impl MarkooServer {
     }
 
     #[tool(
-        description = "Sync a pair, or every pair that can sync, and return the report. Writes to the knowledge base and the repository, unless dry_run is set. Conflicts are never resolved by a sync.",
+        description = "Sync a pair, the pairs of a project that can sync, or every pair that can sync, and return the report. Writes to the knowledge base and the repository, unless dry_run is set. Conflicts are never resolved by a sync.",
         annotations(read_only_hint = false, destructive_hint = true)
     )]
     async fn sync_run(
         &self,
         Parameters(params): Parameters<RunParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        if let Some(pair) = params.pair {
+        if let Err(error) = pair_or_project(params.pair.as_ref(), params.project.as_ref()) {
+            return Ok(failure(error.to_string()));
+        }
+        if let Some(reference) = params.pair {
+            let paths = self.paths.clone();
+            let pair = tokio::task::spawn_blocking(move || {
+                Config::load(paths.config_file())?
+                    .pair(&reference)
+                    .map(|entry| entry.pair.id.clone())
+            })
+            .await
+            .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+            let pair = match pair {
+                Ok(pair) => pair,
+                Err(error) => return Ok(failure(error.to_string())),
+            };
+            // Synced by id: the queue of the daemon keys its jobs on it.
             return match self.syncer.sync(pair.clone(), params.dry_run).await {
                 Ok(outcome) => answer(&json!({"pair": pair, "outcome": outcome})),
                 Err(error) => Ok(failure(error)),
             };
         }
         let paths = self.paths.clone();
-        let names = tokio::task::spawn_blocking(move || service::runnable_pairs(&paths))
-            .await
-            .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+        let project = params.project;
+        let names = tokio::task::spawn_blocking(move || {
+            let runnable = service::runnable_pairs(&paths)?;
+            match project {
+                Some(project) => Ok(service::project_pairs(&paths, &project)?
+                    .into_iter()
+                    .filter(|pair| runnable.contains(pair))
+                    .collect()),
+                None => Ok::<_, markoo_core::Error>(runnable),
+            }
+        })
+        .await
+        .map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
         let names = match names {
             Ok(names) => names,
             Err(error) => return Ok(failure(error.to_string())),
@@ -277,7 +347,7 @@ impl MarkooServer {
     }
 
     #[tool(
-        description = "Change settings of a pair and return a preview of the new plan. Refused unless the user set mcp.allow_config_write = true in markoo.toml.",
+        description = "Change settings of a pair and return a preview of the new plan. Setting name renames the pair without losing its state; its id cannot be changed. Refused unless the user set mcp.allow_config_write = true in markoo.toml.",
         annotations(read_only_hint = false, destructive_hint = true)
     )]
     async fn update_pair_config(
@@ -349,10 +419,10 @@ impl ServerHandler for MarkooServer {
                 .pairs
                 .iter()
                 .map(|entry| {
-                    let name = &entry.pair.name;
+                    let pair = &entry.pair;
                     Resource::new(
-                        format!("{PAIRS_PREFIX}{name}{STATUS_SUFFIX}"),
-                        format!("Status of {name}"),
+                        format!("{PAIRS_PREFIX}{}{STATUS_SUFFIX}", pair.id),
+                        format!("Status of {}", pair.label()),
                     )
                     .with_mime_type("application/json")
                 })

@@ -38,7 +38,9 @@ impl Env {
 
     fn new_pair(&self) -> NewPair {
         NewPair {
+            id: None,
             name: "clara".to_owned(),
+            project: Some("Clara".to_owned()),
             kb: self.kb().display().to_string(),
             kb_type: None,
             repo: self.repo().display().to_string(),
@@ -116,10 +118,15 @@ fn previewing_a_change_saves_nothing() {
 }
 
 #[test]
-fn previewing_a_rename_is_refused() {
+fn a_rename_through_the_settings_keeps_the_id() {
     let env = Env::new().with_saved_pair();
-    let result = service::preview_config(&env.paths, "clara", &settings(&json!({"name": "x"})));
-    assert!(result.is_err());
+    service::preview_config(&env.paths, "clara", &settings(&json!({"name": "Docs"}))).unwrap();
+    let answer =
+        service::update_config(&env.paths, "clara", &settings(&json!({"name": "Docs"}))).unwrap();
+    assert_eq!(
+        (&answer["pair"]["id"], &answer["pair"]["name"]),
+        (&json!("clara"), &json!("Docs"))
+    );
 }
 
 #[test]
@@ -493,4 +500,156 @@ fn a_preview_outside_of_git_flags_nothing() {
     let plan = service::preview_new_pair(&env.paths, &env.new_pair()).unwrap();
     assert_eq!(plan["summary"]["git"], false);
     assert_eq!(plan["summary"]["untracked_to_kb"], 0);
+}
+
+#[test]
+fn a_new_pair_needs_a_project() {
+    let env = Env::new();
+    let mut new = env.new_pair();
+    new.project = Some("  ".to_owned());
+    let error = markoo_core::manage::add_pair(&env.paths, &new).unwrap_err();
+    assert!(error.to_string().contains("name its project"), "{error}");
+    assert!(!env.config_text().contains("clara"));
+}
+
+#[test]
+fn a_second_pair_joins_the_project_as_first_spelled() {
+    let env = Env::new().with_saved_pair();
+    for folder in ["kb2", "repo2"] {
+        std::fs::create_dir_all(env.dir.path().join(folder)).unwrap();
+    }
+    let mut second = env.new_pair();
+    second.name = "skill".to_owned();
+    second.project = Some("clara".to_owned());
+    second.kb = env.dir.path().join("kb2").display().to_string();
+    second.repo = env.dir.path().join("repo2").display().to_string();
+    markoo_core::manage::add_pair(&env.paths, &second).unwrap();
+    let projects = markoo_core::service::projects(&env.paths).unwrap();
+    assert_eq!(
+        projects,
+        [serde_json::json!({"project": "Clara", "pairs": ["clara", "clara-skill"]})]
+    );
+    assert_eq!(
+        markoo_core::service::project_pairs(&env.paths, "CLARA").unwrap(),
+        ["clara", "clara-skill"]
+    );
+}
+
+#[test]
+fn the_project_of_a_pair_can_be_recased() {
+    let env = Env::new().with_saved_pair();
+    markoo_core::manage::set_pair(
+        &env.paths,
+        "clara",
+        &[("project".to_owned(), "CLARA".to_owned())],
+    )
+    .unwrap();
+    assert!(env.config_text().contains("project = \"CLARA\""));
+}
+
+impl Env {
+    /// Adds a pair on new folders and returns its id.
+    fn add(&self, project: &str, name: &str) -> String {
+        let folder = |side: &str| {
+            let path = self.dir.path().join(format!("{side}-{project}-{name}"));
+            std::fs::create_dir_all(&path).unwrap();
+            path.display().to_string()
+        };
+        let new = NewPair {
+            project: Some(project.to_owned()),
+            name: name.to_owned(),
+            kb: folder("kb"),
+            repo: folder("repo"),
+            ..NewPair::default()
+        };
+        markoo_core::manage::add_pair(&self.paths, &new).unwrap().id
+    }
+}
+
+#[test]
+fn two_projects_can_each_have_a_pair_of_the_same_name() {
+    let env = Env::new();
+    assert_eq!(env.add("Markoo", "Documentation"), "markoo-documentation");
+    assert_eq!(env.add("Clara", "Documentation"), "clara-documentation");
+    let config = markoo_core::config::Config::load(env.paths.config_file()).unwrap();
+    assert_eq!(
+        config.pair("clara/documentation").unwrap().pair.id,
+        "clara-documentation"
+    );
+    let ambiguous = config.pair("Documentation").unwrap_err().to_string();
+    assert!(ambiguous.contains("Markoo/Documentation"), "{ambiguous}");
+}
+
+#[test]
+fn a_pair_name_is_unique_within_its_project() {
+    let env = Env::new();
+    env.add("Markoo", "Documentation");
+    let new = NewPair {
+        project: Some("markoo".to_owned()),
+        name: "documentation".to_owned(),
+        kb: env.kb().display().to_string(),
+        repo: env.repo().display().to_string(),
+        ..NewPair::default()
+    };
+    let error = markoo_core::manage::add_pair(&env.paths, &new).unwrap_err();
+    assert!(
+        error.to_string().contains("already has a pair named"),
+        "{error}"
+    );
+}
+
+#[test]
+fn renaming_a_pair_keeps_its_id_and_state() {
+    let env = Env::new().with_saved_pair();
+    std::fs::write(env.kb().join("a.md"), "# A\n").unwrap();
+    markoo_core::service::run_sync(&env.paths, "clara", false, "manual").unwrap();
+    markoo_core::manage::set_pair(
+        &env.paths,
+        "clara",
+        &[("name".to_owned(), "Docs de Clara".to_owned())],
+    )
+    .unwrap();
+    let text = env.config_text();
+    assert!(text.contains("name = \"Docs de Clara\""), "{text}");
+    let history = markoo_core::service::history(&env.paths, "Clara/Docs de Clara", 5).unwrap();
+    assert_eq!(history.as_array().unwrap().len(), 1);
+    assert!(markoo_core::service::history(&env.paths, "clara", 5).is_ok());
+}
+
+#[test]
+fn a_pair_written_without_an_id_keeps_its_name_as_id_when_renamed() {
+    let env = Env::new();
+    std::fs::write(
+        env.paths.config_file(),
+        format!(
+            "[[pair]]\nname = 'notes'\nkb = '{}'\nrepo = '{}'\n",
+            env.kb().display(),
+            env.repo().display()
+        ),
+    )
+    .unwrap();
+    markoo_core::manage::set_pair(
+        &env.paths,
+        "notes",
+        &[("name".to_owned(), "Mes notes".to_owned())],
+    )
+    .unwrap();
+    let config = markoo_core::config::Config::load(env.paths.config_file()).unwrap();
+    let pair = &config.pair("notes").unwrap().pair;
+    assert_eq!(
+        (pair.id.as_str(), pair.name.as_str()),
+        ("notes", "Mes notes")
+    );
+}
+
+#[test]
+fn the_id_of_a_pair_cannot_be_changed() {
+    let env = Env::new().with_saved_pair();
+    let error = markoo_core::manage::set_pair(
+        &env.paths,
+        "clara",
+        &[("id".to_owned(), "other".to_owned())],
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("cannot be changed"), "{error}");
 }

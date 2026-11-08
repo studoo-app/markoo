@@ -7,16 +7,14 @@ use std::path::{Path, PathBuf};
 use std::process::Command as Process;
 
 use anyhow::{Context, Result, bail};
-use markoo_core::config::{
-    Config, ConfigError, ConfigFile, NewPair, PairEntry, Problem, expand_home,
-};
+use markoo_core::config::{Config, ConfigError, ConfigFile, NewPair, Problem, expand_home};
 use markoo_core::fs::{DiskFs, Fs};
 use markoo_core::hooks::{self, GitRepo, HookChange, HookName, HookStatus, HookTarget};
-use markoo_core::manage;
 use markoo_core::paths::{Overrides, Paths};
 use markoo_core::plan::{Action, AttachmentAction, PlannedAttachment, PlannedEntry};
 use markoo_core::state::IssueKind;
 use markoo_core::{Direction, Engine, EntryPath, Pair, Report, Resolution, Side, TargetChanges};
+use markoo_core::{manage, service};
 use markoo_daemon::client::{self, SyncRequest};
 use serde_json::{Value, json};
 
@@ -103,30 +101,69 @@ impl Ctx {
         eprintln!("{} {message}", self.style.yellow("warning:"));
     }
 
-    /// The pairs a command applies to, skipping invalid ones after saying why.
+    /// The pairs a command applies to, skipping invalid ones after saying
+    /// why. `only` is what the user typed: an id, `project/name` or a name.
     fn selected(&self, config: &Config, only: Option<&str>) -> Result<Vec<Pair>> {
-        if let Some(only) = only {
-            config.pair(only)?;
-        }
+        let only = only
+            .map(|reference| config.pair(reference).map(|entry| entry.pair.id.as_str()))
+            .transpose()?;
+        Ok(self.valid_pairs(config, |id| only.is_none_or(|only| only == id)))
+    }
+
+    /// Like [`Ctx::selected`], or the pairs of `project` when it is given.
+    fn selected_in(
+        &self,
+        config: &Config,
+        only: Option<&str>,
+        project: Option<&str>,
+    ) -> Result<Vec<Pair>> {
+        let Some(project) = project else {
+            return self.selected(config, only);
+        };
+        let members = service::project_pairs(&self.paths, project)?;
+        Ok(self.valid_pairs(config, |name| members.iter().any(|member| member == name)))
+    }
+
+    /// The pairs kept by `keep` that can be used, reporting the others.
+    fn valid_pairs(&self, config: &Config, keep: impl Fn(&str) -> bool) -> Vec<Pair> {
         let validation = config.validate();
         let mut pairs = Vec::new();
         for entry in &config.pairs {
-            let name = entry.pair.name.as_str();
-            if only.is_some_and(|only| only != name) {
+            let id = entry.pair.id.as_str();
+            if !keep(id) {
                 continue;
             }
-            for problem in validation.warnings.iter().filter(|p| p.pair == name) {
-                self.warn(&format!("pair \"{name}\": {}", problem.message));
+            let label = entry.pair.label();
+            for problem in validation.warnings.iter().filter(|p| p.pair == id) {
+                self.warn(&format!("pair \"{label}\": {}", problem.message));
             }
-            if validation.is_ok(name) {
+            if validation.is_ok(id) {
                 pairs.push(entry.pair.clone());
             } else {
-                for problem in validation.errors.iter().filter(|p| p.pair == name) {
-                    self.report_error(&format!("pair \"{name}\": {}", problem.message));
+                for problem in validation.errors.iter().filter(|p| p.pair == id) {
+                    self.report_error(&format!("pair \"{label}\": {}", problem.message));
                 }
             }
         }
-        Ok(pairs)
+        pairs
+    }
+
+    /// Asks the questions of a new pair on the terminal.
+    fn ask_new_pair(&self) -> Result<NewPair> {
+        let config = if self.paths.config_file().exists() {
+            Some(self.config()?)
+        } else {
+            None
+        };
+        let projects = config.as_ref().map(Config::projects).unwrap_or_default();
+        let taken: Vec<(&str, &str)> = config
+            .iter()
+            .flat_map(|config| &config.pairs)
+            .filter_map(|entry| Some((entry.pair.project.as_deref()?, entry.pair.name.as_str())))
+            .collect();
+        let mut input = std::io::stdin().lock();
+        let mut output = std::io::stdout();
+        wizard::ask_new_pair(&mut input, &mut output, &projects, &taken)
     }
 
     pub fn init(&self) -> Result<()> {
@@ -142,28 +179,28 @@ impl Ctx {
         self.engine()?;
         println!("State folder: {}", self.paths.data_dir().display());
         if std::io::stdin().is_terminal() {
-            let mut input = std::io::stdin().lock();
-            let mut output = std::io::stdout();
             println!("\nLet's add your first pair.");
-            let new = wizard::ask_new_pair(&mut input, &mut output)?;
+            let new = self.ask_new_pair()?;
             self.add_pair(new)?;
         } else {
-            println!("Next: markoo pair add <name> --kb <folder> --repo <folder>");
+            println!(
+                "Next: markoo pair add \"<name>\" --project <project> --kb <folder> --repo <folder>"
+            );
         }
         Ok(())
     }
 
-    pub fn status(&self, only: Option<&str>) -> Result<()> {
+    pub fn status(&self, only: Option<&str>, project: Option<&str>) -> Result<()> {
         let config = self.config()?;
         let engine = self.engine()?;
         let mut views = Vec::new();
-        for pair in self.selected(&config, only)? {
+        for pair in self.selected_in(&config, only, project)? {
             match engine.plan(&pair) {
                 Ok(planned) => {
                     let visible: Vec<&PlannedEntry> = visible_entries(&planned.plan.entries);
                     if self.json {
                         views.push(json!({
-                            "pair": pair.name,
+                            "pair": pair.id,
                             "direction": pair.direction,
                             "paused": pair.paused,
                             "entries": visible.iter().map(|e| entry_json(e)).collect::<Vec<_>>(),
@@ -203,7 +240,7 @@ impl Ctx {
             };
             for diff in diffs {
                 if self.json {
-                    views.push(json!({"pair": pair.name, "path": diff.path, "patch": diff.patch}));
+                    views.push(json!({"pair": pair.id, "path": diff.path, "patch": diff.patch}));
                 } else {
                     self.print_patch(&diff.path, &diff.patch);
                 }
@@ -215,14 +252,14 @@ impl Ctx {
         Ok(())
     }
 
-    pub fn sync(&self, dry_run: bool, only: Option<&str>) -> Result<()> {
+    pub fn sync(&self, dry_run: bool, only: Option<&str>, project: Option<&str>) -> Result<()> {
         let config = self.config()?;
         let engine = self.engine()?;
         let mut views = Vec::new();
-        for pair in self.selected(&config, only)? {
+        for pair in self.selected_in(&config, only, project)? {
             if pair.paused {
                 if self.json {
-                    views.push(json!({"pair": pair.name, "paused": true}));
+                    views.push(json!({"pair": pair.id, "paused": true}));
                 } else {
                     self.pair_header(&pair);
                     println!("  {}", self.style.dim("paused"));
@@ -239,7 +276,7 @@ impl Ctx {
             let visible = visible_entries(&outcome.planned.plan.entries);
             if self.json {
                 views.push(json!({
-                    "pair": pair.name,
+                    "pair": pair.id,
                     "dry_run": outcome.report.is_none(),
                     "direction_changed": outcome.direction_changed,
                     "entries": visible.iter().map(|e| entry_json(e)).collect::<Vec<_>>(),
@@ -292,7 +329,7 @@ impl Ctx {
             for issue in &issues {
                 if self.json {
                     views.push(json!({
-                        "pair": pair.name,
+                        "pair": pair.id,
                         "path": issue.path,
                         "kind": issue.kind,
                         "kb": issue.kb,
@@ -304,19 +341,19 @@ impl Ctx {
                         self.style.red("!"),
                         issue.path,
                         self.style
-                            .dim(&format!("{} in {}", issue_label(issue.kind), pair.name))
+                            .dim(&format!("{} in {}", issue_label(issue.kind), pair.label()))
                     );
                 }
             }
             for path in &excluded {
                 if self.json {
-                    views.push(json!({"pair": pair.name, "path": path, "kind": "excluded"}));
+                    views.push(json!({"pair": pair.id, "path": path, "kind": "excluded"}));
                 } else {
                     println!(
                         "{} {path}  {}",
                         self.style.dim("-"),
                         self.style
-                            .dim(&format!("excluded from sync in {}", pair.name))
+                            .dim(&format!("excluded from sync in {}", pair.label()))
                     );
                 }
             }
@@ -355,7 +392,7 @@ impl Ctx {
         };
         let report = engine.resolve(&pair, &path, resolution)?;
         if self.json {
-            return self.print_json(&json!({"pair": pair.name, "path": path, "report": report}));
+            return self.print_json(&json!({"pair": pair.id, "path": path, "report": report}));
         }
         if report.skipped.is_empty() {
             println!("{} {path} resolved.", self.style.green("✓"));
@@ -402,7 +439,7 @@ impl Ctx {
             .paths
             .data_dir()
             .join("tmp")
-            .join(format!("{}-{name}", pair.name));
+            .join(format!("{}-{name}", pair.id));
         DiskFs.write_atomic(&file, draft.as_bytes())?;
         let edited = run_editor(&file).and_then(|()| {
             std::fs::read_to_string(&file)
@@ -424,19 +461,19 @@ impl Ctx {
         match command {
             PairCommand::Add {
                 name: None,
+                project: None,
                 kb: None,
                 kb_type: None,
                 repo: None,
                 direction: None,
                 target_changes: None,
             } => {
-                let mut input = std::io::stdin().lock();
-                let mut output = std::io::stdout();
-                let new = wizard::ask_new_pair(&mut input, &mut output)?;
+                let new = self.ask_new_pair()?;
                 self.add_pair(new)
             }
             PairCommand::Add {
                 name,
+                project,
                 kb,
                 kb_type,
                 repo,
@@ -444,10 +481,14 @@ impl Ctx {
                 target_changes,
             } => {
                 let (Some(name), Some(kb), Some(repo)) = (name, kb, repo) else {
-                    bail!("usage: markoo pair add <name> --kb <folder> --repo <folder>");
+                    bail!(
+                        "usage: markoo pair add \"<name>\" --project <project> --kb <folder> --repo <folder>"
+                    );
                 };
                 self.add_pair(NewPair {
+                    id: None,
                     name,
+                    project,
                     kb,
                     kb_type,
                     repo,
@@ -471,48 +512,82 @@ impl Ctx {
     fn add_pair(&self, mut new: NewPair) -> Result<()> {
         new.kb = absolute(&new.kb)?;
         new.repo = absolute(&new.repo)?;
-        let warnings = manage::add_pair(&self.paths, &new)?;
-        self.warn_all(&new.name, &warnings);
+        let added = match manage::add_pair(&self.paths, &new) {
+            Err(error @ markoo_core::Error::Config(ConfigError::MissingProject(_))) => {
+                bail!("{error}: add --project <project>")
+            }
+            other => other?,
+        };
+        let id = added.id;
+        let label = self.config()?.pair(&id)?.pair.label();
+        self.warn_all(&label, &added.warnings);
         if self.json {
-            return self.print_json(&json!({"added": new.name}));
+            return self.print_json(&json!({"added": id, "label": label}));
         }
-        println!("{} Pair \"{}\" added.", self.style.green("✓"), new.name);
         println!(
-            "Preview the first sync with: markoo status --pair {}",
-            new.name
+            "{} Pair \"{label}\" added {}",
+            self.style.green("✓"),
+            self.style.dim(&format!("(id: {id})"))
         );
+        println!("Preview the first sync with: markoo status --pair {id}");
         Ok(())
     }
 
-    fn warn_all(&self, name: &str, warnings: &[Problem]) {
+    fn warn_all(&self, label: &str, warnings: &[Problem]) {
         for problem in warnings {
-            self.warn(&format!("pair \"{name}\": {}", problem.message));
+            self.warn(&format!("pair \"{label}\": {}", problem.message));
         }
     }
 
     fn pair_list(&self) -> Result<()> {
         let config = self.config()?;
         if self.json {
-            let pairs: Vec<Value> = config.pairs.iter().map(pair_json).collect();
+            let pairs: Vec<Value> = config.pairs.iter().map(service::pair_view).collect();
             return self.print_json(&Value::Array(pairs));
         }
         if config.pairs.is_empty() {
             println!("No pairs yet. Add one with: markoo pair add");
         }
-        for entry in &config.pairs {
-            self.pair_header(&entry.pair);
+        // Pairs created before projects existed come last.
+        let groups = config.projects().into_iter().map(Some).chain([None]);
+        for project in groups {
+            let members: Vec<&Pair> = config
+                .pairs
+                .iter()
+                .map(|entry| &entry.pair)
+                .filter(|pair| pair.project.as_deref() == project)
+                .collect();
+            if members.is_empty() {
+                continue;
+            }
+            println!("{}", self.style.bold(project.unwrap_or("(no project)")));
+            for pair in members {
+                let title = format!(
+                    "{}  {}",
+                    self.style.bold(&pair.name),
+                    self.style.dim(&format!("[{}]", pair.id))
+                );
+                print!("  ");
+                self.pair_line(&title, pair);
+            }
         }
         Ok(())
     }
 
-    fn pair_show(&self, name: &str) -> Result<()> {
+    fn pair_show(&self, reference: &str) -> Result<()> {
         let config = self.config()?;
-        let entry = config.pair(name)?;
+        let entry = config.pair(reference)?;
         if self.json {
-            return self.print_json(&pair_json(entry));
+            return self.print_json(&service::pair_view(entry));
         }
         let pair = &entry.pair;
-        println!("{}", self.style.bold(&pair.name));
+        println!("{}", self.style.bold(&pair.label()));
+        println!("  id              {}", pair.id);
+        println!("  name            {}", pair.name);
+        println!(
+            "  project         {}",
+            pair.project.as_deref().unwrap_or("(none)")
+        );
         println!("  kb              {}", pair.kb.display());
         println!("  kb_type         {}", pair.kb_type.id());
         println!("  repo            {}", pair.repo.display());
@@ -525,10 +600,10 @@ impl Ctx {
         println!("  exclude         {}", pair.exclude.join(", "));
         println!("  paused          {}", pair.paused);
         let validation = config.validate();
-        for problem in validation.errors.iter().filter(|p| p.pair == name) {
+        for problem in validation.errors.iter().filter(|p| p.pair == pair.id) {
             self.report_error(&problem.message);
         }
-        for problem in validation.warnings.iter().filter(|p| p.pair == name) {
+        for problem in validation.warnings.iter().filter(|p| p.pair == pair.id) {
             self.warn(&problem.message);
         }
         Ok(())
@@ -536,7 +611,7 @@ impl Ctx {
 
     fn pair_set(
         &self,
-        name: &str,
+        reference: &str,
         key: &str,
         value: &str,
         target_changes: Option<&str>,
@@ -546,56 +621,49 @@ impl Ctx {
         if let Some(target_changes) = target_changes {
             changes.push(("target_changes".to_owned(), target_changes.to_owned()));
         }
-        let warnings = match manage::set_pair(&self.paths, name, &changes) {
+        // Resolved first: once renamed, the pair may no longer match `reference`.
+        let id = self.config()?.pair(reference)?.pair.id.clone();
+        let warnings = match manage::set_pair(&self.paths, &id, &changes) {
             Err(markoo_core::Error::DirectionBlocked { pending, .. }) => bail!(
                 "{pending} conflict(s) must be resolved before switching to a one-way \
                  direction; see markoo conflicts"
             ),
             other => other?,
         };
-        self.warn_all(name, &warnings);
+        let config = self.config()?;
+        let entry = config.pair(&id)?;
+        let label = entry.pair.label();
+        self.warn_all(&label, &warnings);
         if self.json {
-            return self.print_json(&pair_json(self.config()?.pair(name)?));
+            return self.print_json(&service::pair_view(entry));
         }
-        println!("{} Pair \"{name}\" updated.", self.style.green("✓"));
+        println!("{} Pair \"{label}\" updated.", self.style.green("✓"));
         if key_name == "direction" {
             println!("The next sync only shows its plan; nothing is written until the one after.");
         }
         Ok(())
     }
 
-    fn pair_remove(&self, name: &str) -> Result<()> {
-        let hooks_left = self.hooks_left(name);
-        manage::remove_pair(&self.paths, name)?;
+    fn pair_remove(&self, reference: &str) -> Result<()> {
+        let pair = self.config()?.pair(reference)?.pair.clone();
+        let hooks_left = hooks_left(&pair);
+        manage::remove_pair(&self.paths, &pair.id)?;
         if self.json {
-            return self.print_json(&json!({"removed": name, "hooks_left": hooks_left}));
+            return self.print_json(&json!({"removed": pair.id, "hooks_left": hooks_left}));
         }
         println!(
-            "{} Pair \"{name}\" removed. Its files were not touched.",
-            self.style.green("✓")
+            "{} Pair \"{}\" removed. Its files were not touched.",
+            self.style.green("✓"),
+            pair.label()
         );
         for file in &hooks_left {
             self.warn(&format!(
-                "{} still calls this pair: delete its lines, between the two \"markoo {name}\" markers",
-                file.display()
+                "{} still calls this pair: delete its lines, between the two \"markoo {}\" markers",
+                file.display(),
+                pair.id
             ));
         }
         Ok(())
-    }
-
-    /// Hook files still calling a pair. Once it is gone, `hook uninstall` no
-    /// longer knows where they are. A repository out of reach has nothing to
-    /// report: this must not prevent removing the pair.
-    fn hooks_left(&self, name: &str) -> Vec<PathBuf> {
-        let Ok(config) = self.config() else {
-            return Vec::new();
-        };
-        let Ok(entry) = config.pair(name) else {
-            return Vec::new();
-        };
-        GitRepo::open(&entry.pair.repo)
-            .and_then(|repo| hooks::files_with_block(&DiskFs, &repo, name))
-            .unwrap_or_default()
     }
 
     pub fn daemon(&self, action: Option<DaemonCommand>) -> Result<()> {
@@ -620,7 +688,9 @@ impl Ctx {
     pub fn hook(&self, command: HookCommand) -> Result<()> {
         match command {
             HookCommand::Install { pair } => {
-                let changes = self.hook_edit(&pair, hooks::install)?;
+                let config = self.config()?;
+                let pair = &config.pair(&pair)?.pair;
+                let changes = self.hook_edit(pair, hooks::install)?;
                 let in_place = changes
                     .iter()
                     .any(|change| !matches!(change.status, HookStatus::Manual { .. }));
@@ -629,13 +699,18 @@ impl Ctx {
                         "{}",
                         self.style.dim(&format!(
                             "Nothing was synced: hooks act the next time Git runs them. \
-                             To sync now: markoo sync --pair {pair}"
+                             To sync now: markoo sync --pair {}",
+                            pair.id
                         ))
                     );
                 }
                 Ok(())
             }
-            HookCommand::Uninstall { pair } => self.hook_edit(&pair, hooks::uninstall).map(drop),
+            HookCommand::Uninstall { pair } => {
+                let config = self.config()?;
+                self.hook_edit(&config.pair(&pair)?.pair, hooks::uninstall)
+                    .map(drop)
+            }
             HookCommand::Run {
                 hook,
                 pair,
@@ -653,7 +728,7 @@ impl Ctx {
 
     fn hook_edit(
         &self,
-        name: &str,
+        pair: &Pair,
         edit: impl Fn(
             &DiskFs,
             &GitRepo,
@@ -661,12 +736,10 @@ impl Ctx {
             &hooks::HookSettings,
         ) -> Result<Vec<HookChange>, hooks::HookError>,
     ) -> Result<Vec<HookChange>> {
-        let config = self.config()?;
-        let pair = &config.pair(name)?.pair;
         let repo = GitRepo::open(&pair.repo)?;
         let program = std::env::current_exe().context("cannot find the markoo binary")?;
         let target = HookTarget {
-            pair: name,
+            pair: &pair.id,
             program: &program,
             config_file: self.paths.config_file(),
             data_dir: self.paths.data_dir(),
@@ -702,10 +775,10 @@ impl Ctx {
         println!("{} {hook}: {done}", self.style.green("✓"));
     }
 
-    fn hook_run(&self, hook: &str, name: &str, arguments: &[String]) -> Result<()> {
+    fn hook_run(&self, hook: &str, reference: &str, arguments: &[String]) -> Result<()> {
         let hook: HookName = hook.parse().map_err(anyhow::Error::msg)?;
         let config = self.config()?;
-        let pair = &config.pair(name)?.pair;
+        let pair = &config.pair(reference)?.pair;
         if pair.paused {
             return Ok(());
         }
@@ -714,11 +787,11 @@ impl Ctx {
             return Ok(());
         }
         let validation = config.validate();
-        if !validation.is_ok(name) {
+        if !validation.is_ok(&pair.id) {
             let problems: Vec<_> = validation
                 .errors
                 .iter()
-                .filter(|problem| problem.pair == name)
+                .filter(|problem| problem.pair == pair.id)
                 .map(|problem| problem.message.as_str())
                 .collect();
             bail!("{}", problems.join("; "));
@@ -732,14 +805,15 @@ impl Ctx {
                 .count();
             if conflicts > 0 {
                 self.report_error(&format!(
-                    "{conflicts} Markoo conflict(s) pending in \"{name}\": \
-                     see `markoo conflicts`, or skip this check with `git commit --no-verify`"
+                    "{conflicts} Markoo conflict(s) pending in \"{}\": \
+                     see `markoo conflicts`, or skip this check with `git commit --no-verify`",
+                    pair.label()
                 ));
             }
             return Ok(());
         }
         let answer = if config.api.enabled {
-            client::request_sync(self.paths.data_dir(), config.api.port, name)
+            client::request_sync(self.paths.data_dir(), config.api.port, &pair.id)
         } else {
             SyncRequest::Unavailable
         };
@@ -807,7 +881,13 @@ impl Ctx {
         Ok(())
     }
 
+    /// The label of a pair, then its folders.
     fn pair_header(&self, pair: &Pair) {
+        self.pair_line(&self.style.bold(&pair.label()), pair);
+    }
+
+    /// `title`, then the folders of the pair.
+    fn pair_line(&self, title: &str, pair: &Pair) {
         let arrow = match pair.direction {
             Direction::Both => "⇄",
             Direction::KbToRepo => "→",
@@ -815,8 +895,7 @@ impl Ctx {
         };
         let paused = if pair.paused { "  (paused)" } else { "" };
         println!(
-            "{}  {} {arrow} {}  {}{paused}",
-            self.style.bold(&pair.name),
+            "{title}  {} {arrow} {}  {}{paused}",
             pair.kb.display(),
             pair.repo.display(),
             self.style.dim(&format!("[{}]", pair.kb_type.id())),
@@ -934,19 +1013,13 @@ fn entry_json(entry: &PlannedEntry) -> Value {
     json!(entry.view())
 }
 
-fn pair_json(entry: &PairEntry) -> Value {
-    let pair = &entry.pair;
-    json!({
-        "name": pair.name,
-        "kb": pair.kb,
-        "kb_type": pair.kb_type,
-        "repo": pair.repo,
-        "direction": pair.direction,
-        "target_changes": pair.target_changes,
-        "include": pair.include,
-        "exclude": pair.exclude,
-        "paused": pair.paused,
-    })
+/// Hook files still calling a pair. Once it is gone, `hook uninstall` no
+/// longer knows where they are. A repository out of reach has nothing to
+/// report: this must not prevent removing the pair.
+fn hooks_left(pair: &Pair) -> Vec<PathBuf> {
+    GitRepo::open(&pair.repo)
+        .and_then(|repo| hooks::files_with_block(&DiskFs, &repo, &pair.id))
+        .unwrap_or_default()
 }
 
 fn direction_value(direction: Direction) -> &'static str {

@@ -29,14 +29,14 @@
   const branchList = $derived(branches.split(",").map((b) => b.trim()).filter(Boolean));
 
   $effect(() => {
-    void pair.name;
+    void pair.id;
     refresh();
     api.globalSettings().then((value) => (globals = value)).catch(() => {});
   });
 
   async function refresh() {
     try {
-      state_ = await api.hooksState(pair.name);
+      state_ = await api.hooksState(pair.id);
     } catch (failure) {
       error = errorText(failure);
     }
@@ -50,7 +50,7 @@
       if (wanted.join() !== pair.hooks.install.join()) settings["hooks.install"] = wanted;
       if (branchList.join() !== pair.hooks.branches.join()) settings["hooks.branches"] = branchList;
       if (Object.keys(settings).length > 0) {
-        await api.updateSettings(pair.name, settings);
+        await api.updateSettings(pair.id, settings);
         onchange();
       }
       changes = await work();
@@ -95,8 +95,8 @@
       <input id="branches" type="text" bind:value={branches} spellcheck="false" />
     </div>
     <div class="row">
-      <button class="primary" type="button" disabled={busy} onclick={() => run(() => api.installHooks(pair.name))}>{t("Install")}</button>
-      <button type="button" disabled={busy || !state_?.installed.length} onclick={() => run(() => api.uninstallHooks(pair.name))}>{t("Uninstall")}</button>
+      <button class="primary" type="button" disabled={busy} onclick={() => run(() => api.installHooks(pair.id))}>{t("Install")}</button>
+      <button type="button" disabled={busy || !state_?.installed.length} onclick={() => run(() => api.uninstallHooks(pair.id))}>{t("Uninstall")}</button>
     </div>
     <p class="muted hint">{t("Installing syncs nothing: hooks act the next time Git runs them.")}</p>
   {/if}

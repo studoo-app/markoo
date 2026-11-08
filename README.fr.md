@@ -28,6 +28,7 @@ Les outils de base de connaissance sont pris en charge par des **adaptateurs**. 
 
 - **N'importe quelle base de connaissance, via des adaptateurs** : Obsidian et les dossiers Markdown simples aujourd'hui, les autres ensuite. Chaque adaptateur convertit le dialecte Markdown de son outil en Markdown standard, et inversement.
 - **Trois sens de synchro par paire** : KB → repo, repo → KB, ou bidirectionnel.
+- **Projets** : les paires sont regroupées par projet, par exemple la documentation et le skill d'un projet, et un projet entier se synchronise d'un coup. Chaque paire a un nom que vous choisissez et pouvez changer à tout moment (« Documentation technique »), et un identifiant stable qui garde son historique et ses hooks.
 - **Fusion 3-way** : les modifications des deux côtés sont fusionnées ligne à ligne par rapport à la dernière version synchronisée. Vous ne tranchez que les vrais conflits.
 - **Aucune perte de données** : aperçu (dry-run) avant toute écriture, écritures atomiques, sauvegardes et corbeille. Markoo ne fait jamais de commit ni de push à votre place.
 - **Conversion Obsidian ↔ GitHub** (premier adaptateur) : les `[[wikilinks]]` deviennent des liens Markdown standards, les pièces jointes sont copiées dans `assets/`, les callouts deviennent des alerts GitHub et le frontmatter propre à Obsidian est filtré, le tout de façon réversible.
@@ -64,7 +65,7 @@ Détails : [algorithme de synchronisation](documentation/fr/03-algorithme-de-syn
 Récupérez l'app ou la ligne de commande sur les [versions publiées](https://github.com/studoo-app/markoo/releases), ou compilez depuis les sources avec `cargo install --path crates/markoo-cli --locked`. Le [guide utilisateur](documentation/fr/10-guide-utilisateur.md) explique la suite.
 
 ```bash
-markoo pair add clara --kb ~/Obsidian/Knowledge/Projets/Clara --kb-type obsidian --repo ~/code/clara/docs --direction both
+markoo pair add clara --project Clara --kb ~/Obsidian/Knowledge/Projets/Clara --kb-type obsidian --repo ~/code/clara/docs --direction both
 ```
 
 ```bash

@@ -13,8 +13,9 @@ Markoo range deux choses **hors de la base de connaissance (KB) et hors du repo*
 flowchart TD
     G["&lt;config&gt;/markoo.toml<br/><i>configuration globale</i>"]
     S["&lt;data&gt;/<br/><i>état, sauvegardes</i>"]
-    G --> P1["[[pair]] clara"]
-    G --> P2["[[pair]] markoo"]
+    G --> P1["[[pair]] clara-documentation<br/><i>Clara / Documentation</i>"]
+    G --> P2["[[pair]] markoo-documentation<br/><i>Markoo / Documentation</i>"]
+    G --> P3["[[pair]] markoo-skill<br/><i>Markoo / Skill Claude</i>"]
     S --> DB["state.db"]
     S --> B["backups/"]
     S --> T["trash/"]
@@ -81,7 +82,9 @@ allow_config_write = false # un agent peut-il modifier la configuration ?
 
 # ---------------------------------------------------------------
 [[pair]]
-name    = "clara"
+id      = "clara-documentation" # stable, écrit à la création de la paire ; ne change jamais
+name    = "Documentation"  # texte libre, renommable à tout moment
+project = "Clara"          # les paires d'un même projet sont affichées ensemble
 kb      = "~/Obsidian/Knowledge/Projets/Clara"
 kb_type = "obsidian"       # markdown | obsidian ; logseq | foam | dendron après la v1. Détecté si omis
 repo    = "~/Projets/lerebours/clara/docs"
@@ -112,18 +115,29 @@ branches = ["main"]
 
 # ---------------------------------------------------------------
 [[pair]]
-name  = "markoo"
-kb    = "~/Obsidian/Knowledge/Projets/Markoo"   # kb_type omis : détecté (.obsidian/ présent)
-repo  = "~/Projets/opensource/markoo/documentation"
+id      = "markoo-documentation"
+name    = "Documentation"        # même nom que dans Clara : un nom n'est unique que dans son projet
+project = "Markoo"
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Documentation"   # kb_type omis : détecté (.obsidian/ présent)
+repo    = "~/Projets/opensource/markoo/documentation"
 direction = "repo-to-kb"        # le repo fait référence, la KB ne fait que lire
 target_changes = "protect"      # une édition dans la KB est signalée, jamais écrasée
+
+[[pair]]
+id      = "markoo-skill"
+name    = "Skill Claude"
+project = "Markoo"              # deuxième paire du même projet
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Skill"
+repo    = "~/Projets/opensource/markoo/skill"
 ```
 
 ## Référence des options de paire
 
 | Clé | Type | Défaut | Description |
 |-----|------|--------|-------------|
-| `name` | texte | **requis** | Identifiant unique (CLI, API, MCP) |
+| `id` | texte | le `name` | Identifiant stable, unique parmi toutes les paires : lettres minuscules, chiffres et tirets. Écrit par Markoo à la création de la paire, puis jamais modifié ; voir [Identifiant et nom](#identifiant-et-nom) |
+| `name` | texte | **requis** | Nom affiché dans l'app et la CLI : texte libre, de 1 à 64 caractères, unique dans le projet. Modifiable à tout moment |
+| `project` | texte | aucun | Projet de la paire ; les paires d'un même projet sont regroupées. Requis quand Markoo ajoute la paire, voir [Projets](#projets) |
 | `kb` | chemin | **requis** | Dossier côté base de connaissance (KB) |
 | `kb_type` | énum | détecté | Type de KB : `markdown`, `obsidian` en v1 (voir [Types de bases de connaissance pris en charge](09-bases-de-connaissance.md#types-de-bases-de-connaissance-pris-en-charge)) ; détecté par les adaptateurs si omis |
 | `repo` | chemin | **requis** | Dossier côté dépôt Git |
@@ -138,6 +152,66 @@ target_changes = "protect"      # une édition dans la KB est signalée, jamais 
 | `hooks.install` | liste | `["post-merge"]` | Hooks mis en place par `markoo hook install` : `post-merge`, `post-checkout`, `post-commit`, `pre-commit`. Rien n'est installé tant que cette commande n'a pas été lancée, voir [Déclencheurs](05-declencheurs.md#2-hooks-git) |
 | `hooks.branches` | liste | `[]` | Branches sur lesquelles les hooks agissent ; vide pour toutes |
 
+### Projets
+
+Un **projet** regroupe les paires qui vont ensemble, par exemple la documentation et le skill d'un même logiciel. C'est la clé `project` de chacune de ses paires :
+
+```toml
+[[pair]]
+id      = "markoo-documentation"
+name    = "Documentation"
+project = "Markoo"
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Documentation"
+repo    = "~/Projets/opensource/markoo/documentation"
+
+[[pair]]
+id      = "markoo-skill"
+name    = "Skill Claude"
+project = "Markoo"
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Skill"
+repo    = "~/Projets/opensource/markoo/skill"
+```
+
+- Le nom est un texte libre, de 1 à 64 caractères, sur une ligne, sans espace au début ni à la fin et sans `/` : `"Markoo"`, `"Site web"`.
+- Le projet est nommé à la création de sa première paire ; les suivantes le choisissent ou en nomment un nouveau. `markoo pair add`, l'app et l'API refusent une nouvelle paire sans projet.
+- L'orthographe déjà utilisée l'emporte, sans tenir compte de la casse : une paire ajoutée à `markoo` rejoint le projet `Markoo` existant au lieu d'en créer un second.
+- Dans un fichier écrit à la main, la clé est facultative, pour que les fichiers d'avant les projets se chargent toujours. Les paires sans projet sont listées à part, après les projets. Donnez-leur-en un avec `markoo pair set <paire> project <nom>`, qui sert aussi à changer une paire de projet.
+- Un projet n'a pas de réglages propres : il existe tant qu'une de ses paires le nomme.
+- Deux projets peuvent avoir chacun une paire du même nom, par exemple `Documentation` : leurs identifiants les distinguent, voir ci-dessous.
+
+### Identifiant et nom
+
+Une paire a un **identifiant** pour Markoo et un **nom** pour vous :
+
+| | `id` | `name` |
+|---|------|--------|
+| Rôle | Clé de tout ce que Markoo garde sur la paire : état, historique, conflits en attente, verrous, dossiers `backups/` et `trash/`, hooks Git | Affiché dans l'app, dans `markoo pair list` et dans les messages |
+| Forme | Lettres minuscules, chiffres et tirets : `markoo-documentation` | Texte libre, de 1 à 64 caractères sur une ligne, sans espace au début ni à la fin et sans `/` : `"Documentation technique"`, `"Skill Claude (prod)"` |
+| Unique | Parmi toutes les paires | Dans son projet, sans tenir compte de la casse |
+| Change | Jamais | À tout moment |
+
+- Markoo écrit l'`id` à la création de la paire, à partir du projet et du nom : `Markoo` et `Documentation` donnent `markoo-documentation`. Les accents sont retirés, les autres caractères deviennent des tirets, et un numéro est ajouté si l'identifiant est déjà pris (`markoo-documentation-2`). Quand le projet et le nom donnent le même texte, l'identifiant est ce texte seul : `Clara` et `clara` donnent `clara`.
+- L'identifiant n'est plus recalculé ensuite : renommer la paire ou la changer de projet le conserve.
+- Renommez une paire avec `markoo pair set <paire> name "Documentation technique"`, ou dans l'onglet **Général** de l'app. Son historique, ses conflits en attente et ses hooks Git la suivent.
+- L'identifiant ne se modifie pas : `markoo pair set <paire> id …` est refusé. Le modifier à la main dans `markoo.toml` fait voir à Markoo une nouvelle paire, sans historique, et laisse les hooks installés appeler l'ancien identifiant.
+- Dans un fichier écrit à la main, `id` est facultatif : sans lui, l'identifiant est le nom, pour que les fichiers d'avant les identifiants gardent leur état et leurs hooks. Ce nom doit alors respecter la forme d'un identifiant. Renommer une telle paire écrit d'abord son nom actuel comme `id`.
+
+### Désigner une paire
+
+La CLI, l'API et MCP acceptent une paire sous trois formes, essayées dans cet ordre :
+
+1. son **identifiant** : `markoo-documentation` ;
+2. **`Projet/Nom`**, sans tenir compte de la casse : `Markoo/Documentation`, `"markoo/skill claude"` ;
+3. son **nom** seul, sans tenir compte de la casse, quand aucun autre projet n'a de paire de ce nom : `"Skill Claude"`.
+
+Un nom partagé par plusieurs projets est refusé, avec la liste des candidates :
+
+```text
+"Documentation" matches several pairs: Clara/Documentation, Markoo/Documentation; use project/name or the id
+```
+
+**Utilisez l'identifiant dans les scripts, les hooks et la configuration des agents** : c'est la seule forme qui ne change jamais. Dans une URL, encodez les autres formes : `/pairs/Markoo%2FSkill%20Claude/status`. Les sorties JSON (`--json`, API, MCP) donnent l'identifiant dans leurs champs `"pair"` ; les listes de paires de l'API et du MCP donnent aussi `name`, `project` et `label` (`Projet/Nom`).
+
 ### Stratégies de conflit
 
 | Valeur | Comportement en cas de chevauchement |
@@ -151,6 +225,9 @@ target_changes = "protect"      # une édition dans la KB est signalée, jamais 
 
 - `kb` et `repo` existent et sont des dossiers.
 - Deux paires ne se chevauchent pas (même fichier suivi par deux paires) : erreur explicite. Les dossiers `kb` et `repo` d'une même paire ne se chevauchent pas non plus.
+- `id`, s'il est présent, ne contient que des lettres minuscules, des chiffres et des tirets, et aucune autre paire ne l'utilise ; sans `id`, le nom doit respecter cette forme : erreur explicite sinon.
+- `name` compte de 1 à 64 caractères sur une ligne, sans espace au début ni à la fin et sans `/`, et aucune autre paire du même projet ne le porte, sans tenir compte de la casse : erreur explicite sinon.
+- `project`, s'il est présent, compte de 1 à 64 caractères sur une ligne, sans espace au début ni à la fin et sans `/` : erreur explicite sinon.
 - Les clés inconnues dans une table `[[pair]]` sont refusées, pour qu'une faute de frappe comme `directon` ne change pas le sens en silence.
 - `target_changes = "overwrite"` avec `direction = "both"` : avertissement, l'option est sans effet.
 - `repo` se trouve dans un dépôt Git : simple avertissement s'il ne l'est pas, ce qui reste autorisé.
@@ -167,7 +244,7 @@ erDiagram
     PAIR ||--o{ RUN : "historique"
 
     PAIR {
-        text name PK
+        text id PK
         text kb_type "markdown | obsidian…"
         text config_hash
     }

@@ -177,7 +177,7 @@ impl<F: Fs> Engine<F> {
             let root = pair.root(side);
             if !self.fs.is_dir(root) {
                 return Err(Error::MissingRoot {
-                    pair: pair.name.clone(),
+                    pair: pair.id.clone(),
                     side,
                     path: root.to_path_buf(),
                 });
@@ -186,7 +186,7 @@ impl<F: Fs> Engine<F> {
         let prepared = self.prepare(pair)?;
         let adapter = prepared.adapter.as_ref();
         let index = &prepared.index;
-        let bases = self.state.bases(&pair.name)?;
+        let bases = self.state.bases(&pair.id)?;
         let mut kb = scan_side(
             &self.fs,
             &pair.kb,
@@ -205,7 +205,7 @@ impl<F: Fs> Engine<F> {
             index,
             &bases,
         )?;
-        kb.left_alone.extend(self.state.ignored(&pair.name)?);
+        kb.left_alone.extend(self.state.ignored(&pair.id)?);
         let mut plan = plan::plan(pair, &bases, &kb, &repo);
         plan.attachments = self.plan_attachments(pair, &prepared, &bases, &kb, &repo)?;
         let mut scan_issues = kb.issues;
@@ -297,7 +297,7 @@ impl<F: Fs> Engine<F> {
             let kb_path = prepared.attachment_location(pair, &name, &note);
             let kb_hash = self.hash_of(&kb_path)?;
             let repo_hash = self.hash_of(&repo_path)?;
-            let base = self.state.attachment_hash(&pair.name, &name)?;
+            let base = self.state.attachment_hash(&pair.id, &name)?;
             if let Some(action) = attachment_action(pair, kb_hash, repo_hash, base) {
                 planned.push(PlannedAttachment {
                     name,
@@ -319,7 +319,7 @@ impl<F: Fs> Engine<F> {
 
     /// Applies a plan computed by [`Engine::plan`].
     pub fn apply(&self, pair: &Pair, plan: &Plan) -> Result<Report, Error> {
-        let _lock = self.lock_pair(&pair.name)?;
+        let _lock = self.lock_pair(&pair.id)?;
         self.apply_locked(pair, plan)
     }
 
@@ -330,7 +330,7 @@ impl<F: Fs> Engine<F> {
 
     /// Plans and applies in one go, without the direction safeguard of [`Engine::run`].
     pub fn sync(&self, pair: &Pair) -> Result<Report, Error> {
-        let _lock = self.lock_pair(&pair.name)?;
+        let _lock = self.lock_pair(&pair.id)?;
         let planned = self.plan(pair)?;
         self.apply_locked(pair, &planned.plan)
     }
@@ -359,14 +359,14 @@ impl<F: Fs> Engine<F> {
             Err(Error::Busy(_)) => {}
             Err(error) => {
                 let message = error.to_string();
-                let repeated = self.state.runs(&pair.name, 1).is_ok_and(|last| {
+                let repeated = self.state.runs(&pair.id, 1).is_ok_and(|last| {
                     last.first()
                         .is_some_and(|run| run.error.as_ref() == Some(&message))
                 });
                 if !repeated {
                     let _ = self
                         .state
-                        .add_run(&pair.name, &started.record(trigger, None, Some(message)));
+                        .add_run(&pair.id, &started.record(trigger, None, Some(message)));
                 }
             }
         }
@@ -378,7 +378,7 @@ impl<F: Fs> Engine<F> {
             return;
         }
         let _ = self.state.add_run(
-            &pair.name,
+            &pair.id,
             &started.record(trigger, serde_json::to_value(report).ok(), None),
         );
     }
@@ -400,13 +400,13 @@ impl<F: Fs> Engine<F> {
     /// Markoo never decides on the user's behalf.
     pub fn run(&self, pair: &Pair, dry_run: bool) -> Result<RunOutcome, Error> {
         let current = direction_key(pair.direction);
-        let previous = self.state.last_direction(&pair.name)?;
+        let previous = self.state.last_direction(&pair.id)?;
         let direction_changed = previous.as_deref().is_some_and(|last| last != current);
         // A plain dry run writes nothing, so it can run alongside a sync.
         let _lock = if dry_run && !direction_changed {
             None
         } else {
-            Some(self.lock_pair(&pair.name)?)
+            Some(self.lock_pair(&pair.id)?)
         };
         let planned = self.plan(pair)?;
 
@@ -414,16 +414,16 @@ impl<F: Fs> Engine<F> {
             && previous.as_deref() == Some(direction_key(Direction::Both))
             && pair.direction != Direction::Both
         {
-            let pending = self.state.pending(&pair.name)?.len();
+            let pending = self.state.pending(&pair.id)?.len();
             if pending > 0 {
                 return Err(Error::DirectionBlocked {
-                    pair: pair.name.clone(),
+                    pair: pair.id.clone(),
                     pending,
                 });
             }
         }
         if !dry_run || direction_changed {
-            self.state.set_last_direction(&pair.name, current)?;
+            self.state.set_last_direction(&pair.id, current)?;
         }
 
         let report = if dry_run || direction_changed {
@@ -463,12 +463,12 @@ impl<F: Fs> Engine<F> {
 
     /// Entries the user excluded by keeping a one-way target.
     pub fn ignored(&self, pair: &Pair) -> Result<Vec<EntryPath>, Error> {
-        Ok(self.state.ignored(&pair.name)?.into_iter().collect())
+        Ok(self.state.ignored(&pair.id)?.into_iter().collect())
     }
 
     /// Whether moving from `both` to a one-way mode would be refused.
     pub fn pending_count(&self, pair: &Pair) -> Result<usize, Error> {
-        Ok(self.state.pending(&pair.name)?.len())
+        Ok(self.state.pending(&pair.id)?.len())
     }
 
     /// Which files of the pair are tracked, with its filters as they are.
@@ -531,13 +531,13 @@ impl<F: Fs> Engine<F> {
 
     /// The version of each entry at the last sync.
     pub fn bases(&self, pair: &Pair) -> Result<BTreeMap<EntryPath, BaseEntry>, Error> {
-        Ok(self.state.bases(&pair.name)?)
+        Ok(self.state.bases(&pair.id)?)
     }
 
     /// Text to edit by hand to settle an issue, with conflict markers.
     pub fn conflict_draft(&self, pair: &Pair, path: &EntryPath) -> Result<String, Error> {
         let (_, issue) = self.pending_entry(pair, path)?;
-        let bases = self.state.bases(&pair.name)?;
+        let bases = self.state.bases(&pair.id)?;
         let base = bases.get(path).map_or("", |base| base.content.as_str());
         Ok(merge::with_markers(
             base,
@@ -565,14 +565,14 @@ impl<F: Fs> Engine<F> {
         path: &EntryPath,
         resolution: Resolution,
     ) -> Result<Report, Error> {
-        let _lock = self.lock_pair(&pair.name)?;
+        let _lock = self.lock_pair(&pair.id)?;
         let source = pair.direction.source();
-        if self.state.ignored(&pair.name)?.contains(path) {
+        if self.state.ignored(&pair.id)?.contains(path) {
             // The only way back for an excluded file is to restore the source.
             if !matches!(resolution, Resolution::Keep(side) if Some(side) == source) {
                 return Err(Error::AlreadyExcluded(path.clone()));
             }
-            self.state.unignore(&pair.name, path)?;
+            self.state.unignore(&pair.id, path)?;
         }
         let (entry, issue) = self.pending_entry(pair, path)?;
         let side_content = |side: Side| match side {
@@ -591,8 +591,8 @@ impl<F: Fs> Engine<F> {
         match (resolution, source) {
             (Resolution::Keep(side), Some(source)) if side != source => {
                 // Keeping the target of a one-way pair: exclude it from now on.
-                self.state.ignore(&pair.name, path)?;
-                self.state.clear_pending(&pair.name, path)?;
+                self.state.ignore(&pair.id, path)?;
+                self.state.clear_pending(&pair.id, path)?;
                 Ok(Report::default())
             }
             (Resolution::Keep(side), _) => {

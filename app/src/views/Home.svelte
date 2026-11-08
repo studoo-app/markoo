@@ -11,12 +11,14 @@
   }: {
     revision: number;
     onopen: (pair: string, tab?: Tab) => void;
-    onnew: () => void;
+    onnew: (project?: string) => void;
   } = $props();
 
   let pairs = $state<PairView[] | null>(null);
   let error = $state<string | null>(null);
   let syncing = $state<string | null>(null);
+  // Key of the project being synced one sync after the other.
+  let syncingProject = $state<string | null>(null);
   let confirming = $state<string | null>(null);
   let query = $state("");
   // Start time of the latest run of each pair, in milliseconds.
@@ -26,28 +28,45 @@
     (pairs ?? []).filter((pair) => {
       const needle = query.trim().toLowerCase();
       if (needle === "") return true;
-      return [pair.name, pair.kb, pair.repo].some((text) => text.toLowerCase().includes(needle));
+      return [pair.name, pair.label, pair.id, pair.project ?? "", pair.kb, pair.repo].some((text) =>
+        text.toLowerCase().includes(needle),
+      );
     }),
   );
   const toSettle = $derived((pairs ?? []).reduce((total, pair) => total + pair.pending, 0));
 
-  // Syncs grouped by knowledge base type, in the order they first appear.
+  // Syncs grouped by project, in the order projects first appear; syncs made
+  // before projects existed come last.
   const groups = $derived.by(() => {
-    const byType = new Map<string, PairView[]>();
-    for (const pair of visible) {
-      byType.set(pair.kb_type, [...(byType.get(pair.kb_type) ?? []), pair]);
+    const byProject = new Map<string | null, PairView[]>();
+    for (const pair of visible.filter((pair) => pair.project !== null)) {
+      byProject.set(pair.project, [...(byProject.get(pair.project) ?? []), pair]);
     }
-    return [...byType.entries()].map(([type, members]) => ({ type, members }));
+    const legacy = visible.filter((pair) => pair.project === null);
+    if (legacy.length > 0) byProject.set(null, legacy);
+    return [...byProject.entries()].map(([project, members]) => ({ project, members }));
   });
 
-  const groupText: Record<string, { title: string; hint: string }> = {
-    obsidian: { title: "Obsidian vaults", hint: "wikilinks, embeds and callouts converted both ways" },
-    markdown: { title: "Markdown folders", hint: "plain Markdown, copied as it is" },
+  const kindHint: Record<string, string> = {
+    obsidian: "wikilinks, embeds and callouts converted both ways",
+    markdown: "plain Markdown, copied as it is",
   };
 
-  function group(type: string): { title: string; hint: string } {
-    const text = groupText[type];
-    return text ? { title: t(text.title), hint: t(text.hint) } : { title: kbLabel(type), hint: "" };
+  /** The knowledge base of a sync, as its tooltip shows it. */
+  function kbTooltip(pair: PairView): string {
+    const hint = kindHint[pair.kb_type];
+    const kind = hint ? `${kbLabel(pair.kb_type)} (${t(hint)})` : kbLabel(pair.kb_type);
+    return `${kind}: ${pair.kb}\nGit: ${pair.repo}`;
+  }
+
+  /** Whether a sync can be run now from this screen. */
+  function canSync(pair: PairView): boolean {
+    return !pair.paused && !pair.active && pair.errors.length === 0;
+  }
+
+  /** All the syncs of a project, whatever the search shows. */
+  function membersOf(project: string | null): PairView[] {
+    return (pairs ?? []).filter((pair) => pair.project === project);
   }
 
   async function load() {
@@ -58,8 +77,8 @@
       const entries = await Promise.all(
         listed.map(async (pair): Promise<[string, number] | null> => {
           try {
-            const runs = await api.pairHistory(pair.name);
-            return runs.length > 0 ? [pair.name, runs[0].started_at] : null;
+            const runs = await api.pairHistory(pair.id);
+            return runs.length > 0 ? [pair.id, runs[0].started_at] : null;
           } catch {
             return null;
           }
@@ -87,6 +106,24 @@
       syncing = null;
       await load();
     }
+  }
+
+  /** Runs the syncs of a project one after the other. */
+  async function syncProject(project: string | null) {
+    syncingProject = project ?? "";
+    const failures: string[] = [];
+    for (const pair of membersOf(project).filter(canSync)) {
+      syncing = pair.id;
+      try {
+        await api.syncPair(pair.id);
+      } catch (failure) {
+        failures.push(errorText(failure));
+      }
+    }
+    syncing = null;
+    syncingProject = null;
+    error = failures.length > 0 ? failures.join(" · ") : null;
+    await load();
   }
 
   async function remove(pair: string) {
@@ -128,7 +165,7 @@
 
   function status(pair: PairView): { text: string; tone: string } {
     if (pair.errors.length > 0) return { text: t("Error"), tone: "error" };
-    if (pair.active || syncing === pair.name) return { text: t("Syncing"), tone: "muted" };
+    if (pair.active || syncing === pair.id) return { text: t("Syncing"), tone: "muted" };
     if (pair.pending > 0) return { text: t("To settle"), tone: "warn" };
     if (pair.paused) return { text: t("Paused"), tone: "muted" };
     return { text: t("Up to date"), tone: "ok" };
@@ -174,7 +211,7 @@
     <span class="tile big" aria-hidden="true"><Icon name="folder" size={28} stroke={1.25} /></span>
     <h2>{t("No sync yet")}</h2>
     <p class="muted">{t("A sync keeps a folder of your knowledge base in sync with a folder of a Git repository.")}</p>
-    <button class="add" type="button" onclick={onnew}><Icon name="plus" size={14} stroke={2.5} />{t("add a sync")}</button>
+    <button class="add" type="button" onclick={() => onnew()}><Icon name="plus" size={14} stroke={2.5} />{t("add a sync")}</button>
   </div>
 {:else}
   <label class="search">
@@ -186,23 +223,52 @@
     <p class="muted">{t("No sync matches “{query}”.", { query })}</p>
   {/if}
 
-  {#each groups as { type, members }, index (type)}
+  {#each groups as { project, members } (project)}
+    {@const all = membersOf(project)}
+    {@const title = project ?? t("No project")}
     <section>
-      <h2 class="group">
-        <span class="group-title">{group(type).title}</span>
-        {#if group(type).hint}<span class="group-hint">{group(type).hint}</span>{/if}
-        <span class="rule" aria-hidden="true"></span>
-      </h2>
+      <header class="group-head">
+        <h2 class="group">
+          <span class="group-title">{title}</span>
+          <span class="group-hint">{all.length === 1 ? t("1 sync") : t("{count} syncs", { count: all.length })}</span>
+          <span class="rule" aria-hidden="true"></span>
+        </h2>
+        <span class="group-actions">
+          <button
+            class="small"
+            type="button"
+            title={t("Sync every sync of this project that is not paused")}
+            aria-label={t("Sync the project {project}", { project: title })}
+            disabled={syncing !== null || !all.some(canSync)}
+            onclick={() => syncProject(project)}
+          >
+            <span class:spin={syncingProject === (project ?? "")}><Icon name="refresh" size={14} /></span>
+            {t("Sync project")}
+          </button>
+          {#if project !== null}
+            <button
+              class="small"
+              type="button"
+              aria-label={t("Add a sync to {project}", { project })}
+              onclick={() => onnew(project)}
+            >
+              <Icon name="plus" size={14} stroke={2.5} />
+              {t("Add a sync")}
+            </button>
+          {/if}
+        </span>
+      </header>
 
       <ul>
-        {#each members as pair (pair.name)}
+        {#each members as pair (pair.id)}
           {@const state = status(pair)}
           <li class:paused={pair.paused}>
-            <button class="open" type="button" onclick={() => onopen(pair.name)}>
+            <button class="open" type="button" onclick={() => onopen(pair.id)}>
               <span class="tile" aria-hidden="true"><Icon name="folder" size={24} stroke={1.5} /></span>
               <span class="text">
-                <span class="name">{pair.name}</span>
-                <span class="sub" title={`${kbLabel(pair.kb_type)}: ${pair.kb}\nGit: ${pair.repo}`}>
+                <span class="name" title={pair.label}>{pair.name}</span>
+                <span class="sub" title={kbTooltip(pair)}>
+                  <span class="kind">{kbLabel(pair.kb_type)}</span>
                   {folderName(pair.kb)} {arrow(pair.direction)} {folderName(pair.repo)}
                   <span class="detail" class:error={pair.errors.length > 0}>– {detail(pair)}</span>
                 </span>
@@ -210,8 +276,8 @@
             </button>
 
             <span class="meta">
-              {#if lastRuns[pair.name] !== undefined}
-                <strong>{ago(lastRuns[pair.name])}</strong>
+              {#if lastRuns[pair.id] !== undefined}
+                <strong>{ago(lastRuns[pair.id])}</strong>
                 <em>{t("last sync")}</em>
               {:else}
                 <strong>—</strong>
@@ -221,9 +287,9 @@
 
             <span class="pill {state.tone}"><span class="dot" aria-hidden="true"></span>{state.text}</span>
 
-            {#if confirming === pair.name}
-              <span class="confirm" role="group" aria-label={t("Remove {name}", { name: pair.name })}>
-                <button class="danger small" type="button" onclick={() => remove(pair.name)}>{t("Remove")}</button>
+            {#if confirming === pair.id}
+              <span class="confirm" role="group" aria-label={t("Remove {name}", { name: pair.label })}>
+                <button class="danger small" type="button" onclick={() => remove(pair.id)}>{t("Remove")}</button>
                 <button class="small" type="button" onclick={() => (confirming = null)}>{t("Cancel")}</button>
               </span>
             {:else}
@@ -232,18 +298,18 @@
                   class="icon-button"
                   type="button"
                   title={t("Sync now")}
-                  aria-label={t("Sync {name} now", { name: pair.name })}
+                  aria-label={t("Sync {name} now", { name: pair.label })}
                   disabled={pair.paused || pair.active || syncing !== null || pair.errors.length > 0}
-                  onclick={() => sync(pair.name)}
+                  onclick={() => sync(pair.id)}
                 >
-                  <span class:spin={syncing === pair.name || pair.active}><Icon name="refresh" /></span>
+                  <span class:spin={syncing === pair.id || pair.active}><Icon name="refresh" /></span>
                 </button>
                 <button
                   class="icon-button"
                   type="button"
                   title={t("Settings")}
-                  aria-label={t("Settings of {name}", { name: pair.name })}
-                  onclick={() => onopen(pair.name, "general")}
+                  aria-label={t("Settings of {name}", { name: pair.label })}
+                  onclick={() => onopen(pair.id, "general")}
                 >
                   <Icon name="settings" />
                 </button>
@@ -251,8 +317,8 @@
                   class="icon-button"
                   type="button"
                   title={t("Remove this sync (files stay where they are)")}
-                  aria-label={t("Remove {name}", { name: pair.name })}
-                  onclick={() => (confirming = pair.name)}
+                  aria-label={t("Remove {name}", { name: pair.label })}
+                  onclick={() => (confirming = pair.id)}
                 >
                   <Icon name="trash" />
                 </button>
@@ -261,12 +327,10 @@
           </li>
         {/each}
       </ul>
-
-      {#if index === 0}
-        <button class="add" type="button" onclick={onnew}><Icon name="plus" size={14} stroke={2.5} />{t("add a sync")}</button>
-      {/if}
     </section>
   {/each}
+
+  <button class="add" type="button" onclick={() => onnew()}><Icon name="plus" size={14} stroke={2.5} />{t("add a sync")}</button>
 {/if}
 
 <style>
@@ -386,6 +450,28 @@
     font-weight: 400;
     color: var(--muted);
   }
+  .group-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    margin: 0 6px 10px;
+  }
+  .group-head .group {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
+  .group-actions {
+    display: flex;
+    gap: 8px;
+    flex: none;
+  }
+  .group-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
   .rule {
     flex: 1;
     min-width: 24px;
@@ -463,9 +549,13 @@
     font-weight: 500;
     line-height: 1.2;
     letter-spacing: 0.005em;
+    /* Names are free text: two lines before cutting them short. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     transition: color 120ms ease;
   }
   .sub {
@@ -474,6 +564,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .kind {
+    margin-right: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
   .detail.error {
     color: var(--danger);
@@ -623,14 +720,15 @@
 
   /* Narrow window: these come last so they win over the rules above. */
   @container (max-width: 760px) {
-    .meta {
-      display: none;
-    }
-  }
-  @container (max-width: 560px) {
+    .meta,
     .open .tile {
       display: none;
     }
+    .name {
+      font-size: 19px;
+    }
+  }
+  @container (max-width: 560px) {
     li {
       padding: 16px 18px;
       gap: 12px;

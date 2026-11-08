@@ -51,8 +51,15 @@ pub enum TargetChanges {
 /// A pair of folders kept in sync.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pair {
-    /// Unique name of the pair.
+    /// Stable identifier of the pair, unique among all pairs: the state, the
+    /// locks, the issue identifiers and the Git hooks are keyed on it, so it
+    /// never changes, even when the pair or its project is renamed.
+    pub id: String,
+    /// Name of the pair, unique within its project.
     pub name: String,
+    /// Project the pair belongs to; the pairs of a project are shown together.
+    /// `None` for pairs created before projects existed.
+    pub project: Option<String>,
     /// Knowledge base folder.
     pub kb: PathBuf,
     /// Type of the knowledge base.
@@ -80,8 +87,11 @@ pub struct Pair {
 impl Pair {
     /// A bidirectional pair of plain Markdown folders tracking `**/*.md`.
     pub fn new(name: impl Into<String>, kb: impl Into<PathBuf>, repo: impl Into<PathBuf>) -> Self {
+        let name = name.into();
         Self {
-            name: name.into(),
+            id: name.clone(),
+            name,
+            project: None,
             kb: kb.into(),
             kb_type: KbType::default(),
             repo: repo.into(),
@@ -93,6 +103,14 @@ impl Pair {
             assets_dir: "assets".to_owned(),
             kb_options: KbOptions::default(),
             hooks: HookSettings::default(),
+        }
+    }
+
+    /// `project/name`, or the name alone for a pair without a project.
+    pub fn label(&self) -> String {
+        match &self.project {
+            Some(project) => format!("{project}/{}", self.name),
+            None => self.name.clone(),
         }
     }
 

@@ -210,7 +210,6 @@ const fr: Record<string, string> = {
   "✓ {label} {kind} detected": "✓ {kind} {label} détecté",
   "vault": "coffre",
   "folder": "dossier",
-  "Use lowercase letters, digits and hyphens.": "Utilisez des minuscules, des chiffres et des tirets.",
   "Folder in the Git repository": "Dossier dans le dépôt Git",
   "✓ Git repository, branch {branch}": "✓ Dépôt Git, branche {branch}",
   "✓ Git repository": "✓ Dépôt Git",
@@ -269,6 +268,34 @@ const fr: Record<string, string> = {
   "nothing to do": "rien à faire",
   "Synced": "Synchronisé",
   "{count} written": "{count} écrit(s)",
+  // Projects.
+  "Project": "Projet",
+  "Project name": "Nom du projet",
+  "Choose a project": "Choisir un projet",
+  "New project…": "Nouveau projet…",
+  "A project groups this sync and the next ones you add to it.":
+    "Un projet regroupe ce sync et les suivants que vous y ajouterez.",
+  "This sync joins the project {project}.": "Ce sync rejoint le projet {project}.",
+  "No project": "Sans projet",
+  "1 sync": "1 sync",
+  "{count} syncs": "{count} sync",
+  "Sync project": "Synchroniser le projet",
+  "Sync every sync of this project that is not paused":
+    "Synchroniser chaque sync de ce projet qui n'est pas en pause",
+  "Sync the project {project}": "Synchroniser le projet {project}",
+  "Add a sync": "Ajouter un sync",
+  "Add a sync to {project}": "Ajouter un sync à {project}",
+  "Name the project of this sync.": "Nommez le projet de ce sync.",
+  // Names of the syncs.
+  "Use one line of at most {max} characters, without “/”.":
+    "Une seule ligne de {max} caractères au plus, sans « / ».",
+  "A sync of this project already has this name.": "Un sync de ce projet porte déjà ce nom.",
+  "Technical documentation": "Documentation technique",
+  "Free text, shown in the list of syncs. You can change it later.":
+    "Texte libre, affiché dans la liste des sync. Vous pourrez le modifier ensuite.",
+  "Identifier": "Identifiant",
+  "used by the CLI and the Git hooks; it never changes.":
+    "utilisé par la CLI et les hooks Git ; il ne change jamais.",
 };
 
 let current = $state<Locale>("en");
