@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.7] - 2026-11-08
+
+### Security
+
+- The `zip` library used to read the updates is updated to 9.4.2. It fixes three advisories: unbounded symlink targets that could exhaust memory during extraction, HMAC authentication bypass on a premature end of file, and dual-header inconsistencies in zip archives.
+
+### Changed
+
+- The updater plugin is updated to 2.14.1, which brings Tauri to 2.12.5 and its window stack (wry 0.57).
+
 ## [1.0.0-rc.6] - 2026-11-08
 
 ### Added
@@ -118,7 +128,8 @@ First release candidate. Keep a backup of your notes, and start on a copy.
 - No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
 - Not implemented, and ignored with a warning: `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, `schedule.pause_on_battery`, merging frontmatter by key.
 
-[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.6...HEAD
+[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.7...HEAD
+[1.0.0-rc.7]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.6...v1.0.0-rc.7
 [1.0.0-rc.6]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.5...v1.0.0-rc.6
 [1.0.0-rc.5]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.4...v1.0.0-rc.5
 [1.0.0-rc.4]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.3...v1.0.0-rc.4
