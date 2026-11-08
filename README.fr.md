@@ -6,7 +6,7 @@
   </picture>
 </p>
 
-**Garder sa base de connaissance et la documentation de ses projets synchronisées.**
+## **Garder sa base de connaissance et la documentation de ses projets synchronisées.**
 
 Markoo est un connecteur bidirectionnel intelligent entre une **base de connaissance** et un **dépôt Git local**. Vous écrivez une note dans votre base de connaissance : elle arrive dans le `docs/` du repo, avec des liens Markdown qui fonctionnent. Vous récupérez la modification d'un collègue dans `docs/` : votre base de connaissance est mise à jour.
 

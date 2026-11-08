@@ -7,7 +7,7 @@
 </p>
 
 
-**Keep your knowledge base and your project docs in sync.**
+## **Keep your knowledge base and your project docs in sync.**
 
 Markoo is a smart two-way connector between a **knowledge base** and a **local Git repository**. Write a note in your knowledge base and it lands in your repo's `docs/` with working Markdown links; pull a teammate's change to `docs/` and your knowledge base is updated.
 
