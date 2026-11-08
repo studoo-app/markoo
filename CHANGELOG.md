@@ -13,10 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The home screen shows the syncs project by project, each with **Sync project** and **Add a sync**. The creation wizard asks the project first.
 - `markoo pair add --project <name>`, a project question in the interactive wizard, `markoo pair list` grouped by project, and `--project <name>` on `markoo sync` and `markoo status` to act on every sync of a project. `markoo pair set <pair> project <name>` moves a sync to another project.
 - Pair listings of the API and MCP include each pair's project, and a whole project can be synced.
+- Each sync has a stable id, stored as `id` in its `[[pair]]` of `markoo.toml`. It is generated from the project and the name when the sync is created (`markoo-documentation`) and never changes: the state, history, conflicts, locks and Git hooks are keyed on it. In a file written by hand it is optional, and a sync without one keeps its name as id, so existing configurations keep their state and hooks.
+- Sync names are free text, from 1 to 64 characters on one line without `/`, such as "Technical documentation" or "Skill Claude (prod)". The creation wizard asks for one, and a sync can be renamed at any time in the General tab, with `markoo pair set <pair> name "…"`, `PATCH /pairs/{pair}/config` or the MCP `update_pair_config` tool, without losing its history, conflicts or hooks. The General tab shows the id.
+- Two projects can each have a sync with the same name, such as "Documentation".
+- The CLI, the API and MCP designate a sync by its id, by `Project/Name`, or by its name alone when no other project uses it; an ambiguous name is refused with the list of matching syncs. API and MCP pair listings give `id`, `name`, `label` (`Project/Name`) and `project`, and `POST /pairs` answers with the generated `id`.
 
 ### Changed
 
 - Creating a pair now requires a project: `markoo pair add` needs `--project`, the app asks for one, and `POST /pairs` answers `400` without `project`. Syncs created before projects keep working without one and are listed after the projects.
+- Sync names no longer need to be unique across all projects, only within their project, regardless of case. Names and project names cannot contain `/`.
+- The `"pair"` fields of JSON outputs (`--json`, API, MCP: plans, status, job reports, conflicts, history) and the pairs listed by `GET /projects` are ids, not names. `markoo hook install` writes the id in the hook scripts.
 
 ## [1.0.0-rc.5] - 2026-11-08
 

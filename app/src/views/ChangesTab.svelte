@@ -3,7 +3,7 @@
   import { api, errorText, type Plan, type PlanEntry } from "../lib/api";
   import PlanList from "../lib/PlanList.svelte";
 
-  let { name, revision }: { name: string; revision: number } = $props();
+  let { id, revision }: { id: string; revision: number } = $props();
 
   let plan = $state<Plan | null>(null);
   let error = $state<string | null>(null);
@@ -13,7 +13,7 @@
   $effect(() => {
     void revision;
     api
-      .pairStatus(name)
+      .pairStatus(id)
       .then((value) => {
         plan = value;
         error = null;
@@ -25,7 +25,7 @@
     selected = entry.path;
     patch = null;
     try {
-      const answer = await api.pairDiff(name, entry.path);
+      const answer = await api.pairDiff(id, entry.path);
       patch = answer.diffs[0]?.patch ?? "";
     } catch (failure) {
       patch = errorText(failure);

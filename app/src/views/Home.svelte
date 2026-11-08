@@ -28,7 +28,7 @@
     (pairs ?? []).filter((pair) => {
       const needle = query.trim().toLowerCase();
       if (needle === "") return true;
-      return [pair.name, pair.project ?? "", pair.kb, pair.repo].some((text) =>
+      return [pair.name, pair.label, pair.id, pair.project ?? "", pair.kb, pair.repo].some((text) =>
         text.toLowerCase().includes(needle),
       );
     }),
@@ -77,8 +77,8 @@
       const entries = await Promise.all(
         listed.map(async (pair): Promise<[string, number] | null> => {
           try {
-            const runs = await api.pairHistory(pair.name);
-            return runs.length > 0 ? [pair.name, runs[0].started_at] : null;
+            const runs = await api.pairHistory(pair.id);
+            return runs.length > 0 ? [pair.id, runs[0].started_at] : null;
           } catch {
             return null;
           }
@@ -113,9 +113,9 @@
     syncingProject = project ?? "";
     const failures: string[] = [];
     for (const pair of membersOf(project).filter(canSync)) {
-      syncing = pair.name;
+      syncing = pair.id;
       try {
-        await api.syncPair(pair.name);
+        await api.syncPair(pair.id);
       } catch (failure) {
         failures.push(errorText(failure));
       }
@@ -165,7 +165,7 @@
 
   function status(pair: PairView): { text: string; tone: string } {
     if (pair.errors.length > 0) return { text: t("Error"), tone: "error" };
-    if (pair.active || syncing === pair.name) return { text: t("Syncing"), tone: "muted" };
+    if (pair.active || syncing === pair.id) return { text: t("Syncing"), tone: "muted" };
     if (pair.pending > 0) return { text: t("To settle"), tone: "warn" };
     if (pair.paused) return { text: t("Paused"), tone: "muted" };
     return { text: t("Up to date"), tone: "ok" };
@@ -260,13 +260,13 @@
       </header>
 
       <ul>
-        {#each members as pair (pair.name)}
+        {#each members as pair (pair.id)}
           {@const state = status(pair)}
           <li class:paused={pair.paused}>
-            <button class="open" type="button" onclick={() => onopen(pair.name)}>
+            <button class="open" type="button" onclick={() => onopen(pair.id)}>
               <span class="tile" aria-hidden="true"><Icon name="folder" size={24} stroke={1.5} /></span>
               <span class="text">
-                <span class="name">{pair.name}</span>
+                <span class="name" title={pair.label}>{pair.name}</span>
                 <span class="sub" title={kbTooltip(pair)}>
                   <span class="kind">{kbLabel(pair.kb_type)}</span>
                   {folderName(pair.kb)} {arrow(pair.direction)} {folderName(pair.repo)}
@@ -276,8 +276,8 @@
             </button>
 
             <span class="meta">
-              {#if lastRuns[pair.name] !== undefined}
-                <strong>{ago(lastRuns[pair.name])}</strong>
+              {#if lastRuns[pair.id] !== undefined}
+                <strong>{ago(lastRuns[pair.id])}</strong>
                 <em>{t("last sync")}</em>
               {:else}
                 <strong>—</strong>
@@ -287,9 +287,9 @@
 
             <span class="pill {state.tone}"><span class="dot" aria-hidden="true"></span>{state.text}</span>
 
-            {#if confirming === pair.name}
-              <span class="confirm" role="group" aria-label={t("Remove {name}", { name: pair.name })}>
-                <button class="danger small" type="button" onclick={() => remove(pair.name)}>{t("Remove")}</button>
+            {#if confirming === pair.id}
+              <span class="confirm" role="group" aria-label={t("Remove {name}", { name: pair.label })}>
+                <button class="danger small" type="button" onclick={() => remove(pair.id)}>{t("Remove")}</button>
                 <button class="small" type="button" onclick={() => (confirming = null)}>{t("Cancel")}</button>
               </span>
             {:else}
@@ -298,18 +298,18 @@
                   class="icon-button"
                   type="button"
                   title={t("Sync now")}
-                  aria-label={t("Sync {name} now", { name: pair.name })}
+                  aria-label={t("Sync {name} now", { name: pair.label })}
                   disabled={pair.paused || pair.active || syncing !== null || pair.errors.length > 0}
-                  onclick={() => sync(pair.name)}
+                  onclick={() => sync(pair.id)}
                 >
-                  <span class:spin={syncing === pair.name || pair.active}><Icon name="refresh" /></span>
+                  <span class:spin={syncing === pair.id || pair.active}><Icon name="refresh" /></span>
                 </button>
                 <button
                   class="icon-button"
                   type="button"
                   title={t("Settings")}
-                  aria-label={t("Settings of {name}", { name: pair.name })}
-                  onclick={() => onopen(pair.name, "general")}
+                  aria-label={t("Settings of {name}", { name: pair.label })}
+                  onclick={() => onopen(pair.id, "general")}
                 >
                   <Icon name="settings" />
                 </button>
@@ -317,8 +317,8 @@
                   class="icon-button"
                   type="button"
                   title={t("Remove this sync (files stay where they are)")}
-                  aria-label={t("Remove {name}", { name: pair.name })}
-                  onclick={() => (confirming = pair.name)}
+                  aria-label={t("Remove {name}", { name: pair.label })}
+                  onclick={() => (confirming = pair.id)}
                 >
                   <Icon name="trash" />
                 </button>
@@ -549,9 +549,13 @@
     font-weight: 500;
     line-height: 1.2;
     letter-spacing: 0.005em;
+    /* Names are free text: two lines before cutting them short. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     transition: color 120ms ease;
   }
   .sub {
@@ -716,14 +720,15 @@
 
   /* Narrow window: these come last so they win over the rules above. */
   @container (max-width: 760px) {
-    .meta {
-      display: none;
-    }
-  }
-  @container (max-width: 560px) {
+    .meta,
     .open .tile {
       display: none;
     }
+    .name {
+      font-size: 19px;
+    }
+  }
+  @container (max-width: 560px) {
     li {
       padding: 16px 18px;
       gap: 12px;

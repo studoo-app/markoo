@@ -36,7 +36,7 @@ flowchart LR
 | API HTTP | ✅ `GET /pairs/{pair}/config` | ✅ `POST /pairs`, `PATCH /pairs/{pair}/config`, `DELETE /pairs/{pair}` |
 | MCP | ✅ `get_pair_config` | ❌ par défaut ; activable avec `mcp.allow_config_write = true` (outil `update_pair_config`) |
 
-Les listes de paires de l'API et du MCP indiquent le projet de chaque paire, et un projet entier peut être synchronisé.
+Les listes de paires de l'API et du MCP indiquent l'identifiant, le nom et le projet de chaque paire, et un projet entier peut être synchronisé. Tous les accès désignent une paire par son identifiant, par `Projet/Nom` ou par un nom qu'aucun autre projet n'utilise, voir [Désigner une paire](06-configuration.md#désigner-une-paire).
 
 L'écriture de configuration par un agent IA est désactivée par défaut : changer un sens ou un dossier peut provoquer des écritures massives à la synchro suivante.
 
@@ -108,7 +108,8 @@ La vue **Activité** de la barre latérale liste les dernières synchros enregis
 ```text
 ┌─ clara › Général ────────────────────────────────────────────────┐
 │                                                                  │
-│  Nom            [ clara                     ]                    │
+│  Nom            [ Documentation Clara       ]                    │
+│                 Identifiant : clara (ne change jamais)           │
 │                                                                  │
 │  Type de KB     [ Obsidian (détecté)    ▾ ]                      │
 │  KB             [ ~/Obsidian/Knowledge/Projets/Clara ] [Choisir] │
@@ -135,6 +136,7 @@ La vue **Activité** de la barre latérale liste les dernières synchros enregis
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+- Le **nom** est un texte libre, de 64 caractères au plus, unique dans le projet. Enregistrer un nouveau nom renomme la paire sans aperçu, puisqu'aucun fichier ne change : son historique, ses conflits en attente et ses hooks Git la suivent. L'**identifiant** affiché dessous est en lecture seule : c'est la clé utilisée par la CLI, l'API, les hooks Git et l'état, et il ne change jamais, voir [Identifiant et nom](06-configuration.md#identifiant-et-nom).
 - Le **type de KB** est détecté à partir du dossier choisi (voir [Bases de connaissance](09-bases-de-connaissance.md#types-de-bases-de-connaissance-pris-en-charge)) ; on peut le forcer dans la liste. Le message sous le champ KB vient de l'adaptateur : vault Obsidian reconnu, simple dossier Markdown…
 - Les options affichées dépendent du sens : « Si la cible est modifiée » n'apparaît que pour un mode à sens unique, et « Conflits » que pour le mode bidirectionnel.
 - Le bouton **Enregistrer et voir** ouvre l'aperçu (dry-run) au lieu d'enregistrer directement quand le changement touche aux dossiers, au type de KB, au sens ou aux filtres.
@@ -178,7 +180,7 @@ Un panneau **avant / après** montre l'effet sur une note réelle de la paire.
 
 ```mermaid
 flowchart LR
-    S1["1. Base de connaissance<br/>projet + type de KB + dossier"] --> S2["2. Repo<br/>choisir dépôt + dossier"]
+    S1["1. Base de connaissance<br/>projet + dossier + type de KB + nom"] --> S2["2. Repo<br/>choisir dépôt + dossier"]
     S2 --> S3["3. Sens<br/>→ · ⇄ · ←"]
     S3 --> S4["4. Filtres<br/>aperçu en direct"]
     S4 --> S5["5. Déclencheurs<br/>intervalle, hooks"]
@@ -186,7 +188,7 @@ flowchart LR
     S6 -->|Créer| OK(["Paire créée,<br/>première synchro"])
 ```
 
-- **Étape 1** : le premier champ est le **projet**. Quand des projets existent, une liste les propose, avec **Nouveau projet…** qui affiche un champ pour en nommer un ; pour la toute première paire, seul le champ **Nom du projet** est affiché. Un nom qui ne diffère d'un projet existant que par la casse rejoint ce projet. Quand l'assistant est ouvert depuis **Ajouter un sync** d'un projet, ce projet est déjà choisi. On choisit ensuite le **type de KB** (détecté automatiquement quand c'est possible), puis le dossier. Les KB connues sont proposées par l'adaptateur : celui d'Obsidian lit le fichier `obsidian.json` de l'application (sous macOS `~/Library/Application Support/obsidian/`, sous Linux `~/.config/obsidian/`, sous Windows `%APPDATA%\obsidian\`) ; d'autres adaptateurs ne proposent rien et se contentent d'un sélecteur de dossier. On peut toujours choisir un dossier à la main.
+- **Étape 1** : le premier champ est le **projet**. Quand des projets existent, une liste les propose, avec **Nouveau projet…** qui affiche un champ pour en nommer un ; pour la toute première paire, seul le champ **Nom du projet** est affiché. Un nom qui ne diffère d'un projet existant que par la casse rejoint ce projet. Quand l'assistant est ouvert depuis **Ajouter un sync** d'un projet, ce projet est déjà choisi. On choisit ensuite le dossier et le **type de KB** (détecté automatiquement quand c'est possible). L'étape se termine par le **nom du sync** : un texte libre comme « Documentation technique », proposé d'après le nom du dossier de la KB tant que vous n'en tapez pas un, et modifiable ensuite dans l'onglet Général. Markoo en tire l'identifiant de la paire, avec le projet (`Markoo` + `Documentation` donnent `markoo-documentation`), et ne le change plus ensuite. Les KB connues sont proposées par l'adaptateur : celui d'Obsidian lit le fichier `obsidian.json` de l'application (sous macOS `~/Library/Application Support/obsidian/`, sous Linux `~/.config/obsidian/`, sous Windows `%APPDATA%\obsidian\`) ; d'autres adaptateurs ne proposent rien et se contentent d'un sélecteur de dossier. On peut toujours choisir un dossier à la main.
 - **Étape 2** : le sélecteur vérifie que le dossier est dans un dépôt Git et affiche la branche courante.
 - **Étape 3** : les trois cartes de sens, avec le mode bidirectionnel présélectionné.
 - **Étape 6, première synchro d'une nouvelle paire** : si les deux dossiers contiennent déjà des fichiers, l'aperçu met en évidence les fichiers présents des deux côtés avec un contenu différent (cas 5 de la [classification](03-algorithme-de-synchronisation.md#classification)) pour que l'utilisateur les traite avant de lancer. Il compte aussi les fichiers envoyés de chaque côté, et signale ceux qui partent vers la KB sans être suivis par Git dans le dépôt : ils peuvent n'avoir aucun rapport avec lui.
@@ -218,7 +220,7 @@ sequenceDiagram
 
 Les règles de [validation au chargement](06-configuration.md#validation-au-chargement) s'appliquent pendant la saisie, plus :
 
-- nom de paire unique tous projets confondus et utilisable dans une URL (`[a-z0-9-]+`) ;
+- nom de paire requis, texte libre de 1 à 64 caractères sur une ligne sans `/`, unique dans son projet sans tenir compte de la casse (un autre projet peut l'utiliser) ;
 - nom de projet requis pour une nouvelle paire, de 1 à 64 caractères sur une ligne ;
 - passage de `both` à un sens unique **refusé** tant qu'il reste des conflits en attente (voir [Changer de sens](03-algorithme-de-synchronisation.md#changer-de-sens)) ;
 - choix de `overwrite` : avertissement explicite, avec le nombre de fichiers de la cible qui seraient modifiés ou mis à la corbeille.
@@ -240,6 +242,10 @@ markoo pair set clara project Clara
 ```
 
 ```bash
+markoo pair set clara name "Documentation Clara"
+```
+
+```bash
 markoo pair list
 ```
 
@@ -247,4 +253,4 @@ markoo pair list
 markoo sync --project Clara
 ```
 
-`--project` est requis : il nomme un nouveau projet ou rejoint un projet existant, quelle que soit sa casse. `--kb-type` est facultatif : sans lui, le type est détecté à partir du dossier. Sans arguments, `markoo pair add` lance le même assistant en mode interactif dans le terminal, en demandant d'abord le projet. `markoo pair list` affiche les paires projet par projet, et `--project` sur `markoo sync` et `markoo status` agit sur toutes les paires d'un projet.
+`--project` est requis : il nomme un nouveau projet ou rejoint un projet existant, quelle que soit sa casse. Le nom peut contenir des espaces s'il est entre guillemets (`markoo pair add "Documentation technique" --project Markoo …`) ; l'identifiant est tiré du projet et du nom. `markoo pair set <paire> name "…"` renomme une paire ; `id` ne se modifie pas. `--kb-type` est facultatif : sans lui, le type est détecté à partir du dossier. Sans arguments, `markoo pair add` lance le même assistant en mode interactif dans le terminal, en demandant d'abord le projet. `markoo pair list` affiche les paires projet par projet, et `--project` sur `markoo sync` et `markoo status` agit sur toutes les paires d'un projet.

@@ -3,11 +3,11 @@
   import { api, errorText, type Conflict, type Conflicts, type Direction } from "../lib/api";
 
   let {
-    name,
+    id,
     direction,
     revision,
     onchange,
-  }: { name: string; direction: Direction; revision: number; onchange: () => void } = $props();
+  }: { id: string; direction: Direction; revision: number; onchange: () => void } = $props();
 
   let all = $state<Conflicts | null>(null);
   let error = $state<string | null>(null);
@@ -20,7 +20,7 @@
   $effect(() => {
     void revision;
     api
-      .listConflicts(name)
+      .listConflicts(id)
       .then((value) => {
         all = value;
         // A refresh must not throw away the text being edited.

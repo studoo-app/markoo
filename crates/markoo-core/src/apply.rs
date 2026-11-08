@@ -100,12 +100,12 @@ impl<F: Fs> Applier<'_, F> {
         report.written.extend(attachments.written);
         report.skipped.extend(attachments.skipped);
         report.attachment_conflicts = attachments.attachment_conflicts;
-        for issue in self.state.pending(&self.pair.name)? {
+        for issue in self.state.pending(&self.pair.id)? {
             let still_pending = plan.entries.iter().any(|entry| {
                 entry.path == issue.path && matches!(entry.action, Action::Pending { .. })
             });
             if !still_pending {
-                self.state.clear_pending(&self.pair.name, &issue.path)?;
+                self.state.clear_pending(&self.pair.id, &issue.path)?;
             }
         }
         Ok(report)
@@ -124,13 +124,13 @@ impl<F: Fs> Applier<'_, F> {
         match &attachment.action {
             AttachmentAction::Conflict => report.attachment_conflicts.push(name.clone()),
             AttachmentAction::Record { hash } => {
-                self.state.put_attachment(&self.pair.name, name, hash)?;
+                self.state.put_attachment(&self.pair.id, name, hash)?;
             }
             AttachmentAction::Copy { to, hash } => {
                 let result = self.copy_attachment(attachment, *to, hash, &entry);
                 match result {
                     Ok(()) => {
-                        self.state.put_attachment(&self.pair.name, name, hash)?;
+                        self.state.put_attachment(&self.pair.id, name, hash)?;
                         report.written.push(FileRef {
                             side: *to,
                             path: entry,
@@ -202,7 +202,7 @@ impl<F: Fs> Applier<'_, F> {
                 repo_content,
             } => {
                 self.state.set_pending(
-                    &self.pair.name,
+                    &self.pair.id,
                     &PendingIssue {
                         path: path.clone(),
                         kind: *issue,
@@ -336,7 +336,7 @@ impl<F: Fs> Applier<'_, F> {
         let root = self
             .data_dir
             .join(kind)
-            .join(&self.pair.name)
+            .join(&self.pair.id)
             .join(run)
             .join(side.as_str());
         path.under(&root)
@@ -349,14 +349,14 @@ impl<F: Fs> Applier<'_, F> {
             kb_meta: self.fs.meta(&path.under(&self.pair.kb))?,
             repo_meta: self.fs.meta(&path.under(&self.pair.repo))?,
         };
-        self.state.put_base(&self.pair.name, path, &base)?;
-        self.state.clear_pending(&self.pair.name, path)?;
+        self.state.put_base(&self.pair.id, path, &base)?;
+        self.state.clear_pending(&self.pair.id, path)?;
         Ok(())
     }
 
     fn forget(&self, path: &EntryPath) -> Result<(), EntryError> {
-        self.state.forget_base(&self.pair.name, path)?;
-        self.state.clear_pending(&self.pair.name, path)?;
+        self.state.forget_base(&self.pair.id, path)?;
+        self.state.clear_pending(&self.pair.id, path)?;
         Ok(())
     }
 }

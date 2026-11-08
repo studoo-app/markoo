@@ -108,10 +108,10 @@ Binaire `markoo` (`clap`) :
 | `markoo init` | Crée `markoo.toml` de façon interactive (type de KB détecté automatiquement) et prépare le dossier d'état |
 | `markoo status [--project <nom>]` | Liste les fichiers modifiés, ajoutés, supprimés, en conflit, éventuellement pour les seules paires d'un projet |
 | `markoo diff [fichier]` | Affiche le diff coloré |
-| `markoo sync [--dry-run] [--pair <nom> \| --project <nom>]` | Planifie puis applique ; `--project` synchronise toutes les paires d'un projet |
+| `markoo sync [--dry-run] [--pair <paire> \| --project <nom>]` | Planifie puis applique ; `--project` synchronise toutes les paires d'un projet. `<paire>` est l'identifiant de la paire, `Projet/Nom` ou un nom qu'aucun autre projet n'utilise, voir [Désigner une paire](06-configuration.md#désigner-une-paire) |
 | `markoo conflicts` / `markoo resolve <fichier>` | Liste et résout les conflits et divergences, identifiés par le chemin du fichier |
 | `markoo hook install\|uninstall` | Gère les hooks Git |
-| `markoo pair add\|list\|show\|set\|remove` | Gère les paires (sens, dossiers, filtres…) ; création : `markoo pair add <nom> --project <nom> --kb <dossier> [--kb-type obsidian\|markdown] --repo <dossier>` (`--kb-type` détecté si omis) ; `list` regroupe les paires par projet ; voir [Interface de configuration](08-interface-de-configuration.md) |
+| `markoo pair add\|list\|show\|set\|remove` | Gère les paires (sens, dossiers, filtres…) ; création : `markoo pair add <nom> --project <projet> --kb <dossier> [--kb-type obsidian\|markdown] --repo <dossier>` (`--kb-type` détecté si omis) ; l'identifiant est tiré du projet et du nom ; `set <paire> name "…"` renomme une paire et garde son identifiant ; `list` regroupe les paires par projet ; voir [Interface de configuration](08-interface-de-configuration.md) |
 | `markoo paths` | Affiche les chemins de configuration et d'état utilisés |
 | `markoo daemon [install\|uninstall]` | Lance le daemon (planificateur + API + MCP), ou gère son service `launchd` sur macOS |
 | `markoo token rotate` | Remplace le jeton de l'API |
@@ -133,7 +133,7 @@ Si le terminal gère les couleurs, `<` est affiché dans le rose du logo (`#FF00
 
 ### `markoo-daemon`
 
-Processus longue durée, embarqué dans l'app Tauri ou lancé seul (`launchd` sur macOS). Il garantit **une seule synchro à la fois par paire** grâce à une file de jobs et un verrou par paire (`<data>/locks/<paire>.lock`), quel que soit le déclencheur. Le moteur prend lui-même ce verrou : une commande CLI lancée à côté du daemon est donc couverte aussi.
+Processus longue durée, embarqué dans l'app Tauri ou lancé seul (`launchd` sur macOS). Il garantit **une seule synchro à la fois par paire** grâce à une file de jobs et un verrou par paire (`<data>/locks/<identifiant>.lock`, rattaché à l'identifiant stable de la paire), quel que soit le déclencheur. Le moteur prend lui-même ce verrou : une commande CLI lancée à côté du daemon est donc couverte aussi.
 
 ### `markoo-mcp`
 

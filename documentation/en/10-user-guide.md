@@ -61,7 +61,7 @@ markoo sync --pair clara
 Add the next pairs of a project with the same `--project`. The spelling already in use is kept, so `--project clara` joins `Clara`:
 
 ```bash
-markoo pair add clara-skill --project Clara --kb ~/Obsidian/Knowledge/Skills/Clara --repo ~/code/clara/skill
+markoo pair add Skill --project Clara --kb ~/Obsidian/Knowledge/Skills/Clara --repo ~/code/clara/skill
 ```
 
 `markoo pair list` shows the pairs project by project. To act on all of a project's pairs at once:
@@ -74,7 +74,19 @@ markoo status --project Clara
 markoo sync --project Clara
 ```
 
-In the app, the home screen shows one block per project, with **Sync project** and **Add a sync**. Pairs created before projects existed have none and are listed last; `markoo pair set clara project Clara` gives one, or moves a pair to another project. Pair names stay unique across all projects.
+In the app, the home screen shows one block per project, with **Sync project** and **Add a sync**. Pairs created before projects existed have none and are listed last; `markoo pair set clara project Clara` gives one, or moves a pair to another project.
+
+## Name and rename a pair
+
+A pair's name is free text, such as `"Documentation technique"` or `"Skill Claude (prod)"`, and two projects can each have a `Documentation` pair. Rename a pair whenever you like, in its **General** tab or with:
+
+```bash
+markoo pair set clara name "Documentation Clara"
+```
+
+Renaming keeps the history, the pending conflicts and the Git hooks. They are tied to the pair's **id**, written once when the pair is created and never changed: `clara` here, `clara-skill` for the `Skill` pair above, `markoo-documentation` for the `Documentation` pair of `Markoo`. `markoo pair show` and the **General** tab show it.
+
+In a command, designate a pair by its id, by `Project/Name` (`"Clara/Documentation Clara"`), or by its name alone when no other project has a pair with that name; otherwise Markoo refuses and lists the matching pairs. **Use the id in scripts**: it does not change when the pair is renamed. See [Designate a pair](06-configuration.md#designate-a-pair).
 
 > Everything under the KB folder ends up in the repository, including attachments and private notes. Use `exclude` patterns, in the **Filters** tab or with `markoo pair set`, before syncing towards a shared repository.
 
@@ -125,8 +137,8 @@ The interval is set in the app's **Settings**, or in `[schedule]` of `markoo.tom
 
 | In the data folder | Content |
 |--------------------|---------|
-| `backups/<pair>/` | What Markoo overwrote, by sync |
-| `trash/<pair>/` | What Markoo deleted, by sync |
+| `backups/<id>/` | What Markoo overwrote, by sync |
+| `trash/<id>/` | What Markoo deleted, by sync |
 | `hooks.log` | Errors of Git hooks |
 | `daemon.log` | Output of the `launchd` service |
 

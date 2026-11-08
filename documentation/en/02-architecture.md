@@ -108,10 +108,10 @@ The `markoo` binary (`clap`):
 | `markoo init` | Interactively creates `markoo.toml` (KB type auto-detected) and prepares the state folder |
 | `markoo status [--project <name>]` | Lists modified, added, deleted and conflicting files, optionally for a project's pairs only |
 | `markoo diff [file]` | Shows the colored diff |
-| `markoo sync [--dry-run] [--pair <name> \| --project <name>]` | Plans, then applies; `--project` syncs every pair of a project |
+| `markoo sync [--dry-run] [--pair <pair> \| --project <name>]` | Plans, then applies; `--project` syncs every pair of a project. `<pair>` is the pair's id, `Project/Name` or a name no other project uses, see [Designate a pair](06-configuration.md#designate-a-pair) |
 | `markoo conflicts` / `markoo resolve <file>` | Lists and resolves conflicts and divergences, identified by their file path |
 | `markoo hook install\|uninstall` | Manages Git hooks |
-| `markoo pair add\|list\|show\|set\|remove` | Manages pairs (direction, folders, filters…); creation: `markoo pair add <name> --project <name> --kb <folder> [--kb-type obsidian\|markdown] --repo <folder>` (`--kb-type` auto-detected if omitted); `list` groups pairs by project; see [Configuration UI](08-configuration-ui.md) |
+| `markoo pair add\|list\|show\|set\|remove` | Manages pairs (direction, folders, filters…); creation: `markoo pair add <name> --project <project> --kb <folder> [--kb-type obsidian\|markdown] --repo <folder>` (`--kb-type` auto-detected if omitted); the id is generated from the project and the name; `set <pair> name "…"` renames a pair and keeps its id; `list` groups pairs by project; see [Configuration UI](08-configuration-ui.md) |
 | `markoo paths` | Shows the configuration and state paths in use |
 | `markoo daemon [install\|uninstall]` | Starts the daemon (scheduler + API + MCP), or manages its `launchd` service on macOS |
 | `markoo token rotate` | Replaces the API token |
@@ -133,7 +133,7 @@ When the terminal supports color, `<` is printed in the logo's pink (`#FF0070`) 
 
 ### `markoo-daemon`
 
-A long-running process, embedded in the Tauri app or run on its own (`launchd` on macOS). It guarantees **only one sync at a time per pair** through a job queue and one lock per pair (`<data>/locks/<pair>.lock`), whatever the trigger. The engine takes this lock itself, so a CLI command running alongside the daemon is covered too.
+A long-running process, embedded in the Tauri app or run on its own (`launchd` on macOS). It guarantees **only one sync at a time per pair** through a job queue and one lock per pair (`<data>/locks/<id>.lock`, keyed on the pair's stable id), whatever the trigger. The engine takes this lock itself, so a CLI command running alongside the daemon is covered too.
 
 ### `markoo-mcp`
 

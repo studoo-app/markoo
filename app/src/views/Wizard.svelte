@@ -5,11 +5,14 @@
     api,
     arrow,
     errorText,
+    isValidLabel,
     isValidProject,
     kbLabel,
     MAX_PROJECT_LEN,
+    nameTaken,
     projectsOf,
     type Direction,
+    type PairView,
     type Plan,
     type TargetChanges,
   } from "../lib/api";
@@ -26,6 +29,7 @@
     /** Project the new sync goes in, chosen beforehand. */
     project?: string;
     oncancel: () => void;
+    /** Called with the identifier of the new sync. */
     ondone: (pair: string) => void;
   } = $props();
 
@@ -37,9 +41,9 @@
 
   let step = $state(0);
   let known = $state<string[]>([]);
-  // Projects and names of the syncs that exist, null until they are loaded.
+  // Projects and syncs that exist, null until they are loaded.
   let projects = $state<string[] | null>(null);
-  let taken = $state<string[]>([]);
+  let existing = $state<PairView[]>([]);
   let projectChoice = $state("");
   // svelte-ignore state_referenced_locally
   let newProject = $state(initialProject ?? "");
@@ -66,7 +70,7 @@
       .listPairs()
       .then((pairs) => {
         projects = projectsOf(pairs);
-        taken = pairs.map((pair) => pair.name);
+        existing = pairs;
         const preset = initialProject && existingProject(initialProject);
         projectChoice = preset || (projects.length > 0 && !initialProject ? "" : NEW_PROJECT);
       })
@@ -109,18 +113,27 @@
     });
   });
 
+  /** The last folder of a path, as it is written: a readable default name. */
   function suggestedName(path: string): string {
     const last = path.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? "";
-    return last
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    return [...last.trim()].slice(0, MAX_PROJECT_LEN).join("").trim();
   }
 
+  // The name as it is saved: free text, without surrounding spaces.
+  const cleanName = $derived(name.trim());
+  // Why the name cannot be used, if it cannot; nothing while it is empty.
+  const nameError = $derived(
+    cleanName === ""
+      ? null
+      : !isValidLabel(cleanName)
+        ? t("Use one line of at most {max} characters, without “/”.", { max: MAX_PROJECT_LEN })
+        : nameTaken(existing, joins ?? project, cleanName)
+          ? t("A sync of this project already has this name.")
+          : null,
+  );
+
   const newPair = $derived({
-    name,
+    name: cleanName,
     project,
     kb: kb.trim(),
     kb_type: kbType || null,
@@ -147,8 +160,8 @@
     step === 0
       ? isValidProject(project) &&
         detected?.exists === true &&
-        /^[a-z0-9-]+$/.test(name) &&
-        !taken.includes(name)
+        cleanName !== "" &&
+        nameError === null
       : step === 1
         ? repoInfo?.exists === true
         : true,
@@ -176,17 +189,18 @@
   async function create() {
     busy = true;
     error = null;
+    let id: string;
     try {
-      await api.addPair(newPair);
+      id = await api.addPair(newPair);
     } catch (failure) {
       error = errorText(failure);
       busy = false;
       return;
     }
     // The pair exists from here on: what fails now is shown on its page.
-    if (hooks.length > 0) await api.installHooks(name).catch(() => {});
-    api.syncPair(name).catch(() => {});
-    ondone(name);
+    if (hooks.length > 0) await api.installHooks(id).catch(() => {});
+    api.syncPair(id).catch(() => {});
+    ondone(id);
   }
 </script>
 
@@ -202,7 +216,9 @@
       spellcheck="false"
     />
     <div class="hint">
-      {#if joins}
+      {#if newProject.trim() !== "" && !isValidProject(newProject)}
+        <span class="error">{t("Use one line of at most {max} characters, without “/”.", { max: MAX_PROJECT_LEN })}</span>
+      {:else if joins}
         <span class="muted">{t("This sync joins the project {project}.", { project: joins })}</span>
       {:else if projects?.length === 0}
         <span class="muted">{t("A project groups this sync and the next ones you add to it.")}</span>
@@ -225,8 +241,8 @@
         <label for="project">{t("Project")}</label>
         <select id="project" bind:value={projectChoice}>
           <option value="" disabled>{t("Choose a project")}</option>
-          {#each projects as existing}
-            <option value={existing}>{existing}</option>
+          {#each projects as choice}
+            <option value={choice}>{choice}</option>
           {/each}
           <option value={NEW_PROJECT}>{t("New project…")}</option>
         </select>
@@ -268,11 +284,19 @@
     </div>
     <div class="field">
       <label for="name">{t("Name of the sync")}</label>
-      <input id="name" type="text" bind:value={name} oninput={() => (nameEdited = true)} spellcheck="false" />
-      {#if name && !/^[a-z0-9-]+$/.test(name)}
-        <div class="hint error">{t("Use lowercase letters, digits and hyphens.")}</div>
-      {:else if taken.includes(name)}
-        <div class="hint error">{t("A sync already has this name.")}</div>
+      <input
+        id="name"
+        type="text"
+        bind:value={name}
+        oninput={() => (nameEdited = true)}
+        maxlength={MAX_PROJECT_LEN}
+        placeholder={t("Technical documentation")}
+        spellcheck="false"
+      />
+      {#if nameError}
+        <div class="hint error">{nameError}</div>
+      {:else}
+        <div class="hint muted">{t("Free text, shown in the list of syncs. You can change it later.")}</div>
       {/if}
     </div>
   {:else if step === 1}
@@ -309,7 +333,7 @@
       <input id="branches" type="text" bind:value={branches} spellcheck="false" />
     </div>
   {:else if preview}
-    <h2>{joins ?? project} / {name}</h2>
+    <h2>{joins ?? project} / {cleanName}</h2>
     <p class="muted path">{kb} {arrow(direction)} {repo}</p>
     {#if conflicts > 0}
       <p class="warn">

@@ -122,7 +122,7 @@
       {:else}
         {#key route.pair}
           <Pair
-            name={route.pair}
+            id={route.pair}
             initialTab={route.tab}
             {revision}
             onclose={() => (route = { name: "home" })}

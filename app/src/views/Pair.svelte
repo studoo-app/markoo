@@ -22,11 +22,17 @@
   import TriggersTab from "./TriggersTab.svelte";
 
   let {
-    name,
+    id,
     revision,
     initialTab,
     onclose,
-  }: { name: string; revision: number; initialTab?: Tab; onclose: () => void } = $props();
+  }: {
+    /** Identifier of the sync shown. */
+    id: string;
+    revision: number;
+    initialTab?: Tab;
+    onclose: () => void;
+  } = $props();
 
   let pair = $state<PairView | null>(null);
   // The view is keyed on the pair, so the tab it opens on is read once.
@@ -40,8 +46,8 @@
   async function load() {
     try {
       const pairs = await api.listPairs();
-      pair = pairs.find((candidate) => candidate.name === name) ?? null;
-      error = pair ? null : t("The sync \"{name}\" no longer exists.", { name });
+      pair = pairs.find((candidate) => candidate.id === id) ?? null;
+      error = pair ? null : t("The sync \"{name}\" no longer exists.", { name: id });
     } catch (failure) {
       error = errorText(failure);
     }
@@ -69,13 +75,13 @@
 
   async function sync() {
     syncing = true;
-    await act(() => api.syncPair(name));
+    await act(() => api.syncPair(id));
     syncing = false;
   }
 
   async function remove() {
     try {
-      await api.removePair(name);
+      await api.removePair(id);
       onclose();
     } catch (failure) {
       error = errorText(failure);
@@ -97,7 +103,7 @@
 <div class="row spread title">
   <div>
     <button class="back" type="button" onclick={onclose}>{t("‹ Syncs")}</button>
-    <h1>{name}</h1>
+    <h1>{pair?.label ?? id}</h1>
     {#if pair}
       <p class="sub">
         <PairFlow kbType={pair.kb_type} direction={pair.direction} kb={pair.kb} repo={pair.repo} />
@@ -108,7 +114,7 @@
     <div class="row actions">
       <button
         type="button"
-        onclick={() => act(() => api.updateSettings(name, { paused: !pair!.paused }))}
+        onclick={() => act(() => api.updateSettings(id, { paused: !pair!.paused }))}
       >
         {pair.paused ? t("Resume") : t("Pause")}
       </button>
@@ -147,15 +153,15 @@
   </div>
 
   {#if tab === "changes"}
-    <ChangesTab {name} revision={revision + localRevision} />
+    <ChangesTab {id} revision={revision + localRevision} />
   {:else if tab === "conflicts"}
-    <ConflictsTab {name} direction={pair.direction} revision={revision + localRevision} onchange={changed} />
+    <ConflictsTab {id} direction={pair.direction} revision={revision + localRevision} onchange={changed} />
   {:else if tab === "filters"}
     <FiltersTab {pair} onchange={changed} />
   {:else if tab === "transformations"}
     <TransformationsTab {pair} onchange={changed} />
   {:else if tab === "history"}
-    <HistoryTab {name} revision={revision + localRevision} />
+    <HistoryTab {id} revision={revision + localRevision} />
   {:else if tab === "triggers"}
     <TriggersTab {pair} onchange={changed} />
   {:else}
@@ -165,7 +171,7 @@
       <p class="muted">{t("Files stay where they are on both sides. Markoo forgets this sync and its last run.")}</p>
       {#if confirmRemove}
         <div class="row">
-          <button class="danger" type="button" onclick={remove}>{t("Yes, remove “{name}”", { name })}</button>
+          <button class="danger" type="button" onclick={remove}>{t("Yes, remove “{name}”", { name: pair.label })}</button>
           <button type="button" onclick={() => (confirmRemove = false)}>{t("Cancel")}</button>
         </div>
       {:else}

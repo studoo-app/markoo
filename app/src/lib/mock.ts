@@ -12,30 +12,51 @@ const options = {
   hooks: { install: ["post-merge"], branches: [] },
 } as const satisfies Partial<PairView>;
 
+/** A sample sync; its label is made from its project and name. */
+function sample(fields: Omit<PairView, "label" | keyof typeof options>): PairView {
+  const label = fields.project === null ? fields.name : `${fields.project}/${fields.name}`;
+  return { ...fields, label, ...options };
+}
+
 const pairs: PairView[] = [
-  {
-    name: "clara", project: "Clara", kb: "~/Obsidian/Knowledge/Projets/Clara", kb_type: "obsidian",
-    repo: "~/Projets/lerebours/clara/docs", direction: "both", target_changes: "protect",
-    include: ["**/*.md"], exclude: [], paused: false, pending: 1, errors: [], active: false, ...options,
-  },
-  {
-    name: "documentation", project: "Markoo", kb: "~/Obsidian/Knowledge/Projets/Markoo/Documentation", kb_type: "obsidian",
+  sample({
+    id: "clara", name: "Architecture", project: "Clara",
+    kb: "~/Obsidian/Knowledge/Projets/Clara/Architecture", kb_type: "obsidian",
+    repo: "~/Projets/lerebours/clara/docs/architecture", direction: "both", target_changes: "protect",
+    include: ["**/*.md"], exclude: [], paused: false, pending: 1, errors: [], active: false,
+  }),
+  sample({
+    id: "clara-documentation", name: "Documentation", project: "Clara",
+    kb: "~/Obsidian/Knowledge/Projets/Clara/Documentation", kb_type: "obsidian",
+    repo: "~/Projets/lerebours/clara/documentation", direction: "kb-to-repo",
+    target_changes: "protect", include: ["**/*.md"], exclude: [], paused: false, pending: 0,
+    errors: [], active: false,
+  }),
+  sample({
+    id: "markoo-documentation", name: "Documentation", project: "Markoo",
+    kb: "~/Obsidian/Knowledge/Projets/Markoo/Documentation", kb_type: "obsidian",
     repo: "~/Projets/opensource/markoo/documentation", direction: "repo-to-kb",
     target_changes: "protect", include: ["**/*.md"], exclude: [], paused: false, pending: 0,
-    errors: [], active: true, ...options,
-  },
-  {
-    name: "notes-api", project: null, kb: "~/notes/api", kb_type: "markdown", repo: "~/api/docs",
-    direction: "kb-to-repo", target_changes: "protect", include: ["**/*.md"], exclude: [],
-    paused: true, pending: 0, errors: [], active: false, ...options,
-  },
-  {
-    name: "skill", project: "Markoo", kb: "~/Obsidian/Knowledge/Projets/Markoo/Skill",
-    kb_type: "obsidian", repo: "~/Projets/opensource/markoo/skills/markoo", direction: "kb-to-repo",
+    errors: [], active: true,
+  }),
+  sample({
+    id: "notes-api", name: "notes-api", project: null, kb: "~/notes/api", kb_type: "markdown",
+    repo: "~/api/docs", direction: "kb-to-repo", target_changes: "protect", include: ["**/*.md"],
+    exclude: [], paused: true, pending: 0, errors: [], active: false,
+  }),
+  sample({
+    id: "markoo-skill", name: "Skill Claude (prod)", project: "Markoo",
+    kb: "~/Obsidian/Knowledge/Projets/Markoo/Skill", kb_type: "obsidian",
+    repo: "~/Projets/opensource/markoo/skills/markoo", direction: "kb-to-repo",
     target_changes: "protect", include: ["**/*.md"], exclude: [], paused: false, pending: 0,
-    errors: [], active: false, ...options,
-  },
+    errors: [], active: false,
+  }),
 ];
+
+/** The sync a command names by its identifier. */
+function find(id: string | undefined): PairView | undefined {
+  return pairs.find((pair) => pair.id === id);
+}
 
 const plan: Plan = {
   pair: "clara", direction: "both", paused: false,
@@ -60,19 +81,41 @@ const conflict: Conflict = {
 export function installMock(): void {
   mockWindows("main");
   mockIPC((command, args) => {
-    const params = args as { pair?: string };
+    const params = args as { pair?: string; settings?: Record<string, unknown>; new?: { name: string; project: string } };
     switch (command) {
       case "app_info":
         return { config_file: "~/markoo.toml", data_dir: "~/data", embedded_daemon: true, note: null };
       case "list_pairs":
         return pairs;
       case "pair_status":
-        return { ...plan, pair: params.pair ?? "new" };
+        return { ...plan, pair: find(params.pair)?.id ?? "new" };
+      case "add_pair": {
+        const fresh = params.new!;
+        const slug = (text: string) =>
+          text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        let id = `${slug(fresh.project)}-${slug(fresh.name)}`;
+        for (let n = 2; find(id); n++) id = `${slug(fresh.project)}-${slug(fresh.name)}-${n}`;
+        pairs.push(sample({
+          ...pairs[0], id, name: fresh.name, project: fresh.project, pending: 0, active: false,
+        }));
+        return { id, warnings: [] };
+      }
+      case "update_pair_settings": {
+        // Renames and moves are kept, so that the screens follow them.
+        const pair = find(params.pair);
+        const settings = params.settings ?? {};
+        if (pair && typeof settings.name === "string") pair.name = settings.name;
+        if (pair && typeof settings.project === "string") pair.project = settings.project;
+        if (pair) pair.label = pair.project === null ? pair.name : `${pair.project}/${pair.name}`;
+        if (pair && typeof settings.paused === "boolean") pair.paused = settings.paused;
+        return { warnings: [] };
+      }
       case "preview_new_pair":
       case "preview_pair_settings":
         return {
           ...plan,
-          pair: params.pair ?? "new",
+          pair: find(params.pair)?.id ?? "new",
           summary: {
             to_kb: 98,
             to_repo: 1,
@@ -90,7 +133,7 @@ export function installMock(): void {
       case "pair_diff":
         return { diffs: [{ path: "glossary.md", patch: "@@ -1 +1 @@\n-old line\n+new line\n" }] };
       case "list_conflicts":
-        return { conflicts: params.pair === "clara" ? [conflict] : [], excluded: [], errors: [] };
+        return { conflicts: find(params.pair)?.id === "clara" ? [conflict] : [], excluded: [], errors: [] };
       case "conflict_draft":
         return "# Architecture\n\n<<<<<<< ours\nThe engine uses a queue per pair.\n=======\nThe engine uses one global queue.\n>>>>>>> theirs\n";
       case "preview_filters":
@@ -139,7 +182,7 @@ export function installMock(): void {
             },
           },
           {
-            pair: "documentation",
+            pair: "markoo-documentation",
             run: {
               id: 1, trigger: "hook", started_at: Date.now() - 900000, duration_ms: 1240, error: null,
               report: {

@@ -56,6 +56,25 @@ impl Env {
         self
     }
 
+    /// Adds `docs` to the projects `Clara` and `Markoo`, with their own folders.
+    fn with_two_docs(self) -> Self {
+        let mut text = std::fs::read_to_string(self.paths.config_file()).unwrap();
+        for (id, project) in [("clara-docs", "Clara"), ("markoo-docs", "Markoo")] {
+            let kb = self.dir.path().join(format!("kb-{id}"));
+            let repo = self.dir.path().join(format!("repo-{id}"));
+            std::fs::create_dir_all(&kb).unwrap();
+            std::fs::create_dir_all(repo.join(".git")).unwrap();
+            text.push_str(&format!(
+                "[[pair]]\nid = \"{id}\"\nname = \"docs\"\nproject = \"{project}\"\n\
+                 kb = '{}'\nrepo = '{}'\n",
+                kb.display(),
+                repo.display(),
+            ));
+        }
+        std::fs::write(self.paths.config_file(), text).unwrap();
+        self
+    }
+
     fn kb(&self) -> PathBuf {
         self.dir.path().join("kb")
     }
@@ -162,8 +181,39 @@ async fn list_pairs_shows_the_pair() {
     let env = Env::new("");
     let client = env.connect().await;
     let pairs = call(&client, "list_pairs", json!({})).await;
+    assert_eq!(pairs[0]["id"], "clara");
     assert_eq!(pairs[0]["name"], "clara");
+    assert_eq!(pairs[0]["label"], "clara");
     assert_eq!(pairs[0]["pending"], 0);
+}
+
+#[tokio::test]
+async fn pairs_with_the_same_name_are_told_apart_by_id_and_label() {
+    let env = Env::new("").with_two_docs();
+    let client = env.connect().await;
+    let pairs = call(&client, "list_pairs", json!({})).await;
+    assert_eq!(pairs[1]["id"], "clara-docs");
+    assert_eq!(pairs[2]["label"], "Markoo/docs");
+    let status = call(&client, "sync_status", json!({"pair": "Markoo/docs"})).await;
+    assert_eq!(status["pair"], "markoo-docs");
+}
+
+#[tokio::test]
+async fn an_ambiguous_pair_name_is_a_readable_failure() {
+    let env = Env::new("").with_two_docs();
+    let client = env.connect().await;
+    for tool in ["sync_status", "sync_run"] {
+        let message = call_fails(&client, tool, json!({"pair": "docs"})).await;
+        assert!(message.contains("Clara/docs"), "{tool}: {message}");
+    }
+}
+
+#[tokio::test]
+async fn sync_run_reports_the_id_of_the_pair() {
+    let env = Env::new("").with_two_docs();
+    let client = env.connect().await;
+    let result = call(&client, "sync_run", json!({"pair": "clara/DOCS"})).await;
+    assert_eq!(result["pair"], "clara-docs");
 }
 
 #[tokio::test]
@@ -432,16 +482,32 @@ async fn update_pair_config_can_change_the_project() {
 }
 
 #[tokio::test]
-async fn a_pair_cannot_be_renamed() {
+async fn update_pair_config_renames_a_pair_and_keeps_its_id() {
+    let env = Env::new("[mcp]\nallow_config_write = true");
+    let client = env.connect().await;
+    let result = call(
+        &client,
+        "update_pair_config",
+        json!({"pair": "clara", "changes": {"name": "Skill Claude (prod)"}}),
+    )
+    .await;
+    assert_eq!(result["pair"]["id"], "clara");
+    assert_eq!(result["pair"]["name"], "Skill Claude (prod)");
+    let status = call(&client, "sync_status", json!({"pair": "clara"})).await;
+    assert_eq!(status["pair"], "clara");
+}
+
+#[tokio::test]
+async fn the_id_of_a_pair_cannot_be_changed() {
     let env = Env::new("[mcp]\nallow_config_write = true");
     let client = env.connect().await;
     let message = call_fails(
         &client,
         "update_pair_config",
-        json!({"pair": "clara", "changes": {"name": "other"}}),
+        json!({"pair": "clara", "changes": {"id": "other"}}),
     )
     .await;
-    assert!(message.contains("cannot be renamed"), "{message}");
+    assert!(message.contains("cannot be changed"), "{message}");
 }
 
 #[tokio::test]

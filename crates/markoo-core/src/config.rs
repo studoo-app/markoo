@@ -48,15 +48,39 @@ pub enum ConfigError {
     /// No pair has this name.
     #[error("no pair named \"{0}\"")]
     UnknownPair(String),
-    /// A pair already has this name.
-    #[error("a pair named \"{0}\" already exists")]
+    /// A pair already has this identifier.
+    #[error("a pair with the id \"{0}\" already exists")]
     DuplicatePair(String),
-    /// The pair name cannot be used in commands and URLs.
-    #[error("invalid pair name \"{0}\": use lowercase letters, digits and hyphens")]
+    /// Another pair of the project already has this name.
+    #[error("{} already has a pair named \"{name}\"", project_label(.project.as_deref()))]
+    DuplicateName {
+        /// The project, `None` for pairs without one.
+        project: Option<String>,
+        /// The name.
+        name: String,
+    },
+    /// The name matches pairs of several projects.
+    #[error("\"{reference}\" matches several pairs: {}; use project/name or the id", .candidates.join(", "))]
+    AmbiguousPair {
+        /// What was asked for.
+        reference: String,
+        /// `project/name` of each match.
+        candidates: Vec<String>,
+    },
+    /// The identifier of a pair is fixed once written.
+    #[error("the id of a pair cannot be changed")]
+    ImmutableId,
+    /// The pair id cannot be used in commands and URLs.
+    #[error("invalid pair id \"{0}\": use lowercase letters, digits and hyphens")]
     InvalidName(String),
+    /// The name of a pair is empty, too long or spans several lines.
+    #[error(
+        "invalid pair name \"{0}\": use 1 to {MAX_PROJECT_LEN} characters on one line, without surrounding spaces or /"
+    )]
+    InvalidLabel(String),
     /// The project name is empty, too long or spans several lines.
     #[error(
-        "invalid project name \"{0}\": use 1 to {MAX_PROJECT_LEN} characters on one line, without surrounding spaces"
+        "invalid project name \"{0}\": use 1 to {MAX_PROJECT_LEN} characters on one line, without surrounding spaces or /"
     )]
     InvalidProject(String),
     /// A new pair must say which project it belongs to.
@@ -87,6 +111,7 @@ pub enum ConfigError {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawPair {
+    id: Option<String>,
     name: String,
     project: Option<String>,
     kb: String,
@@ -349,17 +374,30 @@ impl Config {
     pub fn parse(text: &str) -> Result<Self, ConfigError> {
         let raw: RawConfig =
             toml::from_str(text).map_err(|e| ConfigError::Invalid(e.to_string()))?;
+        let mut ids = BTreeSet::new();
         let mut names = BTreeSet::new();
         let mut pairs = Vec::with_capacity(raw.pair.len());
         for raw in raw.pair {
-            if !is_valid_name(&raw.name) {
-                return Err(ConfigError::InvalidName(raw.name));
+            // Pairs written before identifiers existed are known by their name.
+            let id = raw.id.clone().unwrap_or_else(|| raw.name.clone());
+            if !is_valid_name(&id) {
+                return Err(ConfigError::InvalidName(id));
             }
-            if !names.insert(raw.name.clone()) {
-                return Err(ConfigError::DuplicatePair(raw.name));
+            if !is_valid_label(&raw.name) {
+                return Err(ConfigError::InvalidLabel(raw.name));
+            }
+            if !ids.insert(id.clone()) {
+                return Err(ConfigError::DuplicatePair(id));
+            }
+            let project_key = raw.project.as_deref().map(str::to_lowercase);
+            if !names.insert((project_key, raw.name.to_lowercase())) {
+                return Err(ConfigError::DuplicateName {
+                    project: raw.project,
+                    name: raw.name,
+                });
             }
             if let Some(project) = &raw.project
-                && !is_valid_project(project)
+                && !is_valid_label(project)
             {
                 return Err(ConfigError::InvalidProject(project.clone()));
             }
@@ -401,12 +439,60 @@ impl Config {
         })
     }
 
-    /// Finds a pair by name.
-    pub fn pair(&self, name: &str) -> Result<&PairEntry, ConfigError> {
-        self.pairs
+    /// Finds a pair from what a user typed, in this order: its id,
+    /// `project/name`, or its name alone when no other project has a pair of
+    /// that name. Projects and names are compared without regard to case.
+    pub fn pair(&self, reference: &str) -> Result<&PairEntry, ConfigError> {
+        if let Some(entry) = self.pairs.iter().find(|entry| entry.pair.id == reference) {
+            return Ok(entry);
+        }
+        if let Some((project, name)) = reference.rsplit_once('/') {
+            let project = project.trim().to_lowercase();
+            return self
+                .pairs
+                .iter()
+                .find(|entry| {
+                    entry.pair.name.to_lowercase() == name.trim().to_lowercase()
+                        && entry.pair.project.as_deref().map(str::to_lowercase)
+                            == Some(project.clone())
+                })
+                .ok_or_else(|| ConfigError::UnknownPair(reference.to_owned()));
+        }
+        let matches: Vec<&PairEntry> = self
+            .pairs
             .iter()
-            .find(|entry| entry.pair.name == name)
-            .ok_or_else(|| ConfigError::UnknownPair(name.to_owned()))
+            .filter(|entry| entry.pair.name.to_lowercase() == reference.trim().to_lowercase())
+            .collect();
+        match matches.as_slice() {
+            [] => Err(ConfigError::UnknownPair(reference.to_owned())),
+            [entry] => Ok(entry),
+            _ => Err(ConfigError::AmbiguousPair {
+                reference: reference.to_owned(),
+                candidates: matches.iter().map(|entry| entry.pair.label()).collect(),
+            }),
+        }
+    }
+
+    /// An identifier for a new pair that no pair uses yet: the project and
+    /// the name in lowercase ASCII (`markoo-documentation`), with a number
+    /// added if needed. It is written to the file and never recomputed.
+    pub fn new_id(&self, project: Option<&str>, name: &str) -> String {
+        let prefix = project.map(slug).filter(|prefix| !prefix.is_empty());
+        let name = Some(slug(name))
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| "pair".to_owned());
+        let base = match prefix {
+            Some(prefix) if prefix != name => format!("{prefix}-{name}"),
+            _ => name,
+        };
+        let taken = |id: &str| self.pairs.iter().any(|entry| entry.pair.id == id);
+        if !taken(&base) {
+            return base;
+        }
+        (2..)
+            .map(|number| format!("{base}-{number}"))
+            .find(|id| !taken(id))
+            .unwrap_or(base)
     }
 
     /// Names of the projects, in the order they first appear in the file.
@@ -446,10 +532,10 @@ impl Config {
                 ] {
                     if nested(a, b) {
                         validation.errors.push(Problem {
-                            pair: second.pair.name.clone(),
+                            pair: second.pair.id.clone(),
                             message: format!(
                                 "its {side} folder overlaps with pair \"{}\"",
-                                first.pair.name
+                                first.pair.id
                             ),
                         });
                     }
@@ -469,7 +555,7 @@ impl PairEntry {
             Some("obsidian") => KbType::Obsidian,
             Some(other) => {
                 return Err(ConfigError::UnsupportedKbType {
-                    pair: raw.name,
+                    pair: raw.id.unwrap_or(raw.name),
                     kb_type: other.to_owned(),
                 });
             }
@@ -479,6 +565,9 @@ impl PairEntry {
             not_implemented.push("conflict (conflicts are always put on hold)".to_owned());
         }
         let mut pair = Pair::new(raw.name, kb, expand_home(&raw.repo));
+        if let Some(id) = raw.id {
+            pair.id = id;
+        }
         pair.project = raw.project;
         pair.hooks = raw.hooks.unwrap_or_default();
         if let Some(transform) = raw.transform {
@@ -541,7 +630,7 @@ impl PairEntry {
     }
 
     fn validate(&self, validation: &mut Validation) {
-        let name = &self.pair.name;
+        let name = &self.pair.id;
         let mut error = |message: String| {
             validation.errors.push(Problem {
                 pair: name.clone(),
@@ -597,7 +686,7 @@ impl PairEntry {
     }
 }
 
-/// Whether a pair name can be used in commands and URLs.
+/// Whether a pair id can be used in commands and URLs.
 pub fn is_valid_name(name: &str) -> bool {
     !name.is_empty()
         && name
@@ -605,23 +694,58 @@ pub fn is_valid_name(name: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+/// Lowercase ASCII letters, digits and single hyphens: "Site Web — v2"
+/// gives `site-web-v2`; letters with accents lose them when they are common.
+pub fn slug(text: &str) -> String {
+    let mut slug = String::new();
+    for c in text.chars().flat_map(char::to_lowercase) {
+        let c = match c {
+            'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => 'a',
+            'ç' => 'c',
+            'è' | 'é' | 'ê' | 'ë' => 'e',
+            'ì' | 'í' | 'î' | 'ï' => 'i',
+            'ñ' => 'n',
+            'ò' | 'ó' | 'ô' | 'õ' | 'ö' => 'o',
+            'ù' | 'ú' | 'û' | 'ü' => 'u',
+            'ý' | 'ÿ' => 'y',
+            c => c,
+        };
+        if c.is_ascii_lowercase() || c.is_ascii_digit() {
+            slug.push(c);
+        } else if !slug.is_empty() && !slug.ends_with('-') {
+            slug.push('-');
+        }
+    }
+    slug.trim_end_matches('-').to_owned()
+}
+
+fn project_label(project: Option<&str>) -> String {
+    project.map_or_else(
+        || "the pairs without a project".to_owned(),
+        |project| format!("project \"{project}\""),
+    )
+}
+
 /// Longest project name, in characters.
 pub const MAX_PROJECT_LEN: usize = 64;
 
-/// Whether a project name can be written to the configuration. It is free
-/// text ("Markoo", "Site web"), but on one line and without surrounding
-/// spaces, so that two spellings of one project cannot differ by a blank.
-pub fn is_valid_project(name: &str) -> bool {
+/// Whether a project or pair name can be written to the configuration. It
+/// is free text ("Markoo", "Documentation technique"), but on one line and
+/// without surrounding spaces, so that two spellings cannot differ by a blank.
+pub fn is_valid_label(name: &str) -> bool {
     !name.is_empty()
         && name.chars().count() <= MAX_PROJECT_LEN
         && name.trim() == name
         && !name.chars().any(char::is_control)
+        && !name.contains('/')
 }
 
 /// Settings of a new pair.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NewPair {
-    /// Name of the pair.
+    /// Identifier of the pair; [`crate::manage::add_pair`] fills it in.
+    pub id: Option<String>,
+    /// Name of the pair, unique within its project.
     pub name: String,
     /// Project of the pair: an existing one, or a new one named here.
     /// [`crate::manage::add_pair`] refuses a pair without one.
@@ -679,6 +803,9 @@ impl ConfigFile {
     /// Adds a pair.
     pub fn add_pair(&mut self, new: &NewPair) -> Result<(), ConfigError> {
         let mut table = Table::new();
+        if let Some(id) = &new.id {
+            table["id"] = value(id);
+        }
         table["name"] = value(&new.name);
         if let Some(project) = &new.project {
             table["project"] = value(project);
@@ -712,10 +839,10 @@ impl ConfigFile {
         Ok(())
     }
 
-    /// Changes a setting of a pair. Lists are comma-separated.
-    pub fn set(&mut self, name: &str, key: &str, new_value: &str) -> Result<(), ConfigError> {
+    /// Changes a setting of the pair with this id. Lists are comma-separated.
+    pub fn set(&mut self, id: &str, key: &str, new_value: &str) -> Result<(), ConfigError> {
         let key = key.replace('-', "_");
-        let table = self.pair_table(name)?;
+        let table = self.pair_table(id)?;
         if let Some((section, option)) = key.split_once('.') {
             let new_item = match (section, option) {
                 ("transform", "links" | "assets_dir" | "frontmatter")
@@ -734,12 +861,26 @@ impl ConfigFile {
             return Ok(());
         }
         match key.as_str() {
-            "direction" | "target_changes" | "kb" | "repo" | "kb_type" | "conflict" | "name" => {
+            "direction" | "target_changes" | "kb" | "repo" | "kb_type" | "conflict" => {
                 table[key.as_str()] = value(new_value);
             }
+            "name" => {
+                // A pair known by its name gets its id written down first,
+                // so that renaming it keeps its state.
+                if !table.contains_key("id") {
+                    table.insert("id", value(id));
+                    table.sort_values_by(|a, _, b, _| (a.get() != "id").cmp(&(b.get() != "id")));
+                }
+                let label = new_value.trim();
+                if !is_valid_label(label) {
+                    return Err(ConfigError::InvalidLabel(new_value.to_owned()));
+                }
+                table["name"] = value(label);
+            }
+            "id" => return Err(ConfigError::ImmutableId),
             "project" => {
                 let project = new_value.trim();
-                if !is_valid_project(project) {
+                if !is_valid_label(project) {
                     return Err(ConfigError::InvalidProject(new_value.to_owned()));
                 }
                 table["project"] = value(project);
@@ -783,7 +924,7 @@ impl ConfigFile {
         Ok(())
     }
 
-    /// Removes a pair.
+    /// Removes the pair with this id.
     pub fn remove_pair(&mut self, name: &str) -> Result<(), ConfigError> {
         let pairs = self
             .doc
@@ -792,7 +933,7 @@ impl ConfigFile {
             .ok_or_else(|| ConfigError::UnknownPair(name.to_owned()))?;
         let index = pairs
             .iter()
-            .position(|table| table.get("name").and_then(Item::as_str) == Some(name))
+            .position(|table| table_id(table) == Some(name))
             .ok_or_else(|| ConfigError::UnknownPair(name.to_owned()))?;
         pairs.remove(index);
         Ok(())
@@ -815,13 +956,17 @@ impl ConfigFile {
         self.doc
             .get_mut("pair")
             .and_then(Item::as_array_of_tables_mut)
-            .and_then(|pairs| {
-                pairs
-                    .iter_mut()
-                    .find(|table| table.get("name").and_then(Item::as_str) == Some(name))
-            })
+            .and_then(|pairs| pairs.iter_mut().find(|table| table_id(table) == Some(name)))
             .ok_or_else(|| ConfigError::UnknownPair(name.to_owned()))
     }
+}
+
+/// The id of a `[[pair]]` table: its `id`, or its name for older pairs.
+fn table_id(table: &Table) -> Option<&str> {
+    table
+        .get("id")
+        .or_else(|| table.get("name"))
+        .and_then(Item::as_str)
 }
 
 fn comma_separated(text: &str) -> Array {
@@ -1406,7 +1551,7 @@ exclude = ["drafts/**"]
                 "{project:?}"
             );
         }
-        assert!(is_valid_project("Site web — v2"));
+        assert!(is_valid_label("Site web — v2"));
     }
 
     #[test]
@@ -1452,6 +1597,90 @@ exclude = ["drafts/**"]
         assert!(matches!(
             file.set("clara", "project", " "),
             Err(ConfigError::InvalidProject(_))
+        ));
+    }
+
+    #[test]
+    fn a_pair_without_an_id_is_known_by_its_name() {
+        let config = Config::parse("[[pair]]\nname='notes'\nkb='/k'\nrepo='/r'\n").unwrap();
+        assert_eq!(config.pairs[0].pair.id, "notes");
+    }
+
+    #[test]
+    fn a_pair_name_is_free_text() {
+        let text = "[[pair]]\nid='m-doc'\nname='Documentation technique'\nkb='/k'\nrepo='/r'\n";
+        let pair = &Config::parse(text).unwrap().pairs[0].pair;
+        assert_eq!(pair.name, "Documentation technique");
+        for name in ["", "a/b", " x"] {
+            let text = format!("[[pair]]\nid='m'\nname=\"{name}\"\nkb='/k'\nrepo='/r'\n");
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::InvalidLabel(_))),
+                "{name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ids_are_unique_and_names_unique_within_a_project() {
+        let pair = |id: &str, name: &str, project: &str| {
+            format!(
+                "[[pair]]\nid='{id}'\nname='{name}'\nproject='{project}'\nkb='/k{id}'\nrepo='/r{id}'\n"
+            )
+        };
+        let same_id = pair("a", "x", "P") + &pair("a", "y", "Q");
+        assert!(matches!(
+            Config::parse(&same_id),
+            Err(ConfigError::DuplicatePair(_))
+        ));
+        let same_name = pair("a", "Docs", "P") + &pair("b", "docs", "p");
+        assert!(matches!(
+            Config::parse(&same_name),
+            Err(ConfigError::DuplicateName { .. })
+        ));
+        let other_project = pair("a", "Docs", "P") + &pair("b", "Docs", "Q");
+        assert!(Config::parse(&other_project).is_ok());
+    }
+
+    #[test]
+    fn new_ids_come_from_the_project_and_the_name() {
+        let config =
+            Config::parse("[[pair]]\nid='site-web-docs'\nname='x'\nkb='/k'\nrepo='/r'\n").unwrap();
+        assert_eq!(config.new_id(Some("Site Web"), "Docs"), "site-web-docs-2");
+        assert_eq!(
+            config.new_id(Some("Markoo"), "Skill Claude"),
+            "markoo-skill-claude"
+        );
+        assert_eq!(config.new_id(Some("Équipe"), "équipe"), "equipe");
+        assert_eq!(config.new_id(Some("日本"), "日本"), "pair");
+    }
+
+    #[test]
+    fn a_pair_is_found_by_id_project_and_name_or_name() {
+        let text = "[[pair]]\nid='m-doc'\nname='Docs'\nproject='Markoo'\nkb='/k1'\nrepo='/r1'\n\
+                    [[pair]]\nid='c-doc'\nname='Docs'\nproject='Clara'\nkb='/k2'\nrepo='/r2'\n\
+                    [[pair]]\nid='c-skill'\nname='Skill'\nproject='Clara'\nkb='/k3'\nrepo='/r3'\n";
+        let config = Config::parse(text).unwrap();
+        let id = |reference: &str| config.pair(reference).map(|entry| entry.pair.id.as_str());
+        assert_eq!(id("c-doc").unwrap(), "c-doc");
+        assert_eq!(id("markoo/docs").unwrap(), "m-doc");
+        assert_eq!(id("skill").unwrap(), "c-skill");
+        assert!(matches!(id("Docs"), Err(ConfigError::AmbiguousPair { .. })));
+        assert!(matches!(id("Clara/Nope"), Err(ConfigError::UnknownPair(_))));
+    }
+
+    #[test]
+    fn renaming_a_pair_without_an_id_writes_its_id_first() {
+        let mut file = ConfigFile::from_text(Path::new("/unused"), SAMPLE).unwrap();
+        file.set("clara", "name", "Docs Clara").unwrap();
+        let config = file.preview().unwrap();
+        let pair = &config.pair("clara").unwrap().pair;
+        assert_eq!(
+            (pair.id.as_str(), pair.name.as_str()),
+            ("clara", "Docs Clara")
+        );
+        assert!(matches!(
+            file.set("clara", "id", "x"),
+            Err(ConfigError::ImmutableId)
         ));
     }
 

@@ -274,7 +274,7 @@ pub fn plan(
     detect_renames(pair.direction, bases, &mut entries);
 
     Plan {
-        pair: pair.name.clone(),
+        pair: pair.id.clone(),
         entries: entries.into_values().collect(),
         attachments: Vec::new(),
     }

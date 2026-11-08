@@ -65,8 +65,12 @@ impl From<ConfigError> for ApiError {
     fn from(error: ConfigError) -> Self {
         let status = match &error {
             ConfigError::UnknownPair(_) => StatusCode::NOT_FOUND,
-            ConfigError::DuplicatePair(_) => StatusCode::CONFLICT,
+            ConfigError::DuplicatePair(_)
+            | ConfigError::DuplicateName { .. }
+            | ConfigError::AmbiguousPair { .. } => StatusCode::CONFLICT,
             ConfigError::InvalidName(_)
+            | ConfigError::InvalidLabel(_)
+            | ConfigError::ImmutableId
             | ConfigError::InvalidProject(_)
             | ConfigError::MissingProject(_)
             | ConfigError::UnknownKey(_)
@@ -138,6 +142,8 @@ pub(crate) fn router(paths: Paths, queue: Queue, mcp: bool) -> (Router, Option<M
         queue,
         started: Instant::now(),
     };
+    // `{pair}` is the id of a pair (stable), its `project/name`, or its name
+    // when no other project has a pair with that name. Answers name it by id.
     let mut routes = Router::new()
         .route("/health", get(health))
         .route("/pairs", get(list_pairs).post(create_pair))
@@ -198,7 +204,7 @@ async fn list_pairs(State(app): State<App>) -> ApiResult {
         let mut views = service::list_pairs(&app.paths)?;
         let active = app.queue.active_pairs();
         for view in &mut views {
-            view["active"] = json!(active.iter().any(|pair| view["name"] == pair.as_str()));
+            view["active"] = json!(active.iter().any(|pair| view["id"] == pair.as_str()));
         }
         Ok(Json(Value::Array(views)))
     })
@@ -208,6 +214,7 @@ async fn list_pairs(State(app): State<App>) -> ApiResult {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreatePair {
+    /// Free text, unique within the project; the id is generated from it.
     name: String,
     /// An existing project, or a new one named by this pair.
     project: Option<String>,
@@ -218,6 +225,7 @@ struct CreatePair {
     target_changes: Option<String>,
 }
 
+/// Adds a pair; the answer is its view, with its generated `id`.
 async fn create_pair(
     State(app): State<App>,
     Json(body): Json<CreatePair>,
@@ -226,6 +234,7 @@ async fn create_pair(
     service::check_folder("repo", &body.repo)?;
     blocking(move || {
         let new = NewPair {
+            id: None,
             name: body.name,
             project: body.project,
             kb: body.kb,
@@ -235,13 +244,13 @@ async fn create_pair(
             target_changes: body.target_changes,
             settings: Vec::new(),
         };
-        let warnings = {
+        let added = {
             let _edit = service::config_edit();
             manage::add_pair(&app.paths, &new)?
         };
         let config = Config::load(app.paths.config_file()).map_err(ApiError::from)?;
-        let mut view = service::pair_view(config.pair(&new.name).map_err(ApiError::from)?);
-        view["warnings"] = json!(service::warnings_view(&warnings));
+        let mut view = service::pair_view(config.pair(&added.id).map_err(ApiError::from)?);
+        view["warnings"] = json!(service::warnings_view(&added.warnings));
         Ok((StatusCode::CREATED, Json(view)))
     })
     .await
@@ -250,8 +259,10 @@ async fn create_pair(
 async fn delete_pair(State(app): State<App>, Path(name): Path<String>) -> ApiResult {
     blocking(move || {
         let _edit = service::config_edit();
-        manage::remove_pair(&app.paths, &name)?;
-        Ok(Json(json!({"removed": name})))
+        let config = Config::load(app.paths.config_file())?;
+        let id = config.pair(&name)?.pair.id.clone();
+        manage::remove_pair(&app.paths, &id)?;
+        Ok(Json(json!({"removed": id})))
     })
     .await
 }
@@ -314,15 +325,15 @@ async fn sync(
 ) -> ApiResult<(StatusCode, Json<Value>)> {
     let (dry_run, trigger) = sync_options(&body)?;
     let paths = app.paths.clone();
-    let lookup = name.clone();
-    let pair = blocking(move || Ok(service::usable_pair(&paths, &lookup)?)).await?;
+    let pair = blocking(move || Ok(service::usable_pair(&paths, &name)?)).await?;
     if pair.paused {
-        return Err(markoo_core::Error::Paused(name).into());
+        return Err(markoo_core::Error::Paused(pair.id).into());
     }
-    let job = app.queue.submit(&name, dry_run, trigger);
+    // Queued by id: the same lock whatever reference the client used.
+    let job = app.queue.submit(&pair.id, dry_run, trigger);
     Ok((
         StatusCode::ACCEPTED,
-        Json(json!({"job": job, "pair": name})),
+        Json(json!({"job": job, "pair": pair.id})),
     ))
 }
 

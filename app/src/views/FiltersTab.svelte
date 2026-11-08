@@ -22,5 +22,5 @@
   }
 </script>
 
-<FilterEditor bind:include bind:exclude load={() => api.previewFilters(pair.name, settings())} />
-<SaveWithPreview pair={pair.name} {settings} onsaved={onchange} />
+<FilterEditor bind:include bind:exclude load={() => api.previewFilters(pair.id, settings())} />
+<SaveWithPreview pair={pair.id} {settings} onsaved={onchange} />

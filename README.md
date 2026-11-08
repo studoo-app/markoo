@@ -29,7 +29,7 @@ Knowledge base tools are supported through **adapters**. **Obsidian is the first
 
 - **Any knowledge base, through adapters**: Obsidian and plain Markdown folders today, others later. Each adapter converts its tool's Markdown dialect to standard Markdown and back.
 - **Three sync directions per pair**: KB → repo, repo → KB, or both ways.
-- **Projects**: pairs are grouped by project, for example a project's documentation and its skill, and a whole project syncs at once.
+- **Projects**: pairs are grouped by project, for example a project's documentation and its skill, and a whole project syncs at once. Each pair has a name you choose and can change at any time ("Technical documentation"), and a stable id that keeps its history and hooks.
 - **3-way merge**: changes on both sides are merged line by line against the last synced version. You only decide on real conflicts.
 - **No data loss**: dry-run before anything is written, atomic writes, backups and a trash folder. Markoo never commits or pushes for you.
 - **Obsidian ↔ GitHub conversion** (first adapter): `[[wikilinks]]` become standard Markdown links, attachments are copied to `assets/`, callouts become GitHub alerts, and Obsidian-only frontmatter is filtered — all reversibly.

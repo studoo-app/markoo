@@ -40,7 +40,7 @@ enum Command {
     Init,
     /// Show what a sync would do.
     Status {
-        /// Only this pair.
+        /// Only this pair: its id, project/name, or its name if no other project uses it.
         #[arg(long)]
         pair: Option<String>,
         /// Only the pairs of this project.
@@ -51,7 +51,7 @@ enum Command {
     Diff {
         /// Only this file, relative to the pair's folders.
         file: Option<String>,
-        /// Only this pair.
+        /// Only this pair: its id, project/name, or its name if no other project uses it.
         #[arg(long)]
         pair: Option<String>,
     },
@@ -60,7 +60,7 @@ enum Command {
         /// Show the plan without writing anything.
         #[arg(long)]
         dry_run: bool,
-        /// Only this pair.
+        /// Only this pair: its id, project/name, or its name if no other project uses it.
         #[arg(long)]
         pair: Option<String>,
         /// Only the pairs of this project.
@@ -69,7 +69,7 @@ enum Command {
     },
     /// List conflicts and divergences.
     Conflicts {
-        /// Only this pair.
+        /// Only this pair: its id, project/name, or its name if no other project uses it.
         #[arg(long)]
         pair: Option<String>,
     },
@@ -78,7 +78,7 @@ enum Command {
     Resolve {
         /// The file, relative to the pair's folders.
         file: String,
-        /// The pair, when several have this file.
+        /// The pair, when several have this file: its id, project/name, or its name if no other project uses it.
         #[arg(long)]
         pair: Option<String>,
         /// Keep this version.
@@ -118,13 +118,13 @@ enum Command {
 enum HookCommand {
     /// Install the hooks listed in the pair's `[pair.hooks]`, by default `post-merge`.
     Install {
-        /// The pair.
+        /// The pair: its id, project/name, or its name if no other project uses it.
         #[arg(long)]
         pair: String,
     },
     /// Remove the pair's hooks and nothing else.
     Uninstall {
-        /// The pair.
+        /// The pair: its id, project/name, or its name if no other project uses it.
         #[arg(long)]
         pair: String,
     },
@@ -133,7 +133,7 @@ enum HookCommand {
     Run {
         /// The hook.
         hook: String,
-        /// The pair.
+        /// The pair: its id, project/name, or its name if no other project uses it.
         #[arg(long)]
         pair: String,
         /// What Git passes to the hook.
@@ -167,7 +167,8 @@ enum Keep {
 enum PairCommand {
     /// Add a pair; without arguments, asks the questions one by one.
     Add {
-        /// Name of the pair.
+        /// Name of the pair, free text unique within its project (quote it
+        /// if it has spaces). Its id is made from the project and the name.
         name: Option<String>,
         /// Project of the pair: an existing one, or a new one.
         #[arg(long)]
@@ -192,14 +193,16 @@ enum PairCommand {
     List,
     /// Show a pair.
     Show {
-        /// Name of the pair.
+        /// The pair: its id, project/name, or its name if no other project uses it.
+        #[arg(value_name = "PAIR")]
         name: String,
     },
-    /// Change a setting of a pair.
+    /// Change a setting of a pair; its id never changes.
     Set {
-        /// Name of the pair.
+        /// The pair: its id, project/name, or its name if no other project uses it.
+        #[arg(value_name = "PAIR")]
         name: String,
-        /// project, direction, target_changes, kb, repo, kb_type, include, exclude, paused, transform.{links,assets_dir,frontmatter}, kb_options.{callouts,frontmatter_drop}, hooks.{install,branches}.
+        /// name, project, direction, target_changes, kb, repo, kb_type, include, exclude, paused, transform.{links,assets_dir,frontmatter}, kb_options.{callouts,frontmatter_drop}, hooks.{install,branches}.
         key: String,
         /// New value; lists are comma-separated.
         value: String,
@@ -209,7 +212,8 @@ enum PairCommand {
     },
     /// Remove a pair. Its files are not touched.
     Remove {
-        /// Name of the pair.
+        /// The pair: its id, project/name, or its name if no other project uses it.
+        #[arg(value_name = "PAIR")]
         name: String,
     },
 }

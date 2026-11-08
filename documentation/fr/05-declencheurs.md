@@ -66,7 +66,7 @@ sequenceDiagram
 ```
 
 - Le hook **n'échoue jamais** à cause de Markoo et ne fait jamais attendre Git : il tourne en arrière-plan, et les erreurs sont journalisées dans `<data>/hooks.log`. `pre-commit` fait exception : il attend, et refuse le commit tant qu'un conflit est en attente (`git commit --no-verify` le contourne) ; une panne de Markoo lui-même laisse passer le commit.
-- Les hooks existants sont respectés : Markoo s'ajoute à la fin, entre deux marqueurs `# >>> markoo clara` / `# <<< markoo clara` qui nomment la paire, après en avoir gardé une copie dans `<data>/backups/`. La désinstallation ne retire que ce bloc ; un hook resté vide part dans `<data>/trash/`.
+- Les hooks existants sont respectés : Markoo s'ajoute à la fin, entre deux marqueurs `# >>> markoo clara` / `# <<< markoo clara` qui portent l'identifiant de la paire, après en avoir gardé une copie dans `<data>/backups/`. La désinstallation ne retire que ce bloc ; un hook resté vide part dans `<data>/trash/`.
 - `markoo pair remove` laisse les hooks en place et nomme les fichiers qui appellent encore la paire : lancez `markoo hook uninstall` avant, car il ne connaît plus la paire ensuite.
 - Markoo ne touche pas à un hook et affiche les lignes à ajouter à la main quand elles ne pourraient pas s'exécuter après lui ou que l'écriture l'abîmerait : pas un script shell, fin par `exit` ou `exec`, non exécutable (Git l'ignore), lien symbolique.
 - Les gestionnaires `husky` et `lefthook`, ainsi que tout autre `core.hooksPath`, sont détectés et un extrait de configuration est proposé à la place : ces fichiers peuvent être versionnés ou partagés, donc l'extrait a besoin de `markoo` dans le `PATH` et ne fait rien sans lui.
@@ -84,20 +84,22 @@ Servie par `axum`, uniquement sur `127.0.0.1` (port par défaut `4848`). L'authe
 | `GET` | `/pairs/{pair}/status` | plan courant (sans rien appliquer) |
 | `GET` | `/pairs/{pair}/diff?path=…` | diff d'un fichier, ou de tous les fichiers sans `path` |
 | `POST` | `/pairs/{pair}/sync` | lance une synchro (`{"dry_run": false}`) → `202` + id du job |
-| `GET` | `/projects` | liste des projets, chacun avec ses paires : `[{"project": "Markoo", "pairs": ["documentation", "skill"]}]` ; les paires créées avant les projets viennent en dernier, sous `"project": null` |
+| `GET` | `/projects` | liste des projets, chacun avec ses paires : `[{"project": "Markoo", "pairs": ["markoo-documentation", "markoo-skill"]}]` (identifiants des paires) ; les paires créées avant les projets viennent en dernier, sous `"project": null` |
 | `POST` | `/projects/{project}/sync` | synchronise chaque paire du projet qui peut l'être (même corps que `/pairs/{pair}/sync`) → `202` + `{"project", "jobs": [{"pair", "job"}], "skipped": […]}` |
 | `GET` | `/jobs/{id}` | état et rapport d'un job |
-| `POST` | `/pairs` | crée une paire ; `project` est requis (`400` sinon) |
+| `POST` | `/pairs` | crée une paire à partir de `name`, `project`, `kb`, `repo`… ; `project` est requis (`400` sinon). Répond `201` avec la nouvelle paire, dont l'`id` généré par Markoo |
 | `GET` | `/pairs/{pair}/config` | configuration de la paire |
-| `PATCH` | `/pairs/{pair}/config` | modifie la paire (sens, filtres…) ; renvoie l'aperçu du plan |
+| `PATCH` | `/pairs/{pair}/config` | modifie la paire (nom, sens, filtres…) ; renvoie l'aperçu du plan. `name` renomme la paire ; `id` ne se modifie pas (`400`) |
 | `DELETE` | `/pairs/{pair}` | supprime la paire (les fichiers ne sont pas touchés) |
 | `GET` | `/conflicts` | conflits et divergences en attente, avec les versions KB, base et repo |
 | `POST` | `/conflicts/{id}/resolve` | `{"keep": "kb" \| "repo" \| "both"}`, `{"content": "…"}` ou `{"push_to_source": true}` |
 | `GET` | `/events` | flux SSE : `job-started`, `job-finished`, `new-conflicts`, `config-reloaded`, `shutdown` |
 
-Toutes les routes exigent le jeton. Les erreurs ont la forme `{"error": "…"}`, avec `400` pour une requête invalide, `401` sans jeton valide, `404` pour une paire, un projet, un job ou un conflit inconnu, et `409` quand l'état l'interdit (paire occupée ou en pause, conflits en attente, dossier indisponible). Les plans et les rapports de job ne contiennent jamais le contenu des fichiers ; seul `/conflicts` le renvoie.
+Toutes les routes exigent le jeton. Les erreurs ont la forme `{"error": "…"}`, avec `400` pour une requête invalide, `401` sans jeton valide, `404` pour une paire, un projet, un job ou un conflit inconnu, et `409` pour un nom qui correspond à des paires de plusieurs projets ou quand l'état l'interdit (paire occupée ou en pause, conflits en attente, dossier indisponible). Les plans et les rapports de job ne contiennent jamais le contenu des fichiers ; seul `/conflicts` le renvoie.
 
 Le nom de projet dans `/projects/{project}/sync` ignore la casse : `markoo` désigne le projet `Markoo`. Les paires en pause et celles qui échouent à la validation ne sont pas mises en file ; elles sont listées dans `skipped`. `POST /pairs` rejoint un projet existant quand le nom n'en diffère que par la casse, et garde l'orthographe déjà utilisée.
+
+`{pair}` dans une route accepte toute [façon de désigner une paire](06-configuration.md#désigner-une-paire) : son identifiant (`markoo-documentation`), `Projet/Nom` encodé (`Markoo%2FDocumentation`), ou un nom qu'aucun autre projet n'utilise. Les scripts gagnent à utiliser l'identifiant, qui résiste au renommage. Les champs `"pair"` des plans, des rapports de job et des conflits contiennent l'identifiant ; `GET /pairs` donne `id`, `name`, `project` et `label` (`Projet/Nom`) pour chaque paire.
 
 Exemple de job (`GET /jobs/{id}`) :
 
@@ -139,19 +141,22 @@ Markoo expose un serveur **Model Context Protocol** (crate `rmcp`), utilisable p
 
 | Outil | Paramètres | Effet |
 |-------|-----------|-------|
-| `list_pairs` | — | Paires configurées, leur projet (`null` pour une paire créée avant les projets), type de KB (par ex. `obsidian`) et état |
+| `list_pairs` | — | Paires configurées avec leur `id`, leur `name`, leur `label` (`Projet/Nom`), leur projet (`null` pour une paire créée avant les projets), type de KB (par ex. `obsidian`) et état |
 | `sync_status` | `pair?` \| `project?` | Plan courant : ce qui serait synchronisé, pour une paire, les paires d'un projet ou toutes les paires |
 | `sync_diff` | `pair`, `path` | Diff unifié d'un fichier (KB ↔ repo, en forme canonique) |
 | `sync_run` | `pair?` \| `project?`, `dry_run?` | Lance une synchro d'une paire, des paires d'un projet qui peuvent l'être, ou de toutes celles qui peuvent l'être ; renvoie le rapport |
 | `list_conflicts` | `pair?` | Conflits en attente, avec les trois versions |
 | `resolve_conflict` | `id`, `keep?` \| `content?` \| `push_to_source?` | Résout un conflit ou une divergence |
 | `get_pair_config` | `pair` | Configuration de la paire (type de KB, sens, filtres…) |
-| `update_pair_config` | `pair`, `changes` | Modifie la paire (`project`, `direction`, `target_changes`, dossiers… ; `project` la déplace dans un autre projet) ; **désactivé** sauf si `mcp.allow_config_write = true` |
+| `update_pair_config` | `pair`, `changes` | Modifie la paire (`name`, `project`, `direction`, `target_changes`, dossiers… ; `name` la renomme, `project` la déplace dans un autre projet, son identifiant ne change jamais) ; **désactivé** sauf si `mcp.allow_config_write = true` |
 
 ### Ressources
 
 - `markoo://pairs/{pair}/status` : état courant.
+
 - `markoo://conflicts/{id}` : versions KB, base et repo d'un conflit.
+
+Le paramètre `pair`, comme `{pair}` dans une ressource, accepte l'identifiant de la paire, `Projet/Nom`, ou un nom qu'aucun autre projet n'utilise ; les agents gagnent à garder l'identifiant donné par `list_pairs`.
 
 ```mermaid
 sequenceDiagram

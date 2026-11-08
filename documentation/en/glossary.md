@@ -11,7 +11,8 @@
 | **Dialect** | A side's own Markdown variant (Obsidian wikilinks and callouts, `gfm` on the repo side…), converted to and from the canonical form by `to_canonical` / `from_canonical`. |
 | **Repo** | The Git repository side of a pair: a folder in a local clone. |
 | **Pair** | A KB folder and a repo folder associated and synced together. |
-| **Project** | A named group of pairs that belong together, e.g. the project `Markoo` with the pairs `documentation` and `skill`. Stored as the `project` key of each pair; named when its first pair is created. See [Projects](06-configuration.md#projects). |
+| **Project** | A named group of pairs that belong together, e.g. the project `Markoo` with the pairs `Documentation` and `Skill Claude`. Stored as the `project` key of each pair; named when its first pair is created. See [Projects](06-configuration.md#projects). |
+| **Id** | Stable identifier of a pair, such as `markoo-documentation`: generated from its project and name when it is created, then never changed. The state, the history, the conflicts and the Git hooks are keyed on it, so the pair's **name**, free text unique within its project, can change at any time. See [Id and name](06-configuration.md#id-and-name). |
 | **Base** | A file's content at the last successful sync, stored in `state.db`. Serves as the common ancestor for merging; stored in canonical form. |
 | **Canonical form** | Standard GitHub Flavored Markdown with relative links, plus invisible `<!--markoo:…-->` comments for what GFM cannot represent. Every adapter converts its dialect to and from this form; comparison, merging and storage of the base are done on it. |
 | **Transformation** | A pair of functions `to_canonical` / `from_canonical` that converts a Markdown construct (links, callouts…) from a dialect to the canonical form and back. |

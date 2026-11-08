@@ -23,7 +23,8 @@ impl Env {
         env
     }
 
-    /// A pair named `clara` between the `kb/` and `repo/docs/` folders.
+    /// A pair named `clara`, id `markoo-clara`, between the `kb/` and
+    /// `repo/docs/` folders.
     fn with_pair() -> Self {
         let env = Self::new();
         env.ok(&["init"]);
@@ -413,6 +414,159 @@ fn pair_set_moves_a_pair_to_another_project() {
     assert_eq!(env.json(&["pair", "show", "clara"])["project"], "Clara");
 }
 
+// --- names and ids --------------------------------------------------------------
+
+/// Two projects, each with a pair named "documentation".
+fn two_documentations() -> Env {
+    let env = Env::new();
+    env.ok(&["init"]);
+    env.add_pair("documentation", "Markoo");
+    let kb = env.path("clara-kb");
+    let repo = env.path("clara-repo");
+    std::fs::create_dir_all(&kb).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    env.ok(&[
+        "pair",
+        "add",
+        "documentation",
+        "--project",
+        "Clara",
+        "--kb",
+        kb.to_str().unwrap(),
+        "--repo",
+        repo.to_str().unwrap(),
+    ]);
+    env
+}
+
+#[test]
+fn pair_add_prints_the_label_and_the_id() {
+    let env = Env::new();
+    env.ok(&["init"]);
+    let (kb, repo) = (env.kb(), env.repo());
+    let output = env.ok(&[
+        "pair",
+        "add",
+        "Documentation technique",
+        "--project",
+        "Markoo",
+        "--kb",
+        kb.to_str().unwrap(),
+        "--repo",
+        repo.to_str().unwrap(),
+    ]);
+    assert!(
+        output.contains(
+            "Pair \"Markoo/Documentation technique\" added (id: markoo-documentation-technique)"
+        ),
+        "{output}"
+    );
+}
+
+#[test]
+fn two_projects_can_each_have_a_pair_of_the_same_name() {
+    let env = two_documentations();
+    let ids: Vec<Value> = env
+        .json(&["pair", "list"])
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|pair| pair["id"].clone())
+        .collect();
+    assert_eq!(ids, ["markoo-documentation", "clara-documentation"]);
+}
+
+#[test]
+fn a_pair_is_addressed_by_project_and_name_or_by_id() {
+    let env = two_documentations();
+    assert_eq!(
+        env.json(&["pair", "show", "clara/Documentation"])["id"],
+        "clara-documentation"
+    );
+    assert_eq!(
+        env.json(&["status", "--pair", "markoo-documentation"])[0]["pair"],
+        "markoo-documentation"
+    );
+}
+
+#[test]
+fn an_ambiguous_name_lists_the_candidates() {
+    let error = two_documentations().fails(&["status", "--pair", "documentation"]);
+    assert!(
+        error.contains("Markoo/documentation") && error.contains("Clara/documentation"),
+        "{error}"
+    );
+}
+
+#[test]
+fn pair_list_shows_the_name_and_the_id() {
+    let listed = two_documentations().ok(&["pair", "list"]);
+    assert!(
+        listed.contains("documentation  [clara-documentation]"),
+        "{listed}"
+    );
+}
+
+#[test]
+fn pair_show_gives_the_id_and_the_name() {
+    let shown = Env::with_pair().ok(&["pair", "show", "Markoo/clara"]);
+    assert!(
+        shown.contains("id              markoo-clara") && shown.contains("name            clara"),
+        "{shown}"
+    );
+}
+
+#[test]
+fn status_shows_the_label_of_the_pair() {
+    let env = two_documentations();
+    let output = env.ok(&["status", "--pair", "clara-documentation"]);
+    assert!(output.starts_with("Clara/documentation  "), "{output}");
+}
+
+#[test]
+fn renaming_a_pair_keeps_its_history() {
+    let env = Env::with_pair();
+    env.write(&env.kb(), "note.md", "hello\n");
+    env.ok(&["sync"]);
+    env.ok(&["pair", "set", "clara", "name", "Documentation technique"]);
+    let shown = env.json(&["pair", "show", "Markoo/Documentation technique"]);
+    assert_eq!(
+        (&shown["id"], &shown["name"]),
+        (&"markoo-clara".into(), &"Documentation technique".into())
+    );
+    let paths = markoo_core::paths::Paths::resolve(&markoo_core::paths::Overrides {
+        config_file: Some(env.config()),
+        data_dir: Some(env.path("data")),
+    })
+    .unwrap();
+    let history = markoo_core::service::history(&paths, "Documentation technique", 1).unwrap();
+    assert_eq!(history[0]["trigger"], "cli");
+    // Nothing to copy again: the state followed the pair.
+    assert!(env.ok(&["status"]).contains("Up to date."));
+}
+
+#[test]
+fn the_id_of_a_pair_cannot_be_changed() {
+    let env = Env::with_pair();
+    let error = env.fails(&["pair", "set", "clara", "id", "other"]);
+    assert!(error.contains("cannot be changed"), "{error}");
+}
+
+#[test]
+fn a_pair_without_an_id_is_known_by_its_name() {
+    let env = Env::new();
+    let config = format!(
+        "[[pair]]\nname = \"notes\"\nproject = \"Markoo\"\nkb = {:?}\nrepo = {:?}\n",
+        env.kb().display().to_string(),
+        env.repo().display().to_string()
+    );
+    std::fs::write(env.config(), config).unwrap();
+    env.write(&env.kb(), "note.md", "hello\n");
+    env.ok(&["sync", "--pair", "notes"]);
+    assert_eq!(env.read(&env.repo(), "note.md").as_deref(), Some("hello\n"));
+    assert_eq!(env.json(&["status", "--pair", "notes"])[0]["pair"], "notes");
+}
+
 #[test]
 fn sync_can_target_one_project() {
     let env = Env::with_pair();
@@ -438,7 +592,7 @@ fn status_can_target_one_project() {
     env.add_pair("site", "Site web");
     let views = env.json(&["status", "--project", "site web"]);
     assert_eq!(views.as_array().unwrap().len(), 1);
-    assert_eq!(views[0]["pair"], "site");
+    assert_eq!(views[0]["pair"], "site-web-site");
 }
 
 #[test]
@@ -1049,7 +1203,7 @@ fn sync_reports_a_busy_pair() {
     let env = Env::with_pair();
     env.ok(&["sync"]);
     std::fs::create_dir_all(env.path("data/locks")).unwrap();
-    let lock = std::fs::File::create(env.path("data/locks/clara.lock")).unwrap();
+    let lock = std::fs::File::create(env.path("data/locks/markoo-clara.lock")).unwrap();
     lock.lock().unwrap();
     assert!(env.fails(&["sync"]).contains("busy"));
 }
@@ -1124,7 +1278,7 @@ fn hook_install_creates_post_merge_by_default() {
     assert!(
         hook_text(&env, "post-merge")
             .unwrap()
-            .contains("# >>> markoo clara")
+            .contains("# >>> markoo markoo-clara")
     );
     assert_eq!(hook_text(&env, "post-commit"), None);
 }
@@ -1147,7 +1301,10 @@ fn hook_install_says_that_nothing_was_synced() {
     let env = env_with_git();
     env.write(&env.repo(), "api.md", "not yet\n");
     let output = env.ok(&["hook", "install", "--pair", "clara"]);
-    assert!(output.contains("markoo sync --pair clara"), "{output}");
+    assert!(
+        output.contains("markoo sync --pair markoo-clara"),
+        "{output}"
+    );
     assert_eq!(env.read(&env.kb(), "api.md"), None);
 }
 
