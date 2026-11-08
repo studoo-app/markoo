@@ -622,7 +622,7 @@ fn a_pair_written_without_an_id_keeps_its_name_as_id_when_renamed() {
     std::fs::write(
         env.paths.config_file(),
         format!(
-            "[[pair]]\nname = \"notes\"\nkb = \"{}\"\nrepo = \"{}\"\n",
+            "[[pair]]\nname = 'notes'\nkb = '{}'\nrepo = '{}'\n",
             env.kb().display(),
             env.repo().display()
         ),
