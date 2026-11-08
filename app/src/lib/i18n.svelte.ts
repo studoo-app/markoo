@@ -269,6 +269,25 @@ const fr: Record<string, string> = {
   "nothing to do": "rien à faire",
   "Synced": "Synchronisé",
   "{count} written": "{count} écrit(s)",
+  // Projects.
+  "Project": "Projet",
+  "Project name": "Nom du projet",
+  "Choose a project": "Choisir un projet",
+  "New project…": "Nouveau projet…",
+  "A project groups this sync and the next ones you add to it.":
+    "Un projet regroupe ce sync et les suivants que vous y ajouterez.",
+  "This sync joins the project {project}.": "Ce sync rejoint le projet {project}.",
+  "A sync already has this name.": "Un sync porte déjà ce nom.",
+  "No project": "Sans projet",
+  "1 sync": "1 sync",
+  "{count} syncs": "{count} sync",
+  "Sync project": "Synchroniser le projet",
+  "Sync every sync of this project that is not paused":
+    "Synchroniser chaque sync de ce projet qui n'est pas en pause",
+  "Sync the project {project}": "Synchroniser le projet {project}",
+  "Add a sync": "Ajouter un sync",
+  "Add a sync to {project}": "Ajouter un sync à {project}",
+  "Name the project of this sync.": "Nommez le projet de ce sync.",
 };
 
 let current = $state<Locale>("en");

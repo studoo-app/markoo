@@ -39,6 +39,7 @@ impl Env {
     fn new_pair(&self) -> NewPair {
         NewPair {
             name: "clara".to_owned(),
+            project: Some("Clara".to_owned()),
             kb: self.kb().display().to_string(),
             kb_type: None,
             repo: self.repo().display().to_string(),
@@ -493,4 +494,49 @@ fn a_preview_outside_of_git_flags_nothing() {
     let plan = service::preview_new_pair(&env.paths, &env.new_pair()).unwrap();
     assert_eq!(plan["summary"]["git"], false);
     assert_eq!(plan["summary"]["untracked_to_kb"], 0);
+}
+
+#[test]
+fn a_new_pair_needs_a_project() {
+    let env = Env::new();
+    let mut new = env.new_pair();
+    new.project = Some("  ".to_owned());
+    let error = markoo_core::manage::add_pair(&env.paths, &new).unwrap_err();
+    assert!(error.to_string().contains("name its project"), "{error}");
+    assert!(!env.config_text().contains("clara"));
+}
+
+#[test]
+fn a_second_pair_joins_the_project_as_first_spelled() {
+    let env = Env::new().with_saved_pair();
+    for folder in ["kb2", "repo2"] {
+        std::fs::create_dir_all(env.dir.path().join(folder)).unwrap();
+    }
+    let mut second = env.new_pair();
+    second.name = "skill".to_owned();
+    second.project = Some("clara".to_owned());
+    second.kb = env.dir.path().join("kb2").display().to_string();
+    second.repo = env.dir.path().join("repo2").display().to_string();
+    markoo_core::manage::add_pair(&env.paths, &second).unwrap();
+    let projects = markoo_core::service::projects(&env.paths).unwrap();
+    assert_eq!(
+        projects,
+        [serde_json::json!({"project": "Clara", "pairs": ["clara", "skill"]})]
+    );
+    assert_eq!(
+        markoo_core::service::project_pairs(&env.paths, "CLARA").unwrap(),
+        ["clara", "skill"]
+    );
+}
+
+#[test]
+fn the_project_of_a_pair_can_be_recased() {
+    let env = Env::new().with_saved_pair();
+    markoo_core::manage::set_pair(
+        &env.paths,
+        "clara",
+        &[("project".to_owned(), "CLARA".to_owned())],
+    )
+    .unwrap();
+    assert!(env.config_text().contains("project = \"CLARA\""));
 }

@@ -24,6 +24,7 @@ pub const TEMPLATE: &str = "\
 #
 # [[pair]]
 # name = \"notes\"
+# project = \"My project\"      # pairs of a project are shown together
 # kb   = \"~/Notes/Project\"
 # repo = \"~/code/project/docs\"
 # direction = \"both\"          # both | kb-to-repo | repo-to-kb
@@ -53,6 +54,14 @@ pub enum ConfigError {
     /// The pair name cannot be used in commands and URLs.
     #[error("invalid pair name \"{0}\": use lowercase letters, digits and hyphens")]
     InvalidName(String),
+    /// The project name is empty, too long or spans several lines.
+    #[error(
+        "invalid project name \"{0}\": use 1 to {MAX_PROJECT_LEN} characters on one line, without surrounding spaces"
+    )]
+    InvalidProject(String),
+    /// A new pair must say which project it belongs to.
+    #[error("pair \"{0}\": name its project")]
+    MissingProject(String),
     /// This KB type has no adapter yet.
     #[error("pair \"{pair}\": kb_type \"{kb_type}\" is not available yet; use \"markdown\"")]
     UnsupportedKbType {
@@ -79,6 +88,7 @@ pub enum ConfigError {
 #[serde(deny_unknown_fields)]
 struct RawPair {
     name: String,
+    project: Option<String>,
     kb: String,
     kb_type: Option<String>,
     repo: String,
@@ -348,6 +358,11 @@ impl Config {
             if !names.insert(raw.name.clone()) {
                 return Err(ConfigError::DuplicatePair(raw.name));
             }
+            if let Some(project) = &raw.project
+                && !is_valid_project(project)
+            {
+                return Err(ConfigError::InvalidProject(project.clone()));
+            }
             pairs.push(PairEntry::from_raw(raw)?);
         }
         let mut language = Language::default();
@@ -392,6 +407,29 @@ impl Config {
             .iter()
             .find(|entry| entry.pair.name == name)
             .ok_or_else(|| ConfigError::UnknownPair(name.to_owned()))
+    }
+
+    /// Names of the projects, in the order they first appear in the file.
+    pub fn projects(&self) -> Vec<&str> {
+        let mut projects: Vec<&str> = Vec::new();
+        for entry in &self.pairs {
+            if let Some(project) = entry.pair.project.as_deref()
+                && !projects.contains(&project)
+            {
+                projects.push(project);
+            }
+        }
+        projects
+    }
+
+    /// The spelling already used for this project, if one matches it without
+    /// regard to case or surrounding spaces: "markoo" joins an existing
+    /// "Markoo" instead of starting a second project.
+    pub fn known_project(&self, name: &str) -> Option<&str> {
+        let name = name.trim().to_lowercase();
+        self.projects()
+            .into_iter()
+            .find(|project| project.to_lowercase() == name)
     }
 
     /// Checks every pair against the disk.
@@ -441,6 +479,7 @@ impl PairEntry {
             not_implemented.push("conflict (conflicts are always put on hold)".to_owned());
         }
         let mut pair = Pair::new(raw.name, kb, expand_home(&raw.repo));
+        pair.project = raw.project;
         pair.hooks = raw.hooks.unwrap_or_default();
         if let Some(transform) = raw.transform {
             if transform
@@ -566,11 +605,27 @@ pub fn is_valid_name(name: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+/// Longest project name, in characters.
+pub const MAX_PROJECT_LEN: usize = 64;
+
+/// Whether a project name can be written to the configuration. It is free
+/// text ("Markoo", "Site web"), but on one line and without surrounding
+/// spaces, so that two spellings of one project cannot differ by a blank.
+pub fn is_valid_project(name: &str) -> bool {
+    !name.is_empty()
+        && name.chars().count() <= MAX_PROJECT_LEN
+        && name.trim() == name
+        && !name.chars().any(char::is_control)
+}
+
 /// Settings of a new pair.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NewPair {
     /// Name of the pair.
     pub name: String,
+    /// Project of the pair: an existing one, or a new one named here.
+    /// [`crate::manage::add_pair`] refuses a pair without one.
+    pub project: Option<String>,
     /// KB folder, as written in the file.
     pub kb: String,
     /// KB type; detected if `None`.
@@ -625,6 +680,9 @@ impl ConfigFile {
     pub fn add_pair(&mut self, new: &NewPair) -> Result<(), ConfigError> {
         let mut table = Table::new();
         table["name"] = value(&new.name);
+        if let Some(project) = &new.project {
+            table["project"] = value(project);
+        }
         table["kb"] = value(&new.kb);
         if let Some(kb_type) = &new.kb_type {
             table["kb_type"] = value(kb_type);
@@ -678,6 +736,13 @@ impl ConfigFile {
         match key.as_str() {
             "direction" | "target_changes" | "kb" | "repo" | "kb_type" | "conflict" | "name" => {
                 table[key.as_str()] = value(new_value);
+            }
+            "project" => {
+                let project = new_value.trim();
+                if !is_valid_project(project) {
+                    return Err(ConfigError::InvalidProject(new_value.to_owned()));
+                }
+                table["project"] = value(project);
             }
             "paused" => {
                 let paused = new_value.parse::<bool>().map_err(|_| {
@@ -1319,6 +1384,74 @@ exclude = ["drafts/**"]
         assert!(matches!(
             ConfigFile::create(&path),
             Err(ConfigError::AlreadyExists(_))
+        ));
+    }
+
+    #[test]
+    fn the_project_of_a_pair_is_read() {
+        let text = "[[pair]]\nname='a'\nproject='Markoo'\nkb='/k'\nrepo='/r'\n\
+                    [[pair]]\nname='b'\nkb='/k2'\nrepo='/r2'\n";
+        let config = Config::parse(text).unwrap();
+        assert_eq!(config.pairs[0].pair.project.as_deref(), Some("Markoo"));
+        assert_eq!(config.pairs[1].pair.project, None);
+    }
+
+    #[test]
+    fn invalid_project_names_are_refused() {
+        let too_long = "x".repeat(MAX_PROJECT_LEN + 1);
+        for project in ["", " Markoo", "a\\nb", too_long.as_str()] {
+            let text = format!("[[pair]]\nname='a'\nproject=\"{project}\"\nkb='/k'\nrepo='/r'\n");
+            assert!(
+                matches!(Config::parse(&text), Err(ConfigError::InvalidProject(_))),
+                "{project:?}"
+            );
+        }
+        assert!(is_valid_project("Site web — v2"));
+    }
+
+    #[test]
+    fn projects_are_listed_once_in_file_order() {
+        let text = "[[pair]]\nname='a'\nproject='Zeta'\nkb='/k1'\nrepo='/r1'\n\
+                    [[pair]]\nname='b'\nkb='/k2'\nrepo='/r2'\n\
+                    [[pair]]\nname='c'\nproject='Alpha'\nkb='/k3'\nrepo='/r3'\n\
+                    [[pair]]\nname='d'\nproject='Zeta'\nkb='/k4'\nrepo='/r4'\n";
+        let config = Config::parse(text).unwrap();
+        assert_eq!(config.projects(), ["Zeta", "Alpha"]);
+        assert_eq!(config.known_project(" zeta "), Some("Zeta"));
+        assert_eq!(config.known_project("Beta"), None);
+    }
+
+    #[test]
+    fn a_new_pair_is_written_with_its_project() {
+        let text = edited(|file| {
+            file.add_pair(&NewPair {
+                name: "two".into(),
+                project: Some("Markoo".into()),
+                kb: "/k2".into(),
+                repo: "/r2".into(),
+                ..NewPair::default()
+            })
+            .unwrap();
+        });
+        let config = Config::parse(&text).unwrap();
+        assert_eq!(
+            config.pair("two").unwrap().pair.project.as_deref(),
+            Some("Markoo")
+        );
+    }
+
+    #[test]
+    fn the_project_of_a_pair_can_be_changed() {
+        let mut file = ConfigFile::from_text(Path::new("/unused"), SAMPLE).unwrap();
+        file.set("clara", "project", "  Clara  ").unwrap();
+        let config = file.preview().unwrap();
+        assert_eq!(
+            config.pair("clara").unwrap().pair.project.as_deref(),
+            Some("Clara")
+        );
+        assert!(matches!(
+            file.set("clara", "project", " "),
+            Err(ConfigError::InvalidProject(_))
         ));
     }
 

@@ -3,11 +3,17 @@
 use std::io::{BufRead, Write};
 
 use anyhow::{Context, Result, bail};
-use markoo_core::config::{NewPair, expand_home, is_valid_name};
+use markoo_core::config::{NewPair, expand_home, is_valid_name, is_valid_project};
 use markoo_core::kb::{self, KbType};
 
-/// Asks for the settings of a new pair.
-pub fn ask_new_pair(input: &mut impl BufRead, output: &mut impl Write) -> Result<NewPair> {
+/// Asks for the settings of a new pair, starting with its project: one of
+/// `projects`, the existing ones, or a new one named here.
+pub fn ask_new_pair(
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+    projects: &[&str],
+) -> Result<NewPair> {
+    let project = ask_project(input, output, projects)?;
     let name = ask_until(input, output, "Name of the pair", None, |answer| {
         is_valid_name(answer)
             .then_some(())
@@ -55,6 +61,7 @@ pub fn ask_new_pair(input: &mut impl BufRead, output: &mut impl Write) -> Result
     };
     Ok(NewPair {
         name,
+        project: Some(project),
         kb,
         kb_type,
         repo,
@@ -62,6 +69,41 @@ pub fn ask_new_pair(input: &mut impl BufRead, output: &mut impl Write) -> Result
         target_changes,
         settings: Vec::new(),
     })
+}
+
+/// The first pair names its project; the next ones pick an existing project
+/// by number, or name a new one.
+fn ask_project(
+    input: &mut impl BufRead,
+    output: &mut impl Write,
+    projects: &[&str],
+) -> Result<String> {
+    const INVALID: &str = "use 1 to 64 characters on one line";
+    if projects.is_empty() {
+        return ask_until(input, output, "Project name", None, |answer| {
+            is_valid_project(answer).then_some(()).ok_or(INVALID)
+        });
+    }
+    writeln!(output, "Projects:")?;
+    for (number, project) in projects.iter().enumerate() {
+        writeln!(output, "  {}. {project}", number + 1)?;
+    }
+    loop {
+        let answer = ask(input, output, "Project (number, or a new name)", None)?;
+        // A number outside the list is a new name: "2026" is a valid project.
+        let listed = answer
+            .parse::<usize>()
+            .ok()
+            .and_then(|number| number.checked_sub(1))
+            .and_then(|index| projects.get(index));
+        if let Some(project) = listed {
+            return Ok((*project).to_owned());
+        } else if is_valid_project(&answer) {
+            return Ok(answer);
+        } else {
+            writeln!(output, "  {INVALID}")?;
+        }
+    }
 }
 
 fn ask_folder(input: &mut impl BufRead, output: &mut impl Write, label: &str) -> Result<String> {
@@ -120,7 +162,52 @@ mod tests {
     use super::*;
 
     fn answers(text: &str) -> Result<NewPair> {
-        ask_new_pair(&mut text.as_bytes(), &mut Vec::new())
+        ask_new_pair(&mut text.as_bytes(), &mut Vec::new(), &[])
+    }
+
+    fn answers_with(projects: &[&str], text: &str) -> Result<NewPair> {
+        ask_new_pair(&mut text.as_bytes(), &mut Vec::new(), projects)
+    }
+
+    #[test]
+    fn the_first_pair_names_its_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().display();
+        let pair = answers(&format!("\nMarkoo\nnotes\n{folder}\n{folder}\n\n")).unwrap();
+        assert_eq!(pair.project.as_deref(), Some("Markoo"));
+    }
+
+    #[test]
+    fn an_existing_project_is_picked_by_number() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().display();
+        let pair = answers_with(
+            &["Markoo", "Site web"],
+            &format!("2\nnotes\n{folder}\n{folder}\n\n"),
+        )
+        .unwrap();
+        assert_eq!(pair.project.as_deref(), Some("Site web"));
+    }
+
+    #[test]
+    fn a_number_outside_the_list_names_a_new_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().display();
+        let pair =
+            answers_with(&["Markoo"], &format!("2026\nnotes\n{folder}\n{folder}\n\n")).unwrap();
+        assert_eq!(pair.project.as_deref(), Some("2026"));
+    }
+
+    #[test]
+    fn a_new_project_can_be_typed_instead_of_a_number() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().display();
+        let pair = answers_with(
+            &["Markoo"],
+            &format!("Clara\nnotes\n{folder}\n{folder}\n\n"),
+        )
+        .unwrap();
+        assert_eq!(pair.project.as_deref(), Some("Clara"));
     }
 
     #[test]
@@ -128,7 +215,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let folder = dir.path().display();
         let pair = answers(&format!(
-            "Bad Name\nnotes\n/nope\n{folder}\n{folder}\nsideways\n\n"
+            "Markoo\nBad Name\nnotes\n/nope\n{folder}\n{folder}\nsideways\n\n"
         ))
         .unwrap();
         assert_eq!(
@@ -141,12 +228,15 @@ mod tests {
     fn one_way_asks_about_target_changes() {
         let dir = tempfile::tempdir().unwrap();
         let folder = dir.path().display();
-        let pair = answers(&format!("notes\n{folder}\n{folder}\nkb-to-repo\n\n")).unwrap();
+        let pair = answers(&format!(
+            "Markoo\nnotes\n{folder}\n{folder}\nkb-to-repo\n\n"
+        ))
+        .unwrap();
         assert_eq!(pair.target_changes.as_deref(), Some("protect"));
     }
 
     #[test]
     fn end_of_input_stops_the_wizard() {
-        assert!(answers("notes\n").is_err());
+        assert!(answers("Markoo\nnotes\n").is_err());
     }
 }

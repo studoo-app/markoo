@@ -14,20 +14,26 @@ const options = {
 
 const pairs: PairView[] = [
   {
-    name: "clara", kb: "~/Obsidian/Knowledge/Projets/Clara", kb_type: "obsidian",
+    name: "clara", project: "Clara", kb: "~/Obsidian/Knowledge/Projets/Clara", kb_type: "obsidian",
     repo: "~/Projets/lerebours/clara/docs", direction: "both", target_changes: "protect",
     include: ["**/*.md"], exclude: [], paused: false, pending: 1, errors: [], active: false, ...options,
   },
   {
-    name: "markoo", kb: "~/Obsidian/Knowledge/Projets/Markoo", kb_type: "obsidian",
+    name: "documentation", project: "Markoo", kb: "~/Obsidian/Knowledge/Projets/Markoo/Documentation", kb_type: "obsidian",
     repo: "~/Projets/opensource/markoo/documentation", direction: "repo-to-kb",
     target_changes: "protect", include: ["**/*.md"], exclude: [], paused: false, pending: 0,
     errors: [], active: true, ...options,
   },
   {
-    name: "notes-api", kb: "~/notes/api", kb_type: "markdown", repo: "~/api/docs",
+    name: "notes-api", project: null, kb: "~/notes/api", kb_type: "markdown", repo: "~/api/docs",
     direction: "kb-to-repo", target_changes: "protect", include: ["**/*.md"], exclude: [],
     paused: true, pending: 0, errors: [], active: false, ...options,
+  },
+  {
+    name: "skill", project: "Markoo", kb: "~/Obsidian/Knowledge/Projets/Markoo/Skill",
+    kb_type: "obsidian", repo: "~/Projets/opensource/markoo/skills/markoo", direction: "kb-to-repo",
+    target_changes: "protect", include: ["**/*.md"], exclude: [], paused: false, pending: 0,
+    errors: [], active: false, ...options,
   },
 ];
 
@@ -133,7 +139,7 @@ export function installMock(): void {
             },
           },
           {
-            pair: "markoo",
+            pair: "documentation",
             run: {
               id: 1, trigger: "hook", started_at: Date.now() - 900000, duration_ms: 1240, error: null,
               report: {

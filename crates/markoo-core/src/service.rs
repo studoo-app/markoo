@@ -82,6 +82,7 @@ pub fn pair_view(entry: &PairEntry) -> Value {
     let pair = &entry.pair;
     json!({
         "name": pair.name,
+        "project": pair.project,
         "kb": pair.kb,
         "kb_type": pair.kb_type,
         "repo": pair.repo,
@@ -133,6 +134,44 @@ pub fn list_pairs(paths: &Paths) -> Result<Vec<Value>, Error> {
         views.push(view);
     }
     Ok(views)
+}
+
+/// The projects and the names of their pairs, in file order; pairs created
+/// before projects existed come last, under `"project": null`.
+pub fn projects(paths: &Paths) -> Result<Vec<Value>, Error> {
+    let config = Config::load(paths.config_file())?;
+    let members = |project: Option<&str>| -> Vec<&str> {
+        config
+            .pairs
+            .iter()
+            .filter(|entry| entry.pair.project.as_deref() == project)
+            .map(|entry| entry.pair.name.as_str())
+            .collect()
+    };
+    let mut views: Vec<Value> = config
+        .projects()
+        .into_iter()
+        .map(|project| json!({"project": project, "pairs": members(Some(project))}))
+        .collect();
+    let orphans = members(None);
+    if !orphans.is_empty() {
+        views.push(json!({"project": null, "pairs": orphans}));
+    }
+    Ok(views)
+}
+
+/// Names of the pairs of a project, in file order.
+pub fn project_pairs(paths: &Paths, project: &str) -> Result<Vec<String>, Error> {
+    let config = Config::load(paths.config_file())?;
+    let project = config
+        .known_project(project)
+        .ok_or_else(|| Error::InvalidRequest(format!("no project named \"{project}\"")))?;
+    Ok(config
+        .pairs
+        .iter()
+        .filter(|entry| entry.pair.project.as_deref() == Some(project))
+        .map(|entry| entry.pair.name.clone())
+        .collect())
 }
 
 /// Settings of a pair.

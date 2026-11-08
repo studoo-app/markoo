@@ -1,6 +1,16 @@
 <script lang="ts">
   import { t } from "../lib/i18n.svelte";
-  import { api, errorText, type PairView, type Plan, type Settings } from "../lib/api";
+  import { onMount } from "svelte";
+  import {
+    api,
+    errorText,
+    isValidProject,
+    MAX_PROJECT_LEN,
+    projectsOf,
+    type PairView,
+    type Plan,
+    type Settings,
+  } from "../lib/api";
   import DirectionCards from "../lib/DirectionCards.svelte";
   import Picker from "../lib/Picker.svelte";
   import PlanList from "../lib/PlanList.svelte";
@@ -8,6 +18,7 @@
   let { pair, onchange }: { pair: PairView; onchange: () => void } = $props();
 
   // Edited copies: a refresh of the pair must not overwrite what is being typed.
+  let project = $state("");
   // svelte-ignore state_referenced_locally
   let kb = $state(pair.kb);
   // svelte-ignore state_referenced_locally
@@ -23,9 +34,25 @@
   let error = $state<string | null>(null);
   let saved = $state(false);
   let busy = $state(false);
+  let projects = $state<string[]>([]);
+
+  onMount(() => {
+    api.listPairs().then((pairs) => (projects = projectsOf(pairs))).catch(() => {});
+  });
+
+  // Follows the saved project, which may take the spelling of an existing one.
+  const savedProject = $derived(pair.project ?? "");
+  $effect(() => {
+    project = savedProject;
+  });
+
+  const projectChanged = $derived(project.trim() !== savedProject);
+  // A sync made before projects may stay without one, but a project is never emptied.
+  const projectOk = $derived(!projectChanged || isValidProject(project));
 
   function settings(): Settings {
     const changes: Settings = {};
+    if (projectChanged) changes.project = project.trim();
     if (kb !== pair.kb) changes.kb = kb;
     if (repo !== pair.repo) changes.repo = repo;
     if (kbType !== pair.kb_type) changes.kb_type = kbType;
@@ -35,7 +62,8 @@
   }
 
   const dirty = $derived(
-    kb !== pair.kb ||
+    projectChanged ||
+      kb !== pair.kb ||
       repo !== pair.repo ||
       kbType !== pair.kb_type ||
       direction !== pair.direction ||
@@ -43,6 +71,11 @@
   );
 
   async function showPreview() {
+    // Moving a sync to another project changes no file: nothing to preview.
+    if (Object.keys(settings()).every((key) => key === "project")) {
+      await confirm();
+      return;
+    }
     busy = true;
     saved = false;
     try {
@@ -84,6 +117,25 @@
   </div>
 {:else}
   <div class="field">
+    <label for="project">{t("Project")}</label>
+    <input
+      id="project"
+      type="text"
+      list="known-projects"
+      bind:value={project}
+      maxlength={MAX_PROJECT_LEN}
+      spellcheck="false"
+    />
+    <datalist id="known-projects">
+      {#each projects as existing}
+        <option value={existing}></option>
+      {/each}
+    </datalist>
+    {#if !projectOk}
+      <div class="hint error">{t("Name the project of this sync.")}</div>
+    {/if}
+  </div>
+  <div class="field">
     <label for="kb-type">{t("KB type")}</label>
     <select id="kb-type" bind:value={kbType}>
       <option value="obsidian">Obsidian</option>
@@ -109,7 +161,7 @@
     <p class="ok" role="status">{t("Saved.")}</p>
   {/if}
   <div class="row end">
-    <button class="primary" type="button" disabled={!dirty || busy} onclick={showPreview}>{t("Save and preview")}</button>
+    <button class="primary" type="button" disabled={!dirty || !projectOk || busy} onclick={showPreview}>{t("Save and preview")}</button>
   </div>
 {/if}
 

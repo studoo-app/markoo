@@ -13,8 +13,9 @@ Markoo keeps two things **outside the knowledge base (KB) and outside the repo**
 flowchart TD
     G["&lt;config&gt;/markoo.toml<br/><i>global configuration</i>"]
     S["&lt;data&gt;/<br/><i>state, backups</i>"]
-    G --> P1["[[pair]] clara"]
-    G --> P2["[[pair]] markoo"]
+    G --> P1["[[pair]] clara<br/><i>project Clara</i>"]
+    G --> P2["[[pair]] documentation<br/><i>project Markoo</i>"]
+    G --> P3["[[pair]] skill<br/><i>project Markoo</i>"]
     S --> DB["state.db"]
     S --> B["backups/"]
     S --> T["trash/"]
@@ -82,6 +83,7 @@ allow_config_write = false # may an agent change the configuration?
 # ---------------------------------------------------------------
 [[pair]]
 name    = "clara"
+project = "Clara"          # pairs sharing a project are shown together
 kb      = "~/Obsidian/Knowledge/Projets/Clara"
 kb_type = "obsidian"       # markdown | obsidian; logseq | foam | dendron after v1. Detected if omitted
 repo    = "~/Projets/lerebours/clara/docs"
@@ -112,18 +114,26 @@ branches = ["main"]
 
 # ---------------------------------------------------------------
 [[pair]]
-name  = "markoo"
-kb    = "~/Obsidian/Knowledge/Projets/Markoo"   # kb_type omitted: detected (.obsidian/ present)
-repo  = "~/Projets/opensource/markoo/documentation"
+name    = "documentation"
+project = "Markoo"
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Documentation"   # kb_type omitted: detected (.obsidian/ present)
+repo    = "~/Projets/opensource/markoo/documentation"
 direction = "repo-to-kb"        # the repo is the reference, the KB only reads
 target_changes = "protect"      # an edit in the KB is reported, never overwritten
+
+[[pair]]
+name    = "skill"
+project = "Markoo"              # second pair of the same project
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Skill"
+repo    = "~/Projets/opensource/markoo/skill"
 ```
 
 ## Pair option reference
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `name` | text | **required** | Unique identifier (CLI, API, MCP) |
+| `name` | text | **required** | Unique identifier (CLI, API, MCP), across all projects |
+| `project` | text | none | Project the pair belongs to; pairs sharing a project are grouped. Required when a pair is added by Markoo, see [Projects](#projects) |
 | `kb` | path | **required** | Folder on the knowledge base (KB) side |
 | `kb_type` | enum | detected | KB type: `markdown`, `obsidian` in v1 (see [Supported knowledge base types](09-knowledge-bases.md#supported-knowledge-base-types)); detected by the adapters if omitted |
 | `repo` | path | **required** | Folder on the Git repository side |
@@ -138,6 +148,30 @@ target_changes = "protect"      # an edit in the KB is reported, never overwritt
 | `hooks.install` | list | `["post-merge"]` | Hooks set up by `markoo hook install`: `post-merge`, `post-checkout`, `post-commit`, `pre-commit`. Nothing is installed until that command runs, see [Triggers](05-triggers.md#2-git-hooks) |
 | `hooks.branches` | list | `[]` | Branches the hooks act on; empty means all of them |
 
+### Projects
+
+A **project** groups the pairs that belong together, for example the documentation and the skill of the same software. It is the `project` key of each of its pairs:
+
+```toml
+[[pair]]
+name    = "documentation"
+project = "Markoo"
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Documentation"
+repo    = "~/Projets/opensource/markoo/documentation"
+
+[[pair]]
+name    = "skill"
+project = "Markoo"
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Skill"
+repo    = "~/Projets/opensource/markoo/skill"
+```
+
+- The name is free text, from 1 to 64 characters, on one line and without spaces at either end: `"Markoo"`, `"Web site"`.
+- The project is named when its first pair is created; the next pairs pick it or name a new one. `markoo pair add`, the app and the API refuse a new pair without a project.
+- The spelling already in use wins, regardless of case: a pair added to `markoo` joins the existing `Markoo` project instead of starting a second one.
+- In a file written by hand, the key is optional, so files from before projects keep loading. Pairs without a project are listed apart, after the projects. Give them one with `markoo pair set <pair> project <name>`, which also moves a pair to another project.
+- A project has no settings of its own: it exists as long as one of its pairs names it. Pair names stay unique across all projects, because the CLI, the API and the history refer to a pair by its name alone.
+
 ### Conflict strategies
 
 | Value | Behavior when changes overlap |
@@ -151,6 +185,7 @@ target_changes = "protect"      # an edit in the KB is reported, never overwritt
 
 - `kb` and `repo` exist and are folders.
 - Two pairs must not overlap (same file tracked by two pairs): explicit error. The `kb` and `repo` folders of a pair must not overlap either.
+- `project`, when present, has 1 to 64 characters on one line, without spaces at either end: explicit error otherwise.
 - Unknown keys in a `[[pair]]` table are refused, so that a typo such as `directon` cannot silently change the direction.
 - `target_changes = "overwrite"` with `direction = "both"`: warning, the option has no effect.
 - `repo` is inside a Git repository: only a warning if it is not, which remains allowed.

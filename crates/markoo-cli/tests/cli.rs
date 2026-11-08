@@ -31,6 +31,8 @@ impl Env {
             "pair",
             "add",
             "clara",
+            "--project",
+            "Markoo",
             "--kb",
             env.kb().to_str().unwrap(),
             "--repo",
@@ -179,6 +181,8 @@ fn pair_add_refuses_a_missing_folder() {
         "pair",
         "add",
         "x",
+        "--project",
+        "Markoo",
         "--kb",
         "/does/not/exist",
         "--repo",
@@ -195,6 +199,8 @@ fn refused_pair_is_not_saved() {
         "pair",
         "add",
         "x",
+        "--project",
+        "Markoo",
         "--kb",
         "/does/not/exist",
         "--repo",
@@ -213,6 +219,8 @@ fn pair_add_refuses_a_repo_inside_the_kb() {
         "pair",
         "add",
         "x",
+        "--project",
+        "Markoo",
         "--kb",
         kb.to_str().unwrap(),
         "--repo",
@@ -230,6 +238,8 @@ fn pair_add_detects_an_obsidian_vault() {
         "pair",
         "add",
         "x",
+        "--project",
+        "Markoo",
         "--kb",
         kb.to_str().unwrap(),
         "--repo",
@@ -247,6 +257,8 @@ fn detected_type_is_written_to_the_file() {
         "pair",
         "add",
         "x",
+        "--project",
+        "Markoo",
         "--kb",
         kb.to_str().unwrap(),
         "--repo",
@@ -268,6 +280,8 @@ fn pair_add_accepts_an_obsidian_vault_as_explicit_markdown() {
         "pair",
         "add",
         "x",
+        "--project",
+        "Markoo",
         "--kb",
         kb.to_str().unwrap(),
         "--kb-type",
@@ -289,7 +303,7 @@ fn pair_add_wizard_reads_the_answers() {
         .spawn()
         .unwrap();
     let answers = format!(
-        "notes\n{}\n{}\nkb-to-repo\n\n",
+        "Markoo\nnotes\n{}\n{}\nkb-to-repo\n\n",
         env.kb().display(),
         env.repo().display()
     );
@@ -300,10 +314,145 @@ fn pair_add_wizard_reads_the_answers() {
         .write_all(answers.as_bytes())
         .unwrap();
     assert!(child.wait().unwrap().success());
+    let shown = env.json(&["pair", "show", "notes"]);
     assert_eq!(
-        env.json(&["pair", "show", "notes"])["direction"],
-        "kb-to-repo"
+        (&shown["direction"], &shown["project"]),
+        (&"kb-to-repo".into(), &"Markoo".into())
     );
+}
+
+// --- projects -------------------------------------------------------------------
+
+impl Env {
+    /// Adds a pair between two new folders named after it.
+    fn add_pair(&self, name: &str, project: &str) -> (PathBuf, PathBuf) {
+        let kb = self.path(&format!("{name}-kb"));
+        let repo = self.path(&format!("{name}-repo"));
+        std::fs::create_dir_all(&kb).unwrap();
+        std::fs::create_dir_all(&repo).unwrap();
+        self.ok(&[
+            "pair",
+            "add",
+            name,
+            "--project",
+            project,
+            "--kb",
+            kb.to_str().unwrap(),
+            "--repo",
+            repo.to_str().unwrap(),
+        ]);
+        (kb, repo)
+    }
+}
+
+#[test]
+fn pair_add_without_a_project_fails() {
+    let env = Env::new();
+    env.ok(&["init"]);
+    let (kb, repo) = (env.kb(), env.repo());
+    let error = env.fails(&[
+        "pair",
+        "add",
+        "x",
+        "--kb",
+        kb.to_str().unwrap(),
+        "--repo",
+        repo.to_str().unwrap(),
+    ]);
+    assert!(error.contains("name its project"), "{error}");
+    assert_eq!(env.json(&["pair", "list"]), Value::Array(vec![]));
+}
+
+#[test]
+fn a_new_pair_joins_a_project_spelled_differently() {
+    let env = Env::with_pair();
+    env.add_pair("skill", "markoo");
+    assert_eq!(env.json(&["pair", "show", "skill"])["project"], "Markoo");
+}
+
+#[test]
+fn pair_list_groups_the_pairs_by_project() {
+    let env = Env::with_pair();
+    env.add_pair("site", "Site web");
+    env.add_pair("skill", "Markoo");
+    let listed = env.ok(&["pair", "list"]);
+    let lines: Vec<&str> = listed
+        .lines()
+        .map(|line| line.split_whitespace().next().unwrap_or_default())
+        .collect();
+    assert_eq!(lines, ["Markoo", "clara", "skill", "Site", "site"]);
+}
+
+#[test]
+fn pairs_without_a_project_are_listed_last() {
+    let env = Env::with_pair();
+    let text = std::fs::read_to_string(env.config()).unwrap();
+    std::fs::write(env.config(), text.replace("project = \"Markoo\"\n", "")).unwrap();
+    env.add_pair("skill", "Markoo");
+    let listed = env.ok(&["pair", "list"]);
+    assert!(
+        listed.find("Markoo").unwrap() < listed.find("(no project)").unwrap(),
+        "{listed}"
+    );
+    assert_eq!(env.json(&["pair", "list"])[0]["project"], Value::Null);
+}
+
+#[test]
+fn pair_show_displays_the_project() {
+    assert!(
+        Env::with_pair()
+            .ok(&["pair", "show", "clara"])
+            .contains("project         Markoo")
+    );
+}
+
+#[test]
+fn pair_set_moves_a_pair_to_another_project() {
+    let env = Env::with_pair();
+    env.ok(&["pair", "set", "clara", "project", "Clara"]);
+    assert_eq!(env.json(&["pair", "show", "clara"])["project"], "Clara");
+}
+
+#[test]
+fn sync_can_target_one_project() {
+    let env = Env::with_pair();
+    let (skill_kb, skill_repo) = env.add_pair("skill", "markoo");
+    let (site_kb, site_repo) = env.add_pair("site", "Site web");
+    env.write(&env.kb(), "a.md", "a\n");
+    env.write(&skill_kb, "b.md", "b\n");
+    env.write(&site_kb, "c.md", "c\n");
+    env.ok(&["sync", "--project", "Markoo"]);
+    assert_eq!(
+        (
+            env.read(&env.repo(), "a.md").is_some(),
+            env.read(&skill_repo, "b.md").is_some(),
+            env.read(&site_repo, "c.md").is_some()
+        ),
+        (true, true, false)
+    );
+}
+
+#[test]
+fn status_can_target_one_project() {
+    let env = Env::with_pair();
+    env.add_pair("site", "Site web");
+    let views = env.json(&["status", "--project", "site web"]);
+    assert_eq!(views.as_array().unwrap().len(), 1);
+    assert_eq!(views[0]["pair"], "site");
+}
+
+#[test]
+fn sync_of_an_unknown_project_fails() {
+    assert!(
+        Env::with_pair()
+            .fails(&["sync", "--project", "Nope"])
+            .contains("no project named")
+    );
+}
+
+#[test]
+fn project_and_pair_cannot_be_combined() {
+    Env::with_pair().fails(&["status", "--project", "Markoo", "--pair", "clara"]);
 }
 
 #[test]
@@ -373,6 +522,8 @@ fn readding_a_removed_pair_starts_from_a_clean_state() {
         "pair",
         "add",
         "clara",
+        "--project",
+        "Markoo",
         "--kb",
         kb.to_str().unwrap(),
         "--repo",
@@ -452,6 +603,8 @@ fn sync_can_target_one_pair() {
         "pair",
         "add",
         "other",
+        "--project",
+        "Markoo",
         "--kb",
         other.to_str().unwrap(),
         "--repo",
@@ -509,6 +662,8 @@ fn a_broken_pair_does_not_stop_the_others() {
         "pair",
         "add",
         "other",
+        "--project",
+        "Markoo",
         "--kb",
         other.to_str().unwrap(),
         "--repo",
@@ -726,6 +881,8 @@ fn vault() -> Env {
         "pair",
         "add",
         "clara",
+        "--project",
+        "Markoo",
         "--kb",
         kb.to_str().unwrap(),
         "--repo",

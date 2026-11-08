@@ -84,8 +84,10 @@ Served by `axum`, on `127.0.0.1` only (default port `4848`). Authentication uses
 | `GET` | `/pairs/{pair}/status` | current plan (nothing applied) |
 | `GET` | `/pairs/{pair}/diff?path=…` | diff of one file, or of every file without `path` |
 | `POST` | `/pairs/{pair}/sync` | start a sync (`{"dry_run": false}`) → `202` + job id |
+| `GET` | `/projects` | list of projects, each with its pairs: `[{"project": "Markoo", "pairs": ["documentation", "skill"]}]`; pairs created before projects come last, under `"project": null` |
+| `POST` | `/projects/{project}/sync` | sync every pair of the project that can sync (same body as `/pairs/{pair}/sync`) → `202` + `{"project", "jobs": [{"pair", "job"}], "skipped": […]}` |
 | `GET` | `/jobs/{id}` | status and report of a job |
-| `POST` | `/pairs` | create a pair |
+| `POST` | `/pairs` | create a pair; `project` is required (`400` without it) |
 | `GET` | `/pairs/{pair}/config` | pair configuration |
 | `PATCH` | `/pairs/{pair}/config` | update the pair (direction, filters…); returns the plan preview |
 | `DELETE` | `/pairs/{pair}` | delete the pair (files are left untouched) |
@@ -93,7 +95,9 @@ Served by `axum`, on `127.0.0.1` only (default port `4848`). Authentication uses
 | `POST` | `/conflicts/{id}/resolve` | `{"keep": "kb" \| "repo" \| "both"}`, `{"content": "…"}` or `{"push_to_source": true}` |
 | `GET` | `/events` | SSE stream: `job-started`, `job-finished`, `new-conflicts`, `config-reloaded`, `shutdown` |
 
-Every route needs the token. Errors are `{"error": "…"}`, with `400` for an invalid request, `401` without a valid token, `404` for an unknown pair, job or conflict, and `409` when the state forbids it (pair busy or paused, conflicts pending, folder unavailable). Plans and job reports never contain file contents; only `/conflicts` does.
+Every route needs the token. Errors are `{"error": "…"}`, with `400` for an invalid request, `401` without a valid token, `404` for an unknown pair, project, job or conflict, and `409` when the state forbids it (pair busy or paused, conflicts pending, folder unavailable). Plans and job reports never contain file contents; only `/conflicts` does.
+
+The project name in `/projects/{project}/sync` ignores case: `markoo` reaches the project `Markoo`. Paused pairs and pairs failing validation are not queued; they are listed in `skipped`. `POST /pairs` joins an existing project when the name differs only by case, and keeps the spelling already in use.
 
 Sample job (`GET /jobs/{id}`):
 
@@ -135,14 +139,14 @@ Markoo exposes a **Model Context Protocol** server (`rmcp` crate), usable from C
 
 | Tool | Parameters | Effect |
 |------|-----------|--------|
-| `list_pairs` | — | Configured pairs, KB type (e.g. `obsidian`) and status |
-| `sync_status` | `pair?` | Current plan: what would be synced |
+| `list_pairs` | — | Configured pairs, their project (`null` for a pair created before projects), KB type (e.g. `obsidian`) and status |
+| `sync_status` | `pair?` \| `project?` | Current plan: what would be synced, for one pair, the pairs of a project, or every pair |
 | `sync_diff` | `pair`, `path` | Unified diff of one file (KB ↔ repo, in canonical form) |
-| `sync_run` | `pair?`, `dry_run?` | Starts a sync, returns the report |
+| `sync_run` | `pair?` \| `project?`, `dry_run?` | Starts a sync of one pair, of the pairs of a project that can sync, or of every pair that can sync; returns the report |
 | `list_conflicts` | `pair?` | Pending conflicts, with all three versions |
 | `resolve_conflict` | `id`, `keep?` \| `content?` \| `push_to_source?` | Resolves a conflict or a divergence |
 | `get_pair_config` | `pair` | Pair configuration (KB type, direction, filters…) |
-| `update_pair_config` | `pair`, `changes` | Updates the pair; **disabled** unless `mcp.allow_config_write = true` |
+| `update_pair_config` | `pair`, `changes` | Updates the pair (`project`, `direction`, `target_changes`, folders…; `project` moves it to another project); **disabled** unless `mcp.allow_config_write = true` |
 
 ### Resources
 

@@ -67,6 +67,8 @@ impl From<ConfigError> for ApiError {
             ConfigError::UnknownPair(_) => StatusCode::NOT_FOUND,
             ConfigError::DuplicatePair(_) => StatusCode::CONFLICT,
             ConfigError::InvalidName(_)
+            | ConfigError::InvalidProject(_)
+            | ConfigError::MissingProject(_)
             | ConfigError::UnknownKey(_)
             | ConfigError::InvalidPair { .. }
             | ConfigError::UnsupportedKbType { .. }
@@ -145,6 +147,8 @@ pub(crate) fn router(paths: Paths, queue: Queue, mcp: bool) -> (Router, Option<M
         .route("/pairs/{pair}/sync", post(sync))
         .route("/pairs/{pair}/config", get(get_config).patch(patch_config))
         .route("/jobs/{id}", get(job))
+        .route("/projects", get(projects))
+        .route("/projects/{project}/sync", post(sync_project))
         .route("/conflicts", get(conflicts))
         .route("/conflicts/{id}/resolve", post(resolve))
         .route("/events", get(events));
@@ -205,6 +209,8 @@ async fn list_pairs(State(app): State<App>) -> ApiResult {
 #[serde(deny_unknown_fields)]
 struct CreatePair {
     name: String,
+    /// An existing project, or a new one named by this pair.
+    project: Option<String>,
     kb: String,
     repo: String,
     kb_type: Option<String>,
@@ -221,6 +227,7 @@ async fn create_pair(
     blocking(move || {
         let new = NewPair {
             name: body.name,
+            project: body.project,
             kb: body.kb,
             kb_type: body.kb_type,
             repo: body.repo,
@@ -282,26 +289,30 @@ struct SyncBody {
     trigger: Option<String>,
 }
 
+/// Reads the optional body of a sync request.
+fn sync_options(body: &Bytes) -> ApiResult<(bool, Trigger)> {
+    // The body is optional, whatever the Content-Type says.
+    if body.is_empty() {
+        return Ok((false, Trigger::Api));
+    }
+    let body = serde_json::from_slice::<SyncBody>(body)
+        .map_err(|error| ApiError::bad_request(error.to_string()))?;
+    let trigger = match body.trigger.as_deref() {
+        None => Trigger::Api,
+        Some("hook") => Trigger::Hook,
+        Some(other) => {
+            return Err(ApiError::bad_request(format!("unknown trigger {other}")));
+        }
+    };
+    Ok((body.dry_run, trigger))
+}
+
 async fn sync(
     State(app): State<App>,
     Path(name): Path<String>,
     body: Bytes,
 ) -> ApiResult<(StatusCode, Json<Value>)> {
-    // The body is optional, whatever the Content-Type says.
-    let (dry_run, trigger) = if body.is_empty() {
-        (false, Trigger::Api)
-    } else {
-        let body = serde_json::from_slice::<SyncBody>(&body)
-            .map_err(|error| ApiError::bad_request(error.to_string()))?;
-        let trigger = match body.trigger.as_deref() {
-            None => Trigger::Api,
-            Some("hook") => Trigger::Hook,
-            Some(other) => {
-                return Err(ApiError::bad_request(format!("unknown trigger {other}")));
-            }
-        };
-        (body.dry_run, trigger)
-    };
+    let (dry_run, trigger) = sync_options(&body)?;
     let paths = app.paths.clone();
     let lookup = name.clone();
     let pair = blocking(move || Ok(service::usable_pair(&paths, &lookup)?)).await?;
@@ -312,6 +323,43 @@ async fn sync(
     Ok((
         StatusCode::ACCEPTED,
         Json(json!({"job": job, "pair": name})),
+    ))
+}
+
+async fn projects(State(app): State<App>) -> ApiResult {
+    blocking(move || Ok(Json(Value::Array(service::projects(&app.paths)?)))).await
+}
+
+/// Queues a sync of every pair of a project that can sync; the paused or
+/// invalid ones are reported as skipped.
+async fn sync_project(
+    State(app): State<App>,
+    Path(project): Path<String>,
+    body: Bytes,
+) -> ApiResult<(StatusCode, Json<Value>)> {
+    let (dry_run, trigger) = sync_options(&body)?;
+    let paths = app.paths.clone();
+    let lookup = project.clone();
+    let (members, runnable) = blocking(move || {
+        let members = service::project_pairs(&paths, &lookup).map_err(|error| match error {
+            markoo_core::Error::InvalidRequest(message) => {
+                ApiError::new(StatusCode::NOT_FOUND, message)
+            }
+            other => other.into(),
+        })?;
+        Ok((members, service::runnable_pairs(&paths)?))
+    })
+    .await?;
+    let (ready, skipped): (Vec<String>, Vec<String>) = members
+        .into_iter()
+        .partition(|pair| runnable.contains(pair));
+    let jobs: Vec<Value> = ready
+        .iter()
+        .map(|pair| json!({"pair": pair, "job": app.queue.submit(pair, dry_run, trigger)}))
+        .collect();
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(json!({"project": project, "jobs": jobs, "skipped": skipped})),
     ))
 }
 

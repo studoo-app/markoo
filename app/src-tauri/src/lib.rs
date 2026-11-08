@@ -88,9 +88,17 @@ async fn pair_diff(backend: State<'_, Backend>, pair: String, path: String) -> C
     blocking(move || service::diff(&paths, &pair, Some(&path))).await
 }
 
+#[tauri::command]
+async fn list_projects(backend: State<'_, Backend>) -> CommandResult {
+    let paths = backend.paths.clone();
+    blocking(move || Ok(Value::Array(service::projects(&paths)?))).await
+}
+
 #[derive(Debug, Deserialize)]
 struct NewPairArgs {
     name: String,
+    /// An existing project, or a new one named by this pair.
+    project: Option<String>,
     kb: String,
     kb_type: Option<String>,
     repo: String,
@@ -104,6 +112,7 @@ impl From<NewPairArgs> for NewPair {
     fn from(args: NewPairArgs) -> Self {
         Self {
             name: args.name,
+            project: args.project,
             kb: args.kb,
             kb_type: args.kb_type,
             repo: args.repo,
@@ -575,6 +584,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_info,
             list_pairs,
+            list_projects,
             pair_status,
             pair_diff,
             preview_new_pair,

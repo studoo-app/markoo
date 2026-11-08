@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Projects: syncs are grouped by project, for example the project "Markoo" holds the syncs "documentation" and "skill". A project is named when its first sync is created; the next syncs pick it or name a new one. It is stored as `project` in each `[[pair]]` of `markoo.toml`, and the spelling already in use is kept regardless of case.
+- The home screen shows the syncs project by project, each with **Sync project** and **Add a sync**. The creation wizard asks the project first.
+- `markoo pair add --project <name>`, a project question in the interactive wizard, `markoo pair list` grouped by project, and `--project <name>` on `markoo sync` and `markoo status` to act on every sync of a project. `markoo pair set <pair> project <name>` moves a sync to another project.
+- Pair listings of the API and MCP include each pair's project, and a whole project can be synced.
+
+### Changed
+
+- Creating a pair now requires a project: `markoo pair add` needs `--project`, the app asks for one, and `POST /pairs` answers `400` without `project`. Syncs created before projects keep working without one and are listed after the projects.
+
 ## [1.0.0-rc.5] - 2026-11-08
 
 ### Added

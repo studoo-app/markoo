@@ -32,13 +32,17 @@ cargo install --path crates/markoo-cli --locked
 
 A **pair** links one KB folder to one repository folder. Pick narrow folders: a pair tracks everything under them.
 
-**In the app**, click **New pair** and follow the steps. **Read the last one before creating the pair**: it lists what will be copied and in which direction. It warns about files going to the KB that Git does not track in the repository: they may have nothing to do with the project, for example if an earlier pair left them there.
+Pairs are grouped by **project**: the project `Markoo`, for example, can hold a `documentation` pair and a `skill` pair. You name the project when you create its first pair; the next pairs pick it, or name a new one.
+
+**In the app**, click **Add a sync** and follow the steps. The first one asks the project: name it for your first pair, then pick it from the list. **Read the last one before creating the pair**: it lists what will be copied and in which direction. It warns about files going to the KB that Git does not track in the repository: they may have nothing to do with the project, for example if an earlier pair left them there.
 
 **From the command line**:
 
 ```bash
-markoo pair add clara --kb ~/Obsidian/Knowledge/Projects/Clara --repo ~/code/clara/docs
+markoo pair add clara --project Clara --kb ~/Obsidian/Knowledge/Projects/Clara --repo ~/code/clara/docs
 ```
+
+Without arguments, `markoo pair add` asks the same questions in the terminal, the project first.
 
 Then look at the plan, which writes nothing:
 
@@ -51,6 +55,26 @@ If it is what you expect, sync:
 ```bash
 markoo sync --pair clara
 ```
+
+## Group pairs by project
+
+Add the next pairs of a project with the same `--project`. The spelling already in use is kept, so `--project clara` joins `Clara`:
+
+```bash
+markoo pair add clara-skill --project Clara --kb ~/Obsidian/Knowledge/Skills/Clara --repo ~/code/clara/skill
+```
+
+`markoo pair list` shows the pairs project by project. To act on all of a project's pairs at once:
+
+```bash
+markoo status --project Clara
+```
+
+```bash
+markoo sync --project Clara
+```
+
+In the app, the home screen shows one block per project, with **Sync project** and **Add a sync**. Pairs created before projects existed have none and are listed last; `markoo pair set clara project Clara` gives one, or moves a pair to another project. Pair names stay unique across all projects.
 
 > Everything under the KB folder ends up in the repository, including attachments and private notes. Use `exclude` patterns, in the **Filters** tab or with `markoo pair set`, before syncing towards a shared repository.
 

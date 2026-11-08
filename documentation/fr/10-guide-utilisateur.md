@@ -32,13 +32,17 @@ cargo install --path crates/markoo-cli --locked
 
 Une **paire** relie un dossier de la KB à un dossier du dépôt. Choisissez des dossiers précis : une paire suit tout ce qu'ils contiennent.
 
-**Dans l'app**, cliquez sur **New pair** et suivez les étapes. **Lisez la dernière avant de créer la paire** : elle liste ce qui sera copié et dans quel sens. Elle signale les fichiers envoyés vers la KB que Git ne suit pas dans le dépôt : ils peuvent n'avoir aucun rapport avec le projet, par exemple si une paire précédente les y a laissés.
+Les paires sont regroupées par **projet** : le projet `Markoo`, par exemple, peut contenir une paire `documentation` et une paire `skill`. Vous nommez le projet à la création de sa première paire ; les suivantes le choisissent, ou en nomment un nouveau.
+
+**Dans l'app**, cliquez sur **Ajouter un sync** et suivez les étapes. La première demande le projet : nommez-le pour votre première paire, puis choisissez-le dans la liste. **Lisez la dernière avant de créer la paire** : elle liste ce qui sera copié et dans quel sens. Elle signale les fichiers envoyés vers la KB que Git ne suit pas dans le dépôt : ils peuvent n'avoir aucun rapport avec le projet, par exemple si une paire précédente les y a laissés.
 
 **En ligne de commande** :
 
 ```bash
-markoo pair add clara --kb ~/Obsidian/Knowledge/Projets/Clara --repo ~/code/clara/docs
+markoo pair add clara --project Clara --kb ~/Obsidian/Knowledge/Projets/Clara --repo ~/code/clara/docs
 ```
+
+Sans arguments, `markoo pair add` pose les mêmes questions dans le terminal, en commençant par le projet.
 
 Regardez ensuite le plan, qui n'écrit rien :
 
@@ -51,6 +55,26 @@ Si c'est ce que vous attendez, synchronisez :
 ```bash
 markoo sync --pair clara
 ```
+
+## Regrouper les paires par projet
+
+Ajoutez les paires suivantes d'un projet avec le même `--project`. L'orthographe déjà utilisée est conservée, donc `--project clara` rejoint `Clara` :
+
+```bash
+markoo pair add clara-skill --project Clara --kb ~/Obsidian/Knowledge/Skills/Clara --repo ~/code/clara/skill
+```
+
+`markoo pair list` affiche les paires projet par projet. Pour agir sur toutes les paires d'un projet d'un coup :
+
+```bash
+markoo status --project Clara
+```
+
+```bash
+markoo sync --project Clara
+```
+
+Dans l'app, l'accueil affiche un bloc par projet, avec **Synchroniser le projet** et **Ajouter un sync**. Les paires créées avant les projets n'en ont pas et sont listées en dernier ; `markoo pair set clara project Clara` leur en donne un, ou change une paire de projet. Les noms de paires restent uniques, tous projets confondus.
 
 > Tout ce que contient le dossier de la KB finit dans le dépôt, y compris les pièces jointes et les notes privées. Utilisez des motifs `exclude`, dans l'onglet **Filters** ou avec `markoo pair set`, avant de synchroniser vers un dépôt partagé.
 

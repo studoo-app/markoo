@@ -84,8 +84,10 @@ Servie par `axum`, uniquement sur `127.0.0.1` (port par défaut `4848`). L'authe
 | `GET` | `/pairs/{pair}/status` | plan courant (sans rien appliquer) |
 | `GET` | `/pairs/{pair}/diff?path=…` | diff d'un fichier, ou de tous les fichiers sans `path` |
 | `POST` | `/pairs/{pair}/sync` | lance une synchro (`{"dry_run": false}`) → `202` + id du job |
+| `GET` | `/projects` | liste des projets, chacun avec ses paires : `[{"project": "Markoo", "pairs": ["documentation", "skill"]}]` ; les paires créées avant les projets viennent en dernier, sous `"project": null` |
+| `POST` | `/projects/{project}/sync` | synchronise chaque paire du projet qui peut l'être (même corps que `/pairs/{pair}/sync`) → `202` + `{"project", "jobs": [{"pair", "job"}], "skipped": […]}` |
 | `GET` | `/jobs/{id}` | état et rapport d'un job |
-| `POST` | `/pairs` | crée une paire |
+| `POST` | `/pairs` | crée une paire ; `project` est requis (`400` sinon) |
 | `GET` | `/pairs/{pair}/config` | configuration de la paire |
 | `PATCH` | `/pairs/{pair}/config` | modifie la paire (sens, filtres…) ; renvoie l'aperçu du plan |
 | `DELETE` | `/pairs/{pair}` | supprime la paire (les fichiers ne sont pas touchés) |
@@ -93,7 +95,9 @@ Servie par `axum`, uniquement sur `127.0.0.1` (port par défaut `4848`). L'authe
 | `POST` | `/conflicts/{id}/resolve` | `{"keep": "kb" \| "repo" \| "both"}`, `{"content": "…"}` ou `{"push_to_source": true}` |
 | `GET` | `/events` | flux SSE : `job-started`, `job-finished`, `new-conflicts`, `config-reloaded`, `shutdown` |
 
-Toutes les routes exigent le jeton. Les erreurs ont la forme `{"error": "…"}`, avec `400` pour une requête invalide, `401` sans jeton valide, `404` pour une paire, un job ou un conflit inconnu, et `409` quand l'état l'interdit (paire occupée ou en pause, conflits en attente, dossier indisponible). Les plans et les rapports de job ne contiennent jamais le contenu des fichiers ; seul `/conflicts` le renvoie.
+Toutes les routes exigent le jeton. Les erreurs ont la forme `{"error": "…"}`, avec `400` pour une requête invalide, `401` sans jeton valide, `404` pour une paire, un projet, un job ou un conflit inconnu, et `409` quand l'état l'interdit (paire occupée ou en pause, conflits en attente, dossier indisponible). Les plans et les rapports de job ne contiennent jamais le contenu des fichiers ; seul `/conflicts` le renvoie.
+
+Le nom de projet dans `/projects/{project}/sync` ignore la casse : `markoo` désigne le projet `Markoo`. Les paires en pause et celles qui échouent à la validation ne sont pas mises en file ; elles sont listées dans `skipped`. `POST /pairs` rejoint un projet existant quand le nom n'en diffère que par la casse, et garde l'orthographe déjà utilisée.
 
 Exemple de job (`GET /jobs/{id}`) :
 
@@ -135,14 +139,14 @@ Markoo expose un serveur **Model Context Protocol** (crate `rmcp`), utilisable p
 
 | Outil | Paramètres | Effet |
 |-------|-----------|-------|
-| `list_pairs` | — | Paires configurées, type de KB (par ex. `obsidian`) et état |
-| `sync_status` | `pair?` | Plan courant : ce qui serait synchronisé |
+| `list_pairs` | — | Paires configurées, leur projet (`null` pour une paire créée avant les projets), type de KB (par ex. `obsidian`) et état |
+| `sync_status` | `pair?` \| `project?` | Plan courant : ce qui serait synchronisé, pour une paire, les paires d'un projet ou toutes les paires |
 | `sync_diff` | `pair`, `path` | Diff unifié d'un fichier (KB ↔ repo, en forme canonique) |
-| `sync_run` | `pair?`, `dry_run?` | Lance une synchro, renvoie le rapport |
+| `sync_run` | `pair?` \| `project?`, `dry_run?` | Lance une synchro d'une paire, des paires d'un projet qui peuvent l'être, ou de toutes celles qui peuvent l'être ; renvoie le rapport |
 | `list_conflicts` | `pair?` | Conflits en attente, avec les trois versions |
 | `resolve_conflict` | `id`, `keep?` \| `content?` \| `push_to_source?` | Résout un conflit ou une divergence |
 | `get_pair_config` | `pair` | Configuration de la paire (type de KB, sens, filtres…) |
-| `update_pair_config` | `pair`, `changes` | Modifie la paire ; **désactivé** sauf si `mcp.allow_config_write = true` |
+| `update_pair_config` | `pair`, `changes` | Modifie la paire (`project`, `direction`, `target_changes`, dossiers… ; `project` la déplace dans un autre projet) ; **désactivé** sauf si `mcp.allow_config_write = true` |
 
 ### Ressources
 

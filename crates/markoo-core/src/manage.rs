@@ -20,6 +20,14 @@ fn with_new_pair(paths: &Paths, new: &NewPair) -> Result<(ConfigFile, String), E
     if DiskFs.meta(config_file)?.is_none() {
         ConfigFile::create(config_file)?;
     }
+    let project = new
+        .project
+        .as_deref()
+        .map(str::trim)
+        .filter(|project| !project.is_empty())
+        .ok_or_else(|| ConfigError::MissingProject(new.name.clone()))?;
+    let config = Config::load(config_file)?;
+    new.project = Some(config.known_project(project).unwrap_or(project).to_owned());
     let mut file = ConfigFile::open(config_file)?;
     file.add_pair(&new)?;
     for (key, value) in &new.settings {
@@ -73,6 +81,19 @@ fn with_changes(
     let current = &config.pair(name)?.pair;
     let mut file = ConfigFile::open(paths.config_file())?;
     for (key, value) in changes {
+        let value = if key == "project" {
+            // Joins another pair's project spelled differently, if any; the
+            // pair's own project is left out so that it can be recased.
+            config
+                .pairs
+                .iter()
+                .filter(|entry| entry.pair.name != name)
+                .filter_map(|entry| entry.pair.project.as_deref())
+                .find(|project| project.to_lowercase() == value.trim().to_lowercase())
+                .unwrap_or(value)
+        } else {
+            value
+        };
         file.set(name, key, value)?;
     }
     let preview = file.preview()?;

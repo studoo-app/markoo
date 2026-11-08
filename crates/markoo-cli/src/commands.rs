@@ -12,11 +12,11 @@ use markoo_core::config::{
 };
 use markoo_core::fs::{DiskFs, Fs};
 use markoo_core::hooks::{self, GitRepo, HookChange, HookName, HookStatus, HookTarget};
-use markoo_core::manage;
 use markoo_core::paths::{Overrides, Paths};
 use markoo_core::plan::{Action, AttachmentAction, PlannedAttachment, PlannedEntry};
 use markoo_core::state::IssueKind;
 use markoo_core::{Direction, Engine, EntryPath, Pair, Report, Resolution, Side, TargetChanges};
+use markoo_core::{manage, service};
 use markoo_daemon::client::{self, SyncRequest};
 use serde_json::{Value, json};
 
@@ -108,11 +108,30 @@ impl Ctx {
         if let Some(only) = only {
             config.pair(only)?;
         }
+        Ok(self.valid_pairs(config, |name| only.is_none_or(|only| only == name)))
+    }
+
+    /// Like [`Ctx::selected`], or the pairs of `project` when it is given.
+    fn selected_in(
+        &self,
+        config: &Config,
+        only: Option<&str>,
+        project: Option<&str>,
+    ) -> Result<Vec<Pair>> {
+        let Some(project) = project else {
+            return self.selected(config, only);
+        };
+        let members = service::project_pairs(&self.paths, project)?;
+        Ok(self.valid_pairs(config, |name| members.iter().any(|member| member == name)))
+    }
+
+    /// The pairs kept by `keep` that can be used, reporting the others.
+    fn valid_pairs(&self, config: &Config, keep: impl Fn(&str) -> bool) -> Vec<Pair> {
         let validation = config.validate();
         let mut pairs = Vec::new();
         for entry in &config.pairs {
             let name = entry.pair.name.as_str();
-            if only.is_some_and(|only| only != name) {
+            if !keep(name) {
                 continue;
             }
             for problem in validation.warnings.iter().filter(|p| p.pair == name) {
@@ -126,7 +145,25 @@ impl Ctx {
                 }
             }
         }
-        Ok(pairs)
+        pairs
+    }
+
+    /// Names of the existing projects; none before the file exists.
+    fn known_projects(&self) -> Result<Vec<String>> {
+        if !self.paths.config_file().exists() {
+            return Ok(Vec::new());
+        }
+        let config = self.config()?;
+        Ok(config.projects().into_iter().map(str::to_owned).collect())
+    }
+
+    /// Asks the questions of a new pair on the terminal.
+    fn ask_new_pair(&self) -> Result<NewPair> {
+        let projects = self.known_projects()?;
+        let projects: Vec<&str> = projects.iter().map(String::as_str).collect();
+        let mut input = std::io::stdin().lock();
+        let mut output = std::io::stdout();
+        wizard::ask_new_pair(&mut input, &mut output, &projects)
     }
 
     pub fn init(&self) -> Result<()> {
@@ -142,22 +179,22 @@ impl Ctx {
         self.engine()?;
         println!("State folder: {}", self.paths.data_dir().display());
         if std::io::stdin().is_terminal() {
-            let mut input = std::io::stdin().lock();
-            let mut output = std::io::stdout();
             println!("\nLet's add your first pair.");
-            let new = wizard::ask_new_pair(&mut input, &mut output)?;
+            let new = self.ask_new_pair()?;
             self.add_pair(new)?;
         } else {
-            println!("Next: markoo pair add <name> --kb <folder> --repo <folder>");
+            println!(
+                "Next: markoo pair add <name> --project <project> --kb <folder> --repo <folder>"
+            );
         }
         Ok(())
     }
 
-    pub fn status(&self, only: Option<&str>) -> Result<()> {
+    pub fn status(&self, only: Option<&str>, project: Option<&str>) -> Result<()> {
         let config = self.config()?;
         let engine = self.engine()?;
         let mut views = Vec::new();
-        for pair in self.selected(&config, only)? {
+        for pair in self.selected_in(&config, only, project)? {
             match engine.plan(&pair) {
                 Ok(planned) => {
                     let visible: Vec<&PlannedEntry> = visible_entries(&planned.plan.entries);
@@ -215,11 +252,11 @@ impl Ctx {
         Ok(())
     }
 
-    pub fn sync(&self, dry_run: bool, only: Option<&str>) -> Result<()> {
+    pub fn sync(&self, dry_run: bool, only: Option<&str>, project: Option<&str>) -> Result<()> {
         let config = self.config()?;
         let engine = self.engine()?;
         let mut views = Vec::new();
-        for pair in self.selected(&config, only)? {
+        for pair in self.selected_in(&config, only, project)? {
             if pair.paused {
                 if self.json {
                     views.push(json!({"pair": pair.name, "paused": true}));
@@ -424,19 +461,19 @@ impl Ctx {
         match command {
             PairCommand::Add {
                 name: None,
+                project: None,
                 kb: None,
                 kb_type: None,
                 repo: None,
                 direction: None,
                 target_changes: None,
             } => {
-                let mut input = std::io::stdin().lock();
-                let mut output = std::io::stdout();
-                let new = wizard::ask_new_pair(&mut input, &mut output)?;
+                let new = self.ask_new_pair()?;
                 self.add_pair(new)
             }
             PairCommand::Add {
                 name,
+                project,
                 kb,
                 kb_type,
                 repo,
@@ -444,10 +481,13 @@ impl Ctx {
                 target_changes,
             } => {
                 let (Some(name), Some(kb), Some(repo)) = (name, kb, repo) else {
-                    bail!("usage: markoo pair add <name> --kb <folder> --repo <folder>");
+                    bail!(
+                        "usage: markoo pair add <name> --project <project> --kb <folder> --repo <folder>"
+                    );
                 };
                 self.add_pair(NewPair {
                     name,
+                    project,
                     kb,
                     kb_type,
                     repo,
@@ -471,7 +511,12 @@ impl Ctx {
     fn add_pair(&self, mut new: NewPair) -> Result<()> {
         new.kb = absolute(&new.kb)?;
         new.repo = absolute(&new.repo)?;
-        let warnings = manage::add_pair(&self.paths, &new)?;
+        let warnings = match manage::add_pair(&self.paths, &new) {
+            Err(error @ markoo_core::Error::Config(ConfigError::MissingProject(_))) => {
+                bail!("{error}: add --project <project>")
+            }
+            other => other?,
+        };
         self.warn_all(&new.name, &warnings);
         if self.json {
             return self.print_json(&json!({"added": new.name}));
@@ -499,8 +544,23 @@ impl Ctx {
         if config.pairs.is_empty() {
             println!("No pairs yet. Add one with: markoo pair add");
         }
-        for entry in &config.pairs {
-            self.pair_header(&entry.pair);
+        // Pairs created before projects existed come last.
+        let groups = config.projects().into_iter().map(Some).chain([None]);
+        for project in groups {
+            let members: Vec<&Pair> = config
+                .pairs
+                .iter()
+                .map(|entry| &entry.pair)
+                .filter(|pair| pair.project.as_deref() == project)
+                .collect();
+            if members.is_empty() {
+                continue;
+            }
+            println!("{}", self.style.bold(project.unwrap_or("(no project)")));
+            for pair in members {
+                print!("  ");
+                self.pair_header(pair);
+            }
         }
         Ok(())
     }
@@ -513,6 +573,10 @@ impl Ctx {
         }
         let pair = &entry.pair;
         println!("{}", self.style.bold(&pair.name));
+        println!(
+            "  project         {}",
+            pair.project.as_deref().unwrap_or("(none)")
+        );
         println!("  kb              {}", pair.kb.display());
         println!("  kb_type         {}", pair.kb_type.id());
         println!("  repo            {}", pair.repo.display());
@@ -938,6 +1002,7 @@ fn pair_json(entry: &PairEntry) -> Value {
     let pair = &entry.pair;
     json!({
         "name": pair.name,
+        "project": pair.project,
         "kb": pair.kb,
         "kb_type": pair.kb_type,
         "repo": pair.repo,

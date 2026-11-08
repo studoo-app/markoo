@@ -43,6 +43,9 @@ enum Command {
         /// Only this pair.
         #[arg(long)]
         pair: Option<String>,
+        /// Only the pairs of this project.
+        #[arg(long, conflicts_with = "pair")]
+        project: Option<String>,
     },
     /// Show the differences between the two sides.
     Diff {
@@ -60,6 +63,9 @@ enum Command {
         /// Only this pair.
         #[arg(long)]
         pair: Option<String>,
+        /// Only the pairs of this project.
+        #[arg(long, conflicts_with = "pair")]
+        project: Option<String>,
     },
     /// List conflicts and divergences.
     Conflicts {
@@ -163,6 +169,9 @@ enum PairCommand {
     Add {
         /// Name of the pair.
         name: Option<String>,
+        /// Project of the pair: an existing one, or a new one.
+        #[arg(long)]
+        project: Option<String>,
         /// Knowledge base folder.
         #[arg(long)]
         kb: Option<String>,
@@ -179,7 +188,7 @@ enum PairCommand {
         #[arg(long)]
         target_changes: Option<String>,
     },
-    /// List the pairs.
+    /// List the pairs, by project.
     List,
     /// Show a pair.
     Show {
@@ -190,7 +199,7 @@ enum PairCommand {
     Set {
         /// Name of the pair.
         name: String,
-        /// direction, target_changes, kb, repo, kb_type, include, exclude, paused, transform.{links,assets_dir,frontmatter}, kb_options.{callouts,frontmatter_drop}, hooks.{install,branches}.
+        /// project, direction, target_changes, kb, repo, kb_type, include, exclude, paused, transform.{links,assets_dir,frontmatter}, kb_options.{callouts,frontmatter_drop}, hooks.{install,branches}.
         key: String,
         /// New value; lists are comma-separated.
         value: String,
@@ -232,9 +241,13 @@ fn run(cli: Cli) -> Result<bool> {
     let ctx = commands::Ctx::new(cli.config, cli.data_dir, cli.json, style)?;
     match command {
         Command::Init => ctx.init()?,
-        Command::Status { pair } => ctx.status(pair.as_deref())?,
+        Command::Status { pair, project } => ctx.status(pair.as_deref(), project.as_deref())?,
         Command::Diff { file, pair } => ctx.diff(file.as_deref(), pair.as_deref())?,
-        Command::Sync { dry_run, pair } => ctx.sync(dry_run, pair.as_deref())?,
+        Command::Sync {
+            dry_run,
+            pair,
+            project,
+        } => ctx.sync(dry_run, pair.as_deref(), project.as_deref())?,
         Command::Conflicts { pair } => ctx.conflicts(pair.as_deref())?,
         Command::Resolve {
             file,

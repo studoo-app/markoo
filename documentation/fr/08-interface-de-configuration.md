@@ -36,6 +36,8 @@ flowchart LR
 | API HTTP | ✅ `GET /pairs/{pair}/config` | ✅ `POST /pairs`, `PATCH /pairs/{pair}/config`, `DELETE /pairs/{pair}` |
 | MCP | ✅ `get_pair_config` | ❌ par défaut ; activable avec `mcp.allow_config_write = true` (outil `update_pair_config`) |
 
+Les listes de paires de l'API et du MCP indiquent le projet de chaque paire, et un projet entier peut être synchronisé.
+
 L'écriture de configuration par un agent IA est désactivée par défaut : changer un sens ou un dossier peut provoquer des écritures massives à la synchro suivante.
 
 ## Navigation dans l'app
@@ -44,7 +46,7 @@ L'écriture de configuration par un agent IA est désactivée par défaut : chan
 flowchart TD
     MB["Barre de menus<br/>🟢 / 🔵 / 🟠"] -->|Ouvrir Markoo| HOME
     MB -->|Synchroniser maintenant| SYNC((sync))
-    HOME["Accueil<br/>liste des paires"] -->|+ Nouvelle paire| WIZ["Assistant de création<br/>(6 étapes)"]
+    HOME["Accueil<br/>paires par projet"] -->|+ ajouter un sync / projet : Ajouter un sync| WIZ["Assistant de création<br/>(6 étapes)"]
     HOME -->|clic sur une paire| PAIR["Détail de la paire"]
     PAIR --> T1["Onglet Général<br/>KB, repo + sens"]
     PAIR --> T2["Onglet Filtres"]
@@ -58,6 +60,7 @@ flowchart TD
     SIDE -->|Réglages| GLOB["Réglages globaux<br/>intervalle, API, MCP, sauvegardes"]
     HOME -->|carte : réglages| T1
     HOME -->|carte : synchroniser| SYNC
+    HOME -->|projet : Synchroniser le projet| SYNC
     WIZ -->|Créer| PREV["Aperçu (dry-run)"]
     T1 & T2 & T3 -->|Enregistrer| PREV
     PREV -->|Confirmer| SYNC
@@ -65,7 +68,7 @@ flowchart TD
 
 ## Écrans
 
-### Accueil : liste des paires
+### Accueil : paires par projet
 
 ```text
 ┌─ Markoo — v1.0.0 ────────────────────────────────────────────────────────┐
@@ -73,22 +76,28 @@ flowchart TD
 │ ─────────── │  ───────────────────────────────────────────────────────── │
 │ ▣ Sync      │  [ 🔍 Rechercher dans vos sync…                        ]   │
 │             │                                                            │
-│             │  Coffres Obsidian  wikilinks, intégrations et callouts…    │
+│             │  Clara  1 sync    [⟳ Synchroniser le projet] [+ Ajouter]   │
 │             │  ┌──────────────────────────────────────────────────────┐  │
 │             │  │ 📁 clara             il y a 2 min  [À RÉGLER] ⟳ ⚙ 🗑  │  │
 │             │  │    Clara ⇄ docs – 1 à régler   dernière synchro      │  │
 │             │  └──────────────────────────────────────────────────────┘  │
+│             │                                                            │
+│             │  Markoo  2 sync   [⟳ Synchroniser le projet] [+ Ajouter]   │
 │             │  ┌──────────────────────────────────────────────────────┐  │
-│             │  │ 📁 markoo            il y a 1 h      [À JOUR] ⟳ ⚙ 🗑  │  │
+│             │  │ 📁 documentation     il y a 1 h      [À JOUR] ⟳ ⚙ 🗑  │  │
 │             │  │    Markoo ← documentation – à jour                    │  │
+│             │  └──────────────────────────────────────────────────────┘  │
+│             │  ┌──────────────────────────────────────────────────────┐  │
+│             │  │ 📁 skill             il y a 1 h      [À JOUR] ⟳ ⚙ 🗑  │  │
+│             │  │    Skill ⇄ skill – à jour                             │  │
 │             │  └──────────────────────────────────────────────────────┘  │
 │             │  [ + ajouter un sync ]                                     │
 │ ∿ Activité  │                                                            │
-│ ⚙ Réglages  │  Dossiers Markdown  Markdown simple, copié tel quel        │
+│ ⚙ Réglages  │                                                            │
 └─────────────┴────────────────────────────────────────────────────────────┘
 ```
 
-Les paires sont regroupées par **type de KB** (coffres Obsidian, dossiers Markdown…). Chaque carte montre le dossier de la KB et celui du repo, l'heure de la dernière synchro enregistrée, un état (À jour, Synchronisation, À régler, En pause, Erreur) et trois actions : synchroniser maintenant, ouvrir les réglages de la paire (onglet Général) et supprimer la synchro après confirmation (les fichiers restent en place). La flèche entre les deux dossiers indique toujours le sens : `⇄` bidirectionnel, `→` KB vers repo, `←` repo vers KB. Le titre de la fenêtre affiche la version.
+Les paires sont regroupées par **projet**, dans l'ordre de `markoo.toml` ; les paires créées avant les projets n'en ont pas et sont listées en dernier. Chaque projet indique combien de sync il contient et propose deux actions : **Synchroniser le projet** synchronise celles de ses paires qui peuvent l'être (les paires en pause, déjà en cours de synchro ou en erreur sont laissées de côté), et **Ajouter un sync** ouvre l'assistant de création avec le projet déjà choisi. Le bouton **+ ajouter un sync**, sous l'ensemble des projets, ouvre l'assistant sans projet choisi : le nouveau sync peut rejoindre n'importe quel projet ou en créer un nouveau. Chaque carte montre le dossier de la KB et celui du repo, l'heure de la dernière synchro enregistrée, un état (À jour, Synchronisation, À régler, En pause, Erreur) et trois actions : synchroniser maintenant, ouvrir les réglages de la paire (onglet Général) et supprimer la synchro après confirmation (les fichiers restent en place). La flèche entre les deux dossiers indique toujours le sens : `⇄` bidirectionnel, `→` KB vers repo, `←` repo vers KB. Le titre de la fenêtre affiche la version.
 
 ### Activité
 
@@ -169,7 +178,7 @@ Un panneau **avant / après** montre l'effet sur une note réelle de la paire.
 
 ```mermaid
 flowchart LR
-    S1["1. Base de connaissance<br/>type de KB + dossier"] --> S2["2. Repo<br/>choisir dépôt + dossier"]
+    S1["1. Base de connaissance<br/>projet + type de KB + dossier"] --> S2["2. Repo<br/>choisir dépôt + dossier"]
     S2 --> S3["3. Sens<br/>→ · ⇄ · ←"]
     S3 --> S4["4. Filtres<br/>aperçu en direct"]
     S4 --> S5["5. Déclencheurs<br/>intervalle, hooks"]
@@ -177,7 +186,7 @@ flowchart LR
     S6 -->|Créer| OK(["Paire créée,<br/>première synchro"])
 ```
 
-- **Étape 1** : on choisit d'abord le **type de KB** (détecté automatiquement quand c'est possible), puis le dossier. Les KB connues sont proposées par l'adaptateur : celui d'Obsidian lit le fichier `obsidian.json` de l'application (sous macOS `~/Library/Application Support/obsidian/`, sous Linux `~/.config/obsidian/`, sous Windows `%APPDATA%\obsidian\`) ; d'autres adaptateurs ne proposent rien et se contentent d'un sélecteur de dossier. On peut toujours choisir un dossier à la main.
+- **Étape 1** : le premier champ est le **projet**. Quand des projets existent, une liste les propose, avec **Nouveau projet…** qui affiche un champ pour en nommer un ; pour la toute première paire, seul le champ **Nom du projet** est affiché. Un nom qui ne diffère d'un projet existant que par la casse rejoint ce projet. Quand l'assistant est ouvert depuis **Ajouter un sync** d'un projet, ce projet est déjà choisi. On choisit ensuite le **type de KB** (détecté automatiquement quand c'est possible), puis le dossier. Les KB connues sont proposées par l'adaptateur : celui d'Obsidian lit le fichier `obsidian.json` de l'application (sous macOS `~/Library/Application Support/obsidian/`, sous Linux `~/.config/obsidian/`, sous Windows `%APPDATA%\obsidian\`) ; d'autres adaptateurs ne proposent rien et se contentent d'un sélecteur de dossier. On peut toujours choisir un dossier à la main.
 - **Étape 2** : le sélecteur vérifie que le dossier est dans un dépôt Git et affiche la branche courante.
 - **Étape 3** : les trois cartes de sens, avec le mode bidirectionnel présélectionné.
 - **Étape 6, première synchro d'une nouvelle paire** : si les deux dossiers contiennent déjà des fichiers, l'aperçu met en évidence les fichiers présents des deux côtés avec un contenu différent (cas 5 de la [classification](03-algorithme-de-synchronisation.md#classification)) pour que l'utilisateur les traite avant de lancer. Il compte aussi les fichiers envoyés de chaque côté, et signale ceux qui partent vers la KB sans être suivis par Git dans le dépôt : ils peuvent n'avoir aucun rapport avec lui.
@@ -209,7 +218,8 @@ sequenceDiagram
 
 Les règles de [validation au chargement](06-configuration.md#validation-au-chargement) s'appliquent pendant la saisie, plus :
 
-- nom de paire unique et utilisable dans une URL (`[a-z0-9-]+`) ;
+- nom de paire unique tous projets confondus et utilisable dans une URL (`[a-z0-9-]+`) ;
+- nom de projet requis pour une nouvelle paire, de 1 à 64 caractères sur une ligne ;
 - passage de `both` à un sens unique **refusé** tant qu'il reste des conflits en attente (voir [Changer de sens](03-algorithme-de-synchronisation.md#changer-de-sens)) ;
 - choix de `overwrite` : avertissement explicite, avec le nombre de fichiers de la cible qui seraient modifiés ou mis à la corbeille.
 
@@ -218,7 +228,7 @@ Les règles de [validation au chargement](06-configuration.md#validation-au-char
 Tout ce que fait l'interface est faisable en ligne de commande :
 
 ```bash
-markoo pair add clara --kb ~/Obsidian/Knowledge/Projets/Clara --kb-type obsidian --repo ~/Projets/lerebours/clara/docs --direction both
+markoo pair add clara --project Clara --kb ~/Obsidian/Knowledge/Projets/Clara --kb-type obsidian --repo ~/Projets/lerebours/clara/docs --direction both
 ```
 
 ```bash
@@ -226,7 +236,15 @@ markoo pair set clara direction kb-to-repo --target-changes protect
 ```
 
 ```bash
+markoo pair set clara project Clara
+```
+
+```bash
 markoo pair list
 ```
 
-`--kb-type` est facultatif : sans lui, le type est détecté à partir du dossier. Sans arguments, `markoo pair add` lance le même assistant en mode interactif dans le terminal.
+```bash
+markoo sync --project Clara
+```
+
+`--project` est requis : il nomme un nouveau projet ou rejoint un projet existant, quelle que soit sa casse. `--kb-type` est facultatif : sans lui, le type est détecté à partir du dossier. Sans arguments, `markoo pair add` lance le même assistant en mode interactif dans le terminal, en demandant d'abord le projet. `markoo pair list` affiche les paires projet par projet, et `--project` sur `markoo sync` et `markoo status` agit sur toutes les paires d'un projet.

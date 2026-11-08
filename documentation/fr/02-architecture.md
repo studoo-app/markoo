@@ -106,12 +106,12 @@ Binaire `markoo` (`clap`) :
 | Commande | Effet |
 |----------|-------|
 | `markoo init` | Crée `markoo.toml` de façon interactive (type de KB détecté automatiquement) et prépare le dossier d'état |
-| `markoo status` | Liste les fichiers modifiés, ajoutés, supprimés, en conflit |
+| `markoo status [--project <nom>]` | Liste les fichiers modifiés, ajoutés, supprimés, en conflit, éventuellement pour les seules paires d'un projet |
 | `markoo diff [fichier]` | Affiche le diff coloré |
-| `markoo sync [--dry-run] [--pair <nom>]` | Planifie puis applique |
+| `markoo sync [--dry-run] [--pair <nom> \| --project <nom>]` | Planifie puis applique ; `--project` synchronise toutes les paires d'un projet |
 | `markoo conflicts` / `markoo resolve <fichier>` | Liste et résout les conflits et divergences, identifiés par le chemin du fichier |
 | `markoo hook install\|uninstall` | Gère les hooks Git |
-| `markoo pair add\|list\|show\|set\|remove` | Gère les paires (sens, dossiers, filtres…) ; création : `markoo pair add <nom> --kb <dossier> [--kb-type obsidian\|markdown] --repo <dossier>` (`--kb-type` détecté si omis) ; voir [Interface de configuration](08-interface-de-configuration.md) |
+| `markoo pair add\|list\|show\|set\|remove` | Gère les paires (sens, dossiers, filtres…) ; création : `markoo pair add <nom> --project <nom> --kb <dossier> [--kb-type obsidian\|markdown] --repo <dossier>` (`--kb-type` détecté si omis) ; `list` regroupe les paires par projet ; voir [Interface de configuration](08-interface-de-configuration.md) |
 | `markoo paths` | Affiche les chemins de configuration et d'état utilisés |
 | `markoo daemon [install\|uninstall]` | Lance le daemon (planificateur + API + MCP), ou gère son service `launchd` sur macOS |
 | `markoo token rotate` | Remplace le jeton de l'API |

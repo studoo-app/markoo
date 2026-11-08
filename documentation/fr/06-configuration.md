@@ -13,8 +13,9 @@ Markoo range deux choses **hors de la base de connaissance (KB) et hors du repo*
 flowchart TD
     G["&lt;config&gt;/markoo.toml<br/><i>configuration globale</i>"]
     S["&lt;data&gt;/<br/><i>état, sauvegardes</i>"]
-    G --> P1["[[pair]] clara"]
-    G --> P2["[[pair]] markoo"]
+    G --> P1["[[pair]] clara<br/><i>projet Clara</i>"]
+    G --> P2["[[pair]] documentation<br/><i>projet Markoo</i>"]
+    G --> P3["[[pair]] skill<br/><i>projet Markoo</i>"]
     S --> DB["state.db"]
     S --> B["backups/"]
     S --> T["trash/"]
@@ -82,6 +83,7 @@ allow_config_write = false # un agent peut-il modifier la configuration ?
 # ---------------------------------------------------------------
 [[pair]]
 name    = "clara"
+project = "Clara"          # les paires d'un même projet sont affichées ensemble
 kb      = "~/Obsidian/Knowledge/Projets/Clara"
 kb_type = "obsidian"       # markdown | obsidian ; logseq | foam | dendron après la v1. Détecté si omis
 repo    = "~/Projets/lerebours/clara/docs"
@@ -112,18 +114,26 @@ branches = ["main"]
 
 # ---------------------------------------------------------------
 [[pair]]
-name  = "markoo"
-kb    = "~/Obsidian/Knowledge/Projets/Markoo"   # kb_type omis : détecté (.obsidian/ présent)
-repo  = "~/Projets/opensource/markoo/documentation"
+name    = "documentation"
+project = "Markoo"
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Documentation"   # kb_type omis : détecté (.obsidian/ présent)
+repo    = "~/Projets/opensource/markoo/documentation"
 direction = "repo-to-kb"        # le repo fait référence, la KB ne fait que lire
 target_changes = "protect"      # une édition dans la KB est signalée, jamais écrasée
+
+[[pair]]
+name    = "skill"
+project = "Markoo"              # deuxième paire du même projet
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Skill"
+repo    = "~/Projets/opensource/markoo/skill"
 ```
 
 ## Référence des options de paire
 
 | Clé | Type | Défaut | Description |
 |-----|------|--------|-------------|
-| `name` | texte | **requis** | Identifiant unique (CLI, API, MCP) |
+| `name` | texte | **requis** | Identifiant unique (CLI, API, MCP), tous projets confondus |
+| `project` | texte | aucun | Projet de la paire ; les paires d'un même projet sont regroupées. Requis quand Markoo ajoute la paire, voir [Projets](#projets) |
 | `kb` | chemin | **requis** | Dossier côté base de connaissance (KB) |
 | `kb_type` | énum | détecté | Type de KB : `markdown`, `obsidian` en v1 (voir [Types de bases de connaissance pris en charge](09-bases-de-connaissance.md#types-de-bases-de-connaissance-pris-en-charge)) ; détecté par les adaptateurs si omis |
 | `repo` | chemin | **requis** | Dossier côté dépôt Git |
@@ -138,6 +148,30 @@ target_changes = "protect"      # une édition dans la KB est signalée, jamais 
 | `hooks.install` | liste | `["post-merge"]` | Hooks mis en place par `markoo hook install` : `post-merge`, `post-checkout`, `post-commit`, `pre-commit`. Rien n'est installé tant que cette commande n'a pas été lancée, voir [Déclencheurs](05-declencheurs.md#2-hooks-git) |
 | `hooks.branches` | liste | `[]` | Branches sur lesquelles les hooks agissent ; vide pour toutes |
 
+### Projets
+
+Un **projet** regroupe les paires qui vont ensemble, par exemple la documentation et le skill d'un même logiciel. C'est la clé `project` de chacune de ses paires :
+
+```toml
+[[pair]]
+name    = "documentation"
+project = "Markoo"
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Documentation"
+repo    = "~/Projets/opensource/markoo/documentation"
+
+[[pair]]
+name    = "skill"
+project = "Markoo"
+kb      = "~/Obsidian/Knowledge/Projets/Markoo/Skill"
+repo    = "~/Projets/opensource/markoo/skill"
+```
+
+- Le nom est un texte libre, de 1 à 64 caractères, sur une ligne et sans espace au début ni à la fin : `"Markoo"`, `"Site web"`.
+- Le projet est nommé à la création de sa première paire ; les suivantes le choisissent ou en nomment un nouveau. `markoo pair add`, l'app et l'API refusent une nouvelle paire sans projet.
+- L'orthographe déjà utilisée l'emporte, sans tenir compte de la casse : une paire ajoutée à `markoo` rejoint le projet `Markoo` existant au lieu d'en créer un second.
+- Dans un fichier écrit à la main, la clé est facultative, pour que les fichiers d'avant les projets se chargent toujours. Les paires sans projet sont listées à part, après les projets. Donnez-leur-en un avec `markoo pair set <paire> project <nom>`, qui sert aussi à changer une paire de projet.
+- Un projet n'a pas de réglages propres : il existe tant qu'une de ses paires le nomme. Les noms de paires restent uniques tous projets confondus, car la CLI, l'API et l'historique désignent une paire par son seul nom.
+
 ### Stratégies de conflit
 
 | Valeur | Comportement en cas de chevauchement |
@@ -151,6 +185,7 @@ target_changes = "protect"      # une édition dans la KB est signalée, jamais 
 
 - `kb` et `repo` existent et sont des dossiers.
 - Deux paires ne se chevauchent pas (même fichier suivi par deux paires) : erreur explicite. Les dossiers `kb` et `repo` d'une même paire ne se chevauchent pas non plus.
+- `project`, s'il est présent, compte de 1 à 64 caractères sur une ligne, sans espace au début ni à la fin : erreur explicite sinon.
 - Les clés inconnues dans une table `[[pair]]` sont refusées, pour qu'une faute de frappe comme `directon` ne change pas le sens en silence.
 - `target_changes = "overwrite"` avec `direction = "both"` : avertissement, l'option est sans effet.
 - `repo` se trouve dans un dépôt Git : simple avertissement s'il ne l'est pas, ce qui reste autorisé.

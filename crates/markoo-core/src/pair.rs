@@ -53,6 +53,9 @@ pub enum TargetChanges {
 pub struct Pair {
     /// Unique name of the pair.
     pub name: String,
+    /// Project the pair belongs to; the pairs of a project are shown together.
+    /// `None` for pairs created before projects existed.
+    pub project: Option<String>,
     /// Knowledge base folder.
     pub kb: PathBuf,
     /// Type of the knowledge base.
@@ -82,6 +85,7 @@ impl Pair {
     pub fn new(name: impl Into<String>, kb: impl Into<PathBuf>, repo: impl Into<PathBuf>) -> Self {
         Self {
             name: name.into(),
+            project: None,
             kb: kb.into(),
             kb_type: KbType::default(),
             repo: repo.into(),

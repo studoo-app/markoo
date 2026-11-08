@@ -106,12 +106,12 @@ The `markoo` binary (`clap`):
 | Command | Effect |
 |---------|--------|
 | `markoo init` | Interactively creates `markoo.toml` (KB type auto-detected) and prepares the state folder |
-| `markoo status` | Lists modified, added, deleted and conflicting files |
+| `markoo status [--project <name>]` | Lists modified, added, deleted and conflicting files, optionally for a project's pairs only |
 | `markoo diff [file]` | Shows the colored diff |
-| `markoo sync [--dry-run] [--pair <name>]` | Plans, then applies |
+| `markoo sync [--dry-run] [--pair <name> \| --project <name>]` | Plans, then applies; `--project` syncs every pair of a project |
 | `markoo conflicts` / `markoo resolve <file>` | Lists and resolves conflicts and divergences, identified by their file path |
 | `markoo hook install\|uninstall` | Manages Git hooks |
-| `markoo pair add\|list\|show\|set\|remove` | Manages pairs (direction, folders, filters…); creation: `markoo pair add <name> --kb <folder> [--kb-type obsidian\|markdown] --repo <folder>` (`--kb-type` auto-detected if omitted); see [Configuration UI](08-configuration-ui.md) |
+| `markoo pair add\|list\|show\|set\|remove` | Manages pairs (direction, folders, filters…); creation: `markoo pair add <name> --project <name> --kb <folder> [--kb-type obsidian\|markdown] --repo <folder>` (`--kb-type` auto-detected if omitted); `list` groups pairs by project; see [Configuration UI](08-configuration-ui.md) |
 | `markoo paths` | Shows the configuration and state paths in use |
 | `markoo daemon [install\|uninstall]` | Starts the daemon (scheduler + API + MCP), or manages its `launchd` service on macOS |
 | `markoo token rotate` | Replaces the API token |

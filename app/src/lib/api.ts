@@ -6,6 +6,8 @@ export type TargetChanges = "protect" | "overwrite";
 
 export interface PairView {
   name: string;
+  /** The project the sync belongs to; null for a sync made before projects. */
+  project: string | null;
   kb: string;
   kb_type: string;
   repo: string;
@@ -126,6 +128,7 @@ export interface Conflicts {
 
 export interface NewPair {
   name: string;
+  project: string;
   kb: string;
   kb_type: string | null;
   repo: string;
@@ -191,6 +194,24 @@ export const api = {
     ),
   knownKbs: () => invoke<string[]>("known_kbs"),
 };
+
+/** Longest project name the configuration accepts. */
+export const MAX_PROJECT_LEN = 64;
+
+/** Whether a project name is accepted: not blank, one line, not too long. */
+export function isValidProject(project: string): boolean {
+  const name = project.trim();
+  return name !== "" && [...name].length <= MAX_PROJECT_LEN && !/[\r\n]/.test(name);
+}
+
+/** Names of the projects of the syncs, in the order they first appear. */
+export function projectsOf(pairs: PairView[]): string[] {
+  const names: string[] = [];
+  for (const pair of pairs) {
+    if (pair.project !== null && !names.includes(pair.project)) names.push(pair.project);
+  }
+  return names;
+}
 
 /** The arrow of a direction, as the documentation draws it. */
 export function arrow(direction: Direction): string {

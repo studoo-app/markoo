@@ -16,7 +16,7 @@
   type Route =
     | { name: "home" }
     | { name: "activity" }
-    | { name: "wizard" }
+    | { name: "wizard"; project?: string }
     | { name: "settings" }
     | { name: "pair"; pair: string; tab?: Tab };
 
@@ -107,7 +107,7 @@
         <Home
           {revision}
           onopen={(pair, tab) => (route = { name: "pair", pair, tab })}
-          onnew={() => (route = { name: "wizard" })}
+          onnew={(project) => (route = { name: "wizard", project })}
         />
       {:else if route.name === "activity"}
         <Activity {revision} onopen={(pair) => (route = { name: "pair", pair, tab: "history" })} />
@@ -115,6 +115,7 @@
         <Settings {info} onclose={() => (route = { name: "home" })} />
       {:else if route.name === "wizard"}
         <Wizard
+          project={route.project}
           oncancel={() => (route = { name: "home" })}
           ondone={(pair) => (route = { name: "pair", pair })}
         />

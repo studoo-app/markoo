@@ -5,7 +5,10 @@
     api,
     arrow,
     errorText,
+    isValidProject,
     kbLabel,
+    MAX_PROJECT_LEN,
+    projectsOf,
     type Direction,
     type Plan,
     type TargetChanges,
@@ -15,13 +18,31 @@
   import Picker from "../lib/Picker.svelte";
   import PlanList from "../lib/PlanList.svelte";
 
-  let { oncancel, ondone }: { oncancel: () => void; ondone: (pair: string) => void } = $props();
+  let {
+    project: initialProject,
+    oncancel,
+    ondone,
+  }: {
+    /** Project the new sync goes in, chosen beforehand. */
+    project?: string;
+    oncancel: () => void;
+    ondone: (pair: string) => void;
+  } = $props();
+
+  // Picked in the list of projects: an existing one, or NEW_PROJECT to name one.
+  const NEW_PROJECT = "\u0000new";
 
   const steps = ["Knowledge base", "Repo", "Direction", "Filters", "Triggers", "Summary"];
   const hookChoices = ["post-merge", "post-checkout", "post-commit", "pre-commit"];
 
   let step = $state(0);
   let known = $state<string[]>([]);
+  // Projects and names of the syncs that exist, null until they are loaded.
+  let projects = $state<string[] | null>(null);
+  let taken = $state<string[]>([]);
+  let projectChoice = $state("");
+  // svelte-ignore state_referenced_locally
+  let newProject = $state(initialProject ?? "");
   let kb = $state("");
   let kbType = $state("");
   let detected = $state<{ exists: boolean; kb_type: string } | null>(null);
@@ -41,7 +62,29 @@
 
   onMount(() => {
     api.knownKbs().then((value) => (known = value)).catch(() => {});
+    api
+      .listPairs()
+      .then((pairs) => {
+        projects = projectsOf(pairs);
+        taken = pairs.map((pair) => pair.name);
+        const preset = initialProject && existingProject(initialProject);
+        projectChoice = preset || (projects.length > 0 && !initialProject ? "" : NEW_PROJECT);
+      })
+      .catch(() => {
+        projects = [];
+        projectChoice = NEW_PROJECT;
+      });
   });
+
+  /** The existing project spelled like `name`, ignoring case. */
+  function existingProject(name: string): string | undefined {
+    const wanted = name.trim().toLowerCase();
+    return projects?.find((existing) => existing.toLowerCase() === wanted);
+  }
+
+  const project = $derived(projectChoice === NEW_PROJECT ? newProject.trim() : projectChoice);
+  // A new name that matches an existing project joins it.
+  const joins = $derived(projectChoice === NEW_PROJECT ? existingProject(newProject) : undefined);
 
   $effect(() => {
     const path = kb.trim();
@@ -78,6 +121,7 @@
 
   const newPair = $derived({
     name,
+    project,
     kb: kb.trim(),
     kb_type: kbType || null,
     repo: repo.trim(),
@@ -101,7 +145,10 @@
 
   const canContinue = $derived(
     step === 0
-      ? detected?.exists === true && /^[a-z0-9-]+$/.test(name)
+      ? isValidProject(project) &&
+        detected?.exists === true &&
+        /^[a-z0-9-]+$/.test(name) &&
+        !taken.includes(name)
       : step === 1
         ? repoInfo?.exists === true
         : true,
@@ -143,6 +190,27 @@
   }
 </script>
 
+{#snippet projectName()}
+  <div class="field">
+    <label for="new-project">{t("Project name")}</label>
+    <input
+      id="new-project"
+      type="text"
+      bind:value={newProject}
+      maxlength={MAX_PROJECT_LEN}
+      placeholder="Markoo"
+      spellcheck="false"
+    />
+    <div class="hint">
+      {#if joins}
+        <span class="muted">{t("This sync joins the project {project}.", { project: joins })}</span>
+      {:else if projects?.length === 0}
+        <span class="muted">{t("A project groups this sync and the next ones you add to it.")}</span>
+      {/if}
+    </div>
+  </div>
+{/snippet}
+
 <h1>{t("New sync")}</h1>
 <ol class="steps">
   {#each steps as label, index}
@@ -152,6 +220,23 @@
 
 <div class="card body">
   {#if step === 0}
+    {#if projects !== null && projects.length > 0}
+      <div class="field">
+        <label for="project">{t("Project")}</label>
+        <select id="project" bind:value={projectChoice}>
+          <option value="" disabled>{t("Choose a project")}</option>
+          {#each projects as existing}
+            <option value={existing}>{existing}</option>
+          {/each}
+          <option value={NEW_PROJECT}>{t("New project…")}</option>
+        </select>
+      </div>
+      {#if projectChoice === NEW_PROJECT}
+        {@render projectName()}
+      {/if}
+    {:else if projects !== null}
+      {@render projectName()}
+    {/if}
     {#if known.length > 0}
       <div class="field">
         <span class="heading">{t("Known vaults")}</span>
@@ -186,6 +271,8 @@
       <input id="name" type="text" bind:value={name} oninput={() => (nameEdited = true)} spellcheck="false" />
       {#if name && !/^[a-z0-9-]+$/.test(name)}
         <div class="hint error">{t("Use lowercase letters, digits and hyphens.")}</div>
+      {:else if taken.includes(name)}
+        <div class="hint error">{t("A sync already has this name.")}</div>
       {/if}
     </div>
   {:else if step === 1}
@@ -222,7 +309,7 @@
       <input id="branches" type="text" bind:value={branches} spellcheck="false" />
     </div>
   {:else if preview}
-    <h2>{name}</h2>
+    <h2>{joins ?? project} / {name}</h2>
     <p class="muted path">{kb} {arrow(direction)} {repo}</p>
     {#if conflicts > 0}
       <p class="warn">
