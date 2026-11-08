@@ -4,21 +4,39 @@
   import logoName from "../../assets/logo-mark-name.svg";
   import logoNameDark from "../../assets/logo-mark-name-dark.svg";
   import { api, type AppInfo } from "./lib/api";
+  import Icon, { type IconName } from "./lib/Icon.svelte";
+  import Activity from "./views/Activity.svelte";
   import Home from "./views/Home.svelte";
-  import Pair from "./views/Pair.svelte";
+  import Pair, { type Tab } from "./views/Pair.svelte";
   import Settings from "./views/Settings.svelte";
   import Wizard from "./views/Wizard.svelte";
 
   type Route =
     | { name: "home" }
+    | { name: "activity" }
     | { name: "wizard" }
     | { name: "settings" }
-    | { name: "pair"; pair: string };
+    | { name: "pair"; pair: string; tab?: Tab };
+
+  type Section = "syncs" | "activity" | "settings";
 
   let route = $state<Route>({ name: "home" });
   let info = $state<AppInfo | null>(null);
   // Goes up when something changed outside of this window.
   let revision = $state(0);
+
+  // The sidebar highlights the section a route belongs to.
+  const section = $derived<Section>(
+    route.name === "activity" ? "activity" : route.name === "settings" ? "settings" : "syncs",
+  );
+
+  const top: { id: Section; label: string; icon: IconName; go: Route }[] = [
+    { id: "syncs", label: "Syncs", icon: "folder", go: { name: "home" } },
+  ];
+  const bottom: { id: Section; label: string; icon: IconName; go: Route }[] = [
+    { id: "activity", label: "Activity", icon: "activity", go: { name: "activity" } },
+    { id: "settings", label: "Settings", icon: "settings", go: { name: "settings" } },
+  ];
 
   onMount(() => {
     api.appInfo().then((value) => (info = value));
@@ -32,68 +50,153 @@
   });
 </script>
 
-<header class="row spread">
-  <button class="home" type="button" onclick={() => (route = { name: "home" })} aria-label="Home">
-    <picture>
-      <source srcset={logoNameDark} media="(prefers-color-scheme: dark)" />
-      <img src={logoName} alt="Markoo" height="30" />
-    </picture>
+{#snippet item(entry: { id: Section; label: string; icon: IconName; go: Route })}
+  <button
+    type="button"
+    class:active={section === entry.id}
+    aria-current={section === entry.id ? "page" : undefined}
+    onclick={() => (route = entry.go)}
+  >
+    <Icon name={entry.icon} />
+    <span>{entry.label}</span>
   </button>
-  <button type="button" onclick={() => (route = { name: "settings" })}>Settings</button>
-</header>
+{/snippet}
 
-{#if info?.note}
-  <p class="note warn" role="status">{info.note}</p>
-{/if}
+<div class="shell">
+  <aside>
+    <div class="brand">
+      <button class="home" type="button" onclick={() => (route = { name: "home" })} aria-label="Home">
+        <picture>
+          <source srcset={logoNameDark} media="(prefers-color-scheme: dark)" />
+          <img src={logoName} alt="Markoo" height="26" />
+        </picture>
+      </button>
+    </div>
 
-<main>
-  {#if route.name === "home"}
-    <Home
-      {revision}
-      onopen={(pair) => (route = { name: "pair", pair })}
-      onnew={() => (route = { name: "wizard" })}
-    />
-  {:else if route.name === "settings"}
-    <Settings {info} onclose={() => (route = { name: "home" })} />
-  {:else if route.name === "wizard"}
-    <Wizard
-      oncancel={() => (route = { name: "home" })}
-      ondone={(pair) => (route = { name: "pair", pair })}
-    />
-  {:else}
-    {#key route.pair}
-      <Pair name={route.pair} {revision} onclose={() => (route = { name: "home" })} />
-    {/key}
-  {/if}
-</main>
+    <nav aria-label="Main">
+      {#each top as entry (entry.id)}
+        {@render item(entry)}
+      {/each}
+    </nav>
+
+    <nav class="bottom" aria-label="More">
+      {#each bottom as entry (entry.id)}
+        {@render item(entry)}
+      {/each}
+    </nav>
+  </aside>
+
+  <div class="content">
+    {#if info?.note}
+      <p class="note warn" role="status">{info.note}</p>
+    {/if}
+
+    <main>
+      {#if route.name === "home"}
+        <Home
+          {revision}
+          onopen={(pair, tab) => (route = { name: "pair", pair, tab })}
+          onnew={() => (route = { name: "wizard" })}
+        />
+      {:else if route.name === "activity"}
+        <Activity {revision} onopen={(pair) => (route = { name: "pair", pair, tab: "history" })} />
+      {:else if route.name === "settings"}
+        <Settings {info} onclose={() => (route = { name: "home" })} />
+      {:else if route.name === "wizard"}
+        <Wizard
+          oncancel={() => (route = { name: "home" })}
+          ondone={(pair) => (route = { name: "pair", pair })}
+        />
+      {:else}
+        {#key route.pair}
+          <Pair
+            name={route.pair}
+            initialTab={route.tab}
+            {revision}
+            onclose={() => (route = { name: "home" })}
+          />
+        {/key}
+      {/if}
+    </main>
+  </div>
+</div>
 
 <style>
-  header {
-    padding: 10px 20px;
+  .shell {
+    display: grid;
+    grid-template-columns: 230px 1fr;
+    height: 100vh;
+  }
+  aside {
+    display: flex;
+    flex-direction: column;
+    padding: 28px 20px 24px;
+    background: var(--sidebar);
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+  }
+  .brand {
+    padding: 0 4px 20px;
+    margin: 0 8px 20px;
     border-bottom: 1px solid var(--line);
-    background: var(--surface);
   }
   .home {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    border: 0;
     padding: 0;
+    border: 0;
     background: none;
-    font-weight: 700;
-    font-size: 15px;
   }
   picture {
     display: flex;
   }
+  nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  nav.bottom {
+    margin-top: auto;
+  }
+  nav button {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 13px 16px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+    font-size: 16px;
+    text-align: left;
+  }
+  nav button :global(.icon) {
+    color: currentColor;
+  }
+  nav button:hover:not(:disabled) {
+    background: var(--tile);
+  }
+  nav button.active {
+    background: color-mix(in srgb, var(--accent) 11%, transparent);
+    color: var(--accent-ink);
+    font-weight: 500;
+  }
+  .content {
+    min-width: 0;
+    overflow-y: auto;
+  }
   .note {
     margin: 0;
-    padding: 8px 20px;
+    padding: 10px 48px;
     border-bottom: 1px solid var(--line);
   }
   main {
-    padding: 20px;
-    max-width: 1100px;
-    margin: 0 auto;
+    padding: 38px 48px 48px;
+    max-width: 1040px;
+  }
+  @media (max-width: 1000px) {
+    main {
+      padding: 30px 28px 40px;
+    }
   }
 </style>

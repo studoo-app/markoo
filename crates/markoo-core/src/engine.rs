@@ -388,6 +388,11 @@ impl<F: Fs> Engine<F> {
         Ok(self.state.runs(pair, limit)?)
     }
 
+    /// The most recent syncs of every pair, the latest first.
+    pub fn activity(&self, limit: u32) -> Result<Vec<(String, RunRecord)>, Error> {
+        Ok(self.state.recent_runs(limit)?)
+    }
+
     /// The sync used by every trigger: plans, then applies unless `dry_run`.
     ///
     /// After a change of direction, the run is forced to be a dry run. Moving

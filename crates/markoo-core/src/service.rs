@@ -627,6 +627,16 @@ pub fn history(paths: &Paths, name: &str, limit: u32) -> Result<Value, Error> {
     Ok(json!(open_engine(paths)?.history(name, limit)?))
 }
 
+/// The most recent syncs of every pair, the latest first, as `{pair, run}` entries.
+pub fn activity(paths: &Paths, limit: u32) -> Result<Value, Error> {
+    let entries: Vec<Value> = open_engine(paths)?
+        .activity(limit)?
+        .into_iter()
+        .map(|(pair, run)| json!({"pair": pair, "run": run}))
+        .collect();
+    Ok(Value::Array(entries))
+}
+
 /// The pairs a sync of everything applies to.
 pub fn runnable_pairs(paths: &Paths) -> Result<Vec<String>, Error> {
     let config = Config::load(paths.config_file())?;
