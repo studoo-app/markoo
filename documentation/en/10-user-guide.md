@@ -142,7 +142,22 @@ The interval is set in the app's **Settings**, or in `[schedule]` of `markoo.tom
 | `hooks.log` | Errors of Git hooks |
 | `daemon.log` | Output of the `launchd` service |
 
-**There is no automatic rollback yet.** To get a file back, copy it from these folders. The **History** tab of the app lists what each sync changed.
+### Revert a sync
+
+The **History** tab of the app lists what each sync changed. Open a sync and choose **Revert this sync…**; on the command line:
+
+```bash
+markoo history clara
+markoo revert clara 12
+```
+
+Markoo puts back the files this sync touched: an overwritten file gets its previous version back, a created file goes to the trash, a deleted file comes back and a moved file goes back to where it was. A file changed since is left alone, and reported. The next sync carries the old versions to the other side.
+
+The revert is itself recorded in the history, with backups of its own, so it can be reverted in turn. Limits:
+
+- Syncs recorded before the version that added reverting cannot be reverted; copy the files from the folders above.
+- For a sync that merged a file on both sides, both earlier versions come back, and the next sync reports a conflict.
+- In a one-way pair, reverting a copy to the target becomes a divergence if the pair protects its target; it is refused if the pair overwrites changes in its target, since the next sync would write the same files again.
 
 ## Stop using Markoo
 

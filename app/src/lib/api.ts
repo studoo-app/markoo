@@ -68,6 +68,10 @@ export interface RunRecord {
   started_at: number;
   duration_ms: number;
   report: {
+    /** Folder of the run's backups: set when it can be reverted. */
+    run?: string;
+    /** For a revert: the id of the sync it put back. */
+    reverts?: number;
     written: { path: string; side: "kb" | "repo" }[];
     trashed: { path: string; side: "kb" | "repo" }[];
     skipped: { path: string; reason: string }[];
@@ -187,6 +191,8 @@ export const api = {
   previewTransform: (pair: string, settings: Settings) =>
     invoke<TransformSample | null>("preview_transform", { pair, settings }),
   pairHistory: (pair: string) => invoke<RunRecord[]>("pair_history", { pair }),
+  revertRun: (pair: string, run: number) =>
+    invoke<{ report: NonNullable<RunRecord["report"]> }>("revert_run", { pair, run }),
   activity: () => invoke<ActivityEntry[]>("activity"),
   globalSettings: () => invoke<GlobalSettings>("global_settings"),
   updateGlobalSettings: (settings: Settings) =>

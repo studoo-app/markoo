@@ -142,7 +142,22 @@ L'intervalle se règle dans les **Settings** de l'app, ou dans `[schedule]` de `
 | `hooks.log` | Erreurs des hooks Git |
 | `daemon.log` | Sortie du service `launchd` |
 
-**Il n'y a pas encore de retour en arrière automatique.** Pour récupérer un fichier, copiez-le depuis ces dossiers. L'onglet **History** de l'app liste ce que chaque synchro a changé.
+### Revenir en arrière
+
+L'onglet **History** de l'app liste ce que chaque synchro a changé. Ouvrez une synchro puis choisissez **Revenir en arrière…** ; en ligne de commande :
+
+```bash
+markoo history clara
+markoo revert clara 12
+```
+
+Markoo remet les fichiers que cette synchro a touchés : un fichier écrasé retrouve sa version précédente, un fichier créé part à la corbeille, un fichier supprimé revient et un fichier déplacé retourne à sa place. Un fichier modifié depuis n'est pas touché, et il est signalé. La synchro suivante reporte les anciennes versions de l'autre côté.
+
+Le retour en arrière est lui-même enregistré dans l'historique, avec ses propres sauvegardes : il peut être annulé à son tour. Limites :
+
+- Les synchros enregistrées avant la version qui a ajouté le retour en arrière ne peuvent pas être annulées ; copiez les fichiers depuis les dossiers ci-dessus.
+- Pour une synchro qui a fusionné un fichier des deux côtés, les deux versions d'avant reviennent, et la synchro suivante signale un conflit.
+- Dans une paire à sens unique, le retour en arrière d'une copie vers la cible devient une divergence si la paire protège sa cible ; il est refusé si elle écrase les changements de sa cible, car la synchro suivante réécrirait les mêmes fichiers.
 
 ## Arrêter d'utiliser Markoo
 

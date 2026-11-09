@@ -94,6 +94,21 @@ enum Command {
         #[arg(long)]
         push_to_source: bool,
     },
+    /// List the latest syncs of a pair that changed something, or failed.
+    History {
+        /// The pair: its id, project/name, or its name if no other project uses it.
+        pair: String,
+        /// How many syncs to show.
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+    },
+    /// Put back what a past sync wrote or deleted; files changed since are left alone.
+    Revert {
+        /// The pair: its id, project/name, or its name if no other project uses it.
+        pair: String,
+        /// The sync, by its number in `markoo history`.
+        run: i64,
+    },
     /// Manage pairs.
     #[command(subcommand)]
     Pair(PairCommand),
@@ -265,6 +280,8 @@ fn run(cli: Cli) -> Result<bool> {
             pair.as_deref(),
             commands::How::from_flags(keep, edit, content_file, push_to_source),
         )?,
+        Command::History { pair, limit } => ctx.history(&pair, limit)?,
+        Command::Revert { pair, run } => ctx.revert(&pair, run)?,
         Command::Pair(command) => ctx.pair(command)?,
         Command::Paths => ctx.paths()?,
         Command::Daemon { action } => ctx.daemon(action)?,

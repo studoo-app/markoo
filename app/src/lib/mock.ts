@@ -153,6 +153,7 @@ export function installMock(): void {
           {
             id: 2, trigger: "interval", started_at: Date.now() - 120000, duration_ms: 84, error: null,
             report: {
+              run: "1794158173153",
               written: [
                 { path: "adr/001-stack.md", side: "repo" },
                 { path: "guide/install.md", side: "kb" },
@@ -167,6 +168,17 @@ export function installMock(): void {
             error: 'pair "clara": the kb folder is unavailable',
           },
         ];
+      case "revert_run":
+        return {
+          pair: "clara", run: 2,
+          report: {
+            reverts: 2, run: "1794158179999",
+            written: [{ path: "adr/001-stack.md", side: "repo" }],
+            trashed: [],
+            skipped: [{ path: "guide/install.md", reason: "changed since this sync" }],
+            pending: [],
+          },
+        };
       case "activity":
         return [
           {

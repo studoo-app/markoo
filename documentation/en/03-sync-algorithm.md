@@ -221,7 +221,7 @@ flowchart TD
 
 - **Atomic writes**: write to `file.md.markoo-tmp`, `fsync`, then `rename`.
 - **Check right before writing**: if the target file changed since the scan (the KB tool, e.g. Obsidian, just saved it), the action is cancelled and rescheduled for the next sync.
-- **History**: each sync that changes something, or fails, is recorded in `state.db`, with its trigger and the files concerned; the latest 500 are kept per pair. An interrupted sync needs no recovery: each file is written atomically and recorded right after, so the next sync plans what is left. There is no rollback yet: what was overwritten or deleted stays in `<data>/backups/` and `<data>/trash/`.
+- **History**: each sync that changes something, or fails, is recorded in `state.db`, with its trigger and the files concerned; the latest 500 are kept per pair. An interrupted sync needs no recovery: each file is written atomically and recorded right after, so the next sync plans what is left. What was overwritten or deleted stays in `<data>/backups/<pair>/<sync>/` and `<data>/trash/<pair>/<sync>/`, and the history records that folder with the hash of each file written. A **revert** puts the files of a sync back from that folder, except those changed since, without touching the base: the next sync carries the old versions to the other side.
 - **Unavailable folder**: if a pair's folder is missing (unplugged disk, unmounted volume), the sync is refused. Otherwise an empty listing would look like every file was deleted, and the other side would be emptied.
 - **Unreadable files**: a file that cannot be read (invalid UTF-8) is reported and left out of the plan, on both sides; it never counts as deleted.
 - **Backups**: overwritten content is copied to `<data>/backups/` before writing.

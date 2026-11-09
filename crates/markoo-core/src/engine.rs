@@ -8,7 +8,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::Error;
-use crate::apply::{Applier, Report};
+use crate::apply::{Applier, FileRef, Renamed, Report, Skipped, keep_path, run_id};
 use crate::entry::{ContentHash, EntryPath, Side};
 use crate::fs::{Fs, FsLock};
 use crate::kb::obsidian::{self, ObsidianAdapter, VaultSettings};
@@ -18,7 +18,7 @@ use crate::pair::{Direction, Filter, Pair, TargetChanges};
 use crate::paths::Paths;
 use crate::plan::{self, Action, AttachmentAction, Plan, PlannedAttachment, PlannedEntry};
 use crate::scan::{ScanIssue, SideScan, normalize, scan_side};
-use crate::state::{BaseEntry, PendingIssue, RunRecord, State};
+use crate::state::{BaseEntry, KEPT_RUNS, PendingIssue, RunRecord, State};
 
 /// Name of the state database inside `<data>`.
 pub const STATE_FILE: &str = "state.db";
@@ -648,6 +648,122 @@ impl<F: Fs> Engine<F> {
         }
     }
 
+    /// Puts back what a past sync wrote or deleted, from its backups and trash:
+    /// a file it overwrote gets its previous version back, a file it created
+    /// goes to the trash, a file it deleted comes back, a file it moved goes
+    /// back to where it was. Only the files the sync touched are put back, so
+    /// the next sync carries their old version to the other side. A file
+    /// changed since is left alone and reported as skipped.
+    ///
+    /// The revert is itself recorded in the history, with backups of its own,
+    /// so it can be reverted in turn.
+    pub fn revert(&self, pair: &Pair, run: i64) -> Result<Report, Error> {
+        let started = Timer::start();
+        let report = self.revert_now(pair, run)?;
+        self.record_report(pair, "revert", &started, &report);
+        Ok(report)
+    }
+
+    fn revert_now(&self, pair: &Pair, run: i64) -> Result<Report, Error> {
+        let _lock = self.lock_pair(&pair.id)?;
+        let refuse = |reason: &str| Error::NotRevertible {
+            run,
+            reason: reason.to_owned(),
+        };
+        let record = self
+            .state
+            .run(&pair.id, run)?
+            .ok_or_else(|| Error::UnknownRun {
+                pair: pair.id.clone(),
+                run,
+            })?;
+        let past: Report = record
+            .report
+            .and_then(|report| serde_json::from_value(report).ok())
+            .ok_or_else(|| refuse("it failed and wrote nothing"))?;
+        let Some(folder) = past.run.clone() else {
+            return Err(refuse(
+                "it wrote nothing, or ran before Markoo kept what reverting needs",
+            ));
+        };
+        let already = self
+            .state
+            .runs(&pair.id, KEPT_RUNS)?
+            .into_iter()
+            .any(|later| {
+                later
+                    .report
+                    .and_then(|report| serde_json::from_value::<Report>(report).ok())
+                    .is_some_and(|later| later.reverts == Some(run) && later.run.is_some())
+            });
+        if already {
+            return Err(refuse("it was already reverted"));
+        }
+        if let Some(source) = pair.direction.source() {
+            let touches_target = past
+                .written
+                .iter()
+                .chain(&past.trashed)
+                .any(|file| file.side != source);
+            if touches_target && pair.target_changes == TargetChanges::Overwrite {
+                return Err(refuse(
+                    "this pair overwrites changes in its target, so the next sync would write the same files again",
+                ));
+            }
+        }
+
+        let mut revert = Reverter {
+            fs: &self.fs,
+            pair,
+            data_dir: &self.data_dir,
+            from: folder,
+            own: run_id(),
+            report: Report {
+                reverts: Some(run),
+                ..Report::default()
+            },
+        };
+        for moved in &past.renamed {
+            let written = past
+                .written
+                .iter()
+                .find(|file| file.side == moved.side && file.path == moved.to);
+            let result = revert.rename_back(moved, written);
+            revert.settle(&moved.to, result);
+        }
+        for file in &past.written {
+            let moved = past
+                .renamed
+                .iter()
+                .any(|moved| moved.side == file.side && moved.to == file.path);
+            if !moved {
+                let result = revert.unwrite(file);
+                revert.settle(&file.path, result);
+            }
+        }
+        for file in &past.trashed {
+            let result = revert.untrash(file);
+            revert.settle(&file.path, result);
+        }
+        let mut report = revert.report;
+        // A merge put back on both sides would be merged again by the next
+        // sync, dropping both edits: without a base, it becomes a conflict.
+        for file in &report.written {
+            let both_restored = file.side == Side::Kb
+                && report.written.iter().any(|other| {
+                    other.side == Side::Repo && other.path == file.path && other.backup
+                })
+                && file.backup;
+            if both_restored {
+                self.state.forget_base(&pair.id, &file.path)?;
+            }
+        }
+        if !report.written.is_empty() || !report.trashed.is_empty() {
+            report.run = Some(revert.own);
+        }
+        Ok(report)
+    }
+
     /// Unified diffs of the entries that differ between the two sides.
     /// With `only`, the output is limited to that entry.
     pub fn diffs(&self, pair: &Pair, only: Option<&EntryPath>) -> Result<Vec<FileDiff>, Error> {
@@ -700,6 +816,7 @@ impl<F: Fs> Engine<F> {
             repo_dialect: &Gfm,
             index: &prepared.index,
             data_dir: &self.data_dir,
+            run: run_id(),
         }
     }
 
@@ -749,6 +866,152 @@ impl<F: Fs> Engine<F> {
         ctx: &ConvertCtx<'_>,
     ) -> Result<Option<String>, ()> {
         crate::scan::read_canonical(&self.fs, path, dialect, ctx).map_err(|_| ())
+    }
+}
+
+/// Puts back the files of one past sync.
+struct Reverter<'a, F: Fs> {
+    fs: &'a F,
+    pair: &'a Pair,
+    data_dir: &'a Path,
+    /// Folder of the sync being reverted.
+    from: String,
+    /// Folder of the revert's own backups and trash.
+    own: String,
+    report: Report,
+}
+
+impl<F: Fs> Reverter<'_, F> {
+    fn settle(&mut self, path: &EntryPath, result: Result<(), String>) {
+        if let Err(reason) = result {
+            self.report.skipped.push(Skipped {
+                path: path.clone(),
+                reason,
+            });
+        }
+    }
+
+    fn location(&self, file: &FileRef) -> PathBuf {
+        file.file
+            .clone()
+            .unwrap_or_else(|| file.path.under(self.pair.root(file.side)))
+    }
+
+    fn kept(&self, kind: &str, file: &FileRef) -> PathBuf {
+        keep_path(
+            self.data_dir,
+            kind,
+            &self.pair.id,
+            &self.from,
+            file.side,
+            &file.path,
+        )
+    }
+
+    fn keep(&self, kind: &str, side: Side, path: &EntryPath) -> PathBuf {
+        keep_path(self.data_dir, kind, &self.pair.id, &self.own, side, path)
+    }
+
+    fn hash(&self, path: &Path) -> Result<Option<ContentHash>, String> {
+        if self.fs.meta(path).map_err(|e| e.to_string())?.is_none() {
+            return Ok(None);
+        }
+        let bytes = self.fs.read(path).map_err(|e| e.to_string())?;
+        Ok(Some(ContentHash::of_bytes(&bytes)))
+    }
+
+    fn exists(&self, path: &Path) -> Result<bool, String> {
+        Ok(self.fs.meta(path).map_err(|e| e.to_string())?.is_some())
+    }
+
+    /// Checks that the file is still what the sync left.
+    fn unchanged(&self, path: &Path, expected: Option<&ContentHash>) -> Result<(), String> {
+        let Some(expected) = expected else {
+            return Err("the sync did not record what it wrote".to_owned());
+        };
+        if self.hash(path)?.as_ref() == Some(expected) {
+            Ok(())
+        } else {
+            Err("changed since this sync".to_owned())
+        }
+    }
+
+    /// A file the sync wrote: its previous version back, or to the trash if
+    /// the sync created it.
+    fn unwrite(&mut self, file: &FileRef) -> Result<(), String> {
+        let target = self.location(file);
+        self.unchanged(&target, file.hash.as_ref())?;
+        let fs_err = |e: crate::fs::FsError| e.to_string();
+        if file.backup {
+            let backup = self.kept("backups", file);
+            if !self.exists(&backup)? {
+                return Err("its backup no longer exists".to_owned());
+            }
+            let previous = self.fs.read(&backup).map_err(fs_err)?;
+            let current = self.fs.read(&target).map_err(fs_err)?;
+            self.fs
+                .write_atomic(&self.keep("backups", file.side, &file.path), &current)
+                .map_err(fs_err)?;
+            self.fs.write_atomic(&target, &previous).map_err(fs_err)?;
+            self.report.written.push(FileRef {
+                hash: Some(ContentHash::of_bytes(&previous)),
+                backup: true,
+                file: file.file.clone(),
+                ..FileRef::new(file.side, file.path.clone())
+            });
+        } else {
+            self.fs
+                .rename(&target, &self.keep("trash", file.side, &file.path))
+                .map_err(fs_err)?;
+            self.report.trashed.push(FileRef {
+                file: file.file.clone(),
+                ..FileRef::new(file.side, file.path.clone())
+            });
+        }
+        Ok(())
+    }
+
+    /// A file the sync deleted: back from the trash.
+    fn untrash(&mut self, file: &FileRef) -> Result<(), String> {
+        let target = self.location(file);
+        let trashed = self.kept("trash", file);
+        if !self.exists(&trashed)? {
+            return Err("it is no longer in the trash".to_owned());
+        }
+        if self.exists(&target)? {
+            return Err("a file was created at its place since".to_owned());
+        }
+        self.fs
+            .rename(&trashed, &target)
+            .map_err(|e| e.to_string())?;
+        self.report.written.push(FileRef {
+            hash: self.hash(&target)?,
+            file: file.file.clone(),
+            ..FileRef::new(file.side, file.path.clone())
+        });
+        Ok(())
+    }
+
+    /// A file the sync moved: back to where it was.
+    fn rename_back(&mut self, moved: &Renamed, written: Option<&FileRef>) -> Result<(), String> {
+        let root = self.pair.root(moved.side);
+        let now = moved.to.under(root);
+        let before = moved.from.under(root);
+        self.unchanged(&now, written.and_then(|file| file.hash.as_ref()))?;
+        if self.exists(&before)? {
+            return Err(format!("a file was created at {} since", moved.from));
+        }
+        self.fs.rename(&now, &before).map_err(|e| e.to_string())?;
+        self.report.written.push(FileRef {
+            hash: self.hash(&before)?,
+            ..FileRef::new(moved.side, moved.from.clone())
+        });
+        self.report.renamed.push(Renamed {
+            side: moved.side,
+            from: moved.to.clone(),
+            to: moved.from.clone(),
+        });
+        Ok(())
     }
 }
 

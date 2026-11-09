@@ -673,6 +673,14 @@ pub fn history(paths: &Paths, name: &str, limit: u32) -> Result<Value, Error> {
     Ok(json!(open_engine(paths)?.history(id, limit)?))
 }
 
+/// Puts back what a past sync of a pair wrote or deleted; `run` is its id in
+/// the history. A paused pair can be reverted: nothing is synced.
+pub fn revert(paths: &Paths, name: &str, run: i64) -> Result<Value, Error> {
+    let pair = usable_pair(paths, name)?;
+    let report = open_engine(paths)?.revert(&pair, run)?;
+    Ok(json!({"pair": pair.id, "run": run, "report": report}))
+}
+
 /// The most recent syncs of every pair, the latest first, as `{pair, run}` entries.
 pub fn activity(paths: &Paths, limit: u32) -> Result<Value, Error> {
     let entries: Vec<Value> = open_engine(paths)?

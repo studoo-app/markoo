@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A past sync can be reverted, from the **History** tab of the app or with `markoo revert <pair> <number>`: what it overwrote gets its previous version back, what it created goes to the trash, what it deleted comes back and what it moved goes back to where it was. A file changed since is left alone. The next sync carries the old versions to the other side. A revert is recorded in the history and can be reverted in turn.
+- `markoo history <pair>` lists the latest syncs of a pair with their number.
+
+### Changed
+
+- Each sync keeps its backups and trashed files in a single folder, and the history records it with the hash of each file written. Syncs recorded before this version cannot be reverted.
+
 ## [1.0.0-rc.7] - 2026-11-08
 
 ### Security

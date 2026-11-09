@@ -126,3 +126,33 @@ fn locks_of_different_pairs_are_independent() {
     let _lock = s.engine.lock_pair("fixture").unwrap();
     assert!(s.engine.lock_pair("other").is_ok());
 }
+
+#[test]
+fn revert_on_disk_takes_the_whole_sync_back() {
+    let s = setup();
+    s.engine.sync(&s.pair).unwrap();
+    std::fs::remove_file(s.pair.kb.join("architecture.md")).unwrap();
+    std::fs::write(s.pair.kb.join("adr/001-stack.md"), "changed\n").unwrap();
+    std::fs::write(s.pair.kb.join("adr/002-new.md"), "new\n").unwrap();
+    let before = DiskFs.read(&s.pair.repo.join("adr/001-stack.md")).unwrap();
+    s.engine.run_recorded(&s.pair, false, "test").unwrap();
+    let run = s.engine.history(&s.pair.id, 1).unwrap()[0].id;
+    let report = s.engine.revert(&s.pair, run).unwrap();
+    let mut files = DiskFs.list(&s.pair.repo).unwrap();
+    files.sort();
+    assert_eq!(
+        (
+            files,
+            DiskFs.read(&s.pair.repo.join("adr/001-stack.md")).unwrap(),
+            report.skipped
+        ),
+        (
+            vec![
+                PathBuf::from("adr").join("001-stack.md"),
+                PathBuf::from("architecture.md")
+            ],
+            before,
+            vec![]
+        )
+    );
+}

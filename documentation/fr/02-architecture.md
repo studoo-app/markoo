@@ -110,6 +110,7 @@ Binaire `markoo` (`clap`) :
 | `markoo diff [fichier]` | Affiche le diff coloré |
 | `markoo sync [--dry-run] [--pair <paire> \| --project <nom>]` | Planifie puis applique ; `--project` synchronise toutes les paires d'un projet. `<paire>` est l'identifiant de la paire, `Projet/Nom` ou un nom qu'aucun autre projet n'utilise, voir [Désigner une paire](06-configuration.md#désigner-une-paire) |
 | `markoo conflicts` / `markoo resolve <fichier>` | Liste et résout les conflits et divergences, identifiés par le chemin du fichier |
+| `markoo history <paire>` / `markoo revert <paire> <numéro>` | Liste les dernières synchros d'une paire, et revient en arrière sur l'une d'elles |
 | `markoo hook install\|uninstall` | Gère les hooks Git |
 | `markoo pair add\|list\|show\|set\|remove` | Gère les paires (sens, dossiers, filtres…) ; création : `markoo pair add <nom> --project <projet> --kb <dossier> [--kb-type obsidian\|markdown] --repo <dossier>` (`--kb-type` détecté si omis) ; l'identifiant est tiré du projet et du nom ; `set <paire> name "…"` renomme une paire et garde son identifiant ; `list` regroupe les paires par projet ; voir [Interface de configuration](08-interface-de-configuration.md) |
 | `markoo paths` | Affiche les chemins de configuration et d'état utilisés |

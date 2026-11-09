@@ -101,6 +101,15 @@ const fr: Record<string, string> = {
   "from a Git hook": "depuis un hook Git",
   "from the command line": "depuis la ligne de commande",
   "settling a conflict": "en réglant un conflit",
+  "reverting a sync": "en revenant en arrière",
+  "Reverted": "Annulée",
+  "Revert this sync…": "Revenir en arrière…",
+  "Revert": "Revenir en arrière",
+  "Put back the {count} file(s) this sync changed? A file changed since is left alone.":
+    "Remettre les {count} fichier(s) modifiés par cette synchro ? Un fichier modifié depuis n'est pas touché.",
+  "The next sync carries the old versions to the other side. What is replaced goes to the backups, so this can be reverted too.":
+    "La synchro suivante reporte les anciennes versions de l'autre côté. Ce qui est remplacé part dans les sauvegardes : ce retour en arrière peut lui-même être annulé.",
+  "{count} file(s) put back.": "{count} fichier(s) remis.",
   "{count} to the repo": "{count} vers le dépôt",
   "{count} to the KB": "{count} vers la KB",
   "{count} to the trash": "{count} à la corbeille",
