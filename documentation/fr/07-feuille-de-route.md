@@ -34,6 +34,8 @@ gantt
 
 **Terminé quand** : `cargo test` passe en CI.
 
+**État** : terminé. La CI compile et teste sur macOS, Linux et Windows, et passe sur `main`.
+
 ### M1 — Moteur de synchro
 - `scanner`, `state` (SQLite), `planner` (les 15 cas de la [classification](03-algorithme-de-synchronisation.md#classification)), `merge` (3-way), `applier` (atomique, sauvegardes, corbeille).
 - Les trois sens (`both`, `kb-to-repo`, `repo-to-kb`) avec `protect` / `overwrite` et les divergences.
@@ -42,12 +44,16 @@ gantt
 
 **Terminé quand** : chaque ligne du tableau de classification a un test, et une synchro rejouée ne produit aucune écriture.
 
+**État** : terminé. Chaque ligne du tableau de classification a son test, comme les trois sens, `protect` / `overwrite`, les renommages exacts et une deuxième synchro qui n'écrit rien. Ces tests s'exécutent sur un système de fichiers en mémoire ; quelques tests seulement écrivent sur le disque.
+
 ### M2 — CLI
 - `init`, `status`, `diff`, `sync [--dry-run]`, `conflicts`, `resolve`.
 - `pair add|list|show|set|remove`, avec assistant interactif.
 - Sortie colorée et `--json` pour les scripts.
 
 **Terminé quand** : Markoo est utilisable au quotidien sur une vraie paire (KB ↔ `clara/docs`).
+
+**État** : terminé. Toutes les commandes prévues existent, avec l'assistant de `pair add`, les couleurs (coupées hors terminal ou avec `NO_COLOR`) et `--json`. Markoo sert au quotidien sur trois vraies paires Obsidian, mais pas encore sur `clara/docs`.
 
 ### M3 — Adaptateurs KB : trait + Obsidian (première KB)
 - Trait `KbAdapter` dans `markoo-core::kb` : détection, organisation des fichiers, dialecte (`to_canonical` / `from_canonical`), résolution des noms (voir [Modèle d'adaptateur](09-bases-de-connaissance.md#modèle-dadaptateur)).
@@ -56,6 +62,8 @@ gantt
 - Tests golden et tests de propriété d'aller-retour, pour chaque adaptateur.
 
 **Terminé quand** : l'aller-retour d'un vault Obsidian réel ne produit aucune différence et les liens fonctionnent sur GitHub.
+
+**État** : terminé. Le trait `KbAdapter`, l'adaptateur `obsidian` et le dialecte `gfm` sont en place, avec des tests golden et des tests de propriété d'aller-retour. Le test sur un vault réel (`real_vault_round_trip`, à lancer à la main avec `MARKOO_CORPUS`) ne modifie aucun fichier sur deux vraies paires. Il signale des liens cassés seulement quand il copie le dossier de la paire sans le reste du vault ; dans les vrais repos, ces liens fonctionnent.
 
 ### M4 — Daemon, intervalle, API
 - `markoo daemon` : file de jobs, verrou, anti-rebond, planificateur.
