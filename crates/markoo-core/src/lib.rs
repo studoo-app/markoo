@@ -88,4 +88,20 @@ pub enum Error {
     /// Keeping both versions when one was deleted.
     #[error("{0} exists on one side only; keep one side instead")]
     KeepBothNeedsTwoVersions(EntryPath),
+    /// No sync of this pair has this identifier in the history.
+    #[error("pair \"{pair}\" has no sync {run} in its history")]
+    UnknownRun {
+        /// The pair.
+        pair: String,
+        /// The run asked for.
+        run: i64,
+    },
+    /// This sync cannot be reverted.
+    #[error("sync {run} cannot be reverted: {reason}")]
+    NotRevertible {
+        /// The run asked for.
+        run: i64,
+        /// Why not.
+        reason: String,
+    },
 }

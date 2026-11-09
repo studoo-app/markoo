@@ -88,7 +88,7 @@ gantt
 - Three-column conflict view with an editor.
 - [Configuration UI](08-configuration-ui.md): creation wizard, direction choice, filters with preview, transformations, triggers.
 
-**Status**: done on macOS, except that the screens were mostly checked with sample data. Not done: rollback from the history, per-pair intervals, the Linux and Windows builds of the app.
+**Status**: done on macOS, except that the screens were mostly checked with sample data. Rollback from the history is done. Not done: per-pair intervals, the Linux and Windows builds of the app.
 
 ### M8 — v1.0
 - Signed binaries (notarized on macOS), Homebrew formula, user documentation.

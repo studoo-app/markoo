@@ -661,3 +661,40 @@ fn real_vault_round_trip() {
     print_some(&broken);
     assert!(changed.is_empty() && again.is_empty());
 }
+
+// --- Revert ---------------------------------------------------------------------
+
+impl Vault {
+    /// Syncs like a real interface and reverts that sync at once.
+    fn sync_then_revert(&self) -> Report {
+        self.engine.run_recorded(&self.pair, false, "test").unwrap();
+        let run = self.engine.history(&self.pair.id, 1).unwrap()[0].id;
+        self.engine.revert(&self.pair, run).unwrap()
+    }
+}
+
+#[test]
+fn revert_restores_an_attachment_kept_elsewhere_in_the_vault() {
+    let v = Vault::new();
+    v.kb("a.md", "![[pic.png]]\n");
+    v.vault("attachments/pic.png", "v1");
+    v.sync();
+    v.repo("assets/pic.png", "v2");
+    let report = v.sync_then_revert();
+    assert_eq!(
+        (
+            v.read_vault("attachments/pic.png").as_deref(),
+            report.skipped
+        ),
+        (Some("v1"), vec![])
+    );
+}
+
+#[test]
+fn revert_trashes_an_attachment_the_sync_created_in_the_vault() {
+    let v = Vault::with_settings(r#"{"attachmentFolderPath":"files"}"#);
+    v.repo("a.md", "![pic](./assets/pic.png)\n");
+    v.repo("assets/pic.png", "png");
+    v.sync_then_revert();
+    assert_eq!(v.read_vault("files/pic.png"), None);
+}

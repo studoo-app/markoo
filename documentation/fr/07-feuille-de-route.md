@@ -88,7 +88,7 @@ gantt
 - Vue de conflit en trois colonnes avec éditeur.
 - [Interface de configuration](08-interface-de-configuration.md) : assistant de création, choix du sens, filtres avec aperçu, transformations, déclencheurs.
 
-**État** : terminé sur macOS, mais les écrans ont surtout été vérifiés avec des données d'exemple. Pas fait : le retour en arrière depuis l'historique, les intervalles par paire, les builds Linux et Windows de l'app.
+**État** : terminé sur macOS, mais les écrans ont surtout été vérifiés avec des données d'exemple. Le retour en arrière depuis l'historique est fait. Pas fait : les intervalles par paire, les builds Linux et Windows de l'app.
 
 ### M8 — v1.0
 - Binaires signés (macOS notarisé), formule Homebrew, documentation utilisateur.

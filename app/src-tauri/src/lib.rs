@@ -287,6 +287,12 @@ async fn pair_history(backend: State<'_, Backend>, pair: String) -> CommandResul
     blocking(move || service::history(&paths, &pair, HISTORY_LENGTH)).await
 }
 
+#[tauri::command]
+async fn revert_run(backend: State<'_, Backend>, pair: String, run: i64) -> CommandResult {
+    let paths = backend.paths.clone();
+    blocking(move || service::revert(&paths, &pair, run)).await
+}
+
 /// How many syncs the Activity view lists, across every pair.
 const ACTIVITY_LENGTH: u32 = 200;
 
@@ -611,6 +617,7 @@ pub fn run() {
             preview_new_pair_filters,
             preview_transform,
             pair_history,
+            revert_run,
             activity,
             global_settings,
             update_global_settings,

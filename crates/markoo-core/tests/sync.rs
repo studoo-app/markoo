@@ -994,3 +994,267 @@ fn resolving_is_refused_while_the_pair_is_locked() {
         Err(markoo_core::Error::Busy(_))
     ));
 }
+
+// --- Revert --------------------------------------------------------------
+
+impl Harness {
+    /// Syncs like a real interface, so the run goes to the history; returns its id.
+    fn recorded(&self) -> i64 {
+        self.engine.run_recorded(&self.pair, false, "test").unwrap();
+        self.latest_run()
+    }
+
+    fn latest_run(&self) -> i64 {
+        self.engine.history(&self.pair.id, 1).unwrap()[0].id
+    }
+
+    fn revert(&self, run: i64) -> Report {
+        self.engine.revert(&self.pair, run).unwrap()
+    }
+}
+
+#[test]
+fn revert_restores_an_overwritten_file() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.put(Side::Kb, "a.md", "new\n");
+    let run = h.recorded();
+    h.revert(run);
+    assert_eq!(h.get(Side::Repo, "a.md").as_deref(), Some(BASE));
+}
+
+#[test]
+fn sync_after_a_revert_puts_the_other_side_back() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.put(Side::Kb, "a.md", "new\n");
+    let run = h.recorded();
+    h.revert(run);
+    h.sync();
+    assert_eq!(h.get(Side::Kb, "a.md").as_deref(), Some(BASE));
+}
+
+#[test]
+fn revert_trashes_a_file_the_sync_created() {
+    let h = Harness::new();
+    h.put(Side::Kb, "a.md", "a\n");
+    let run = h.recorded();
+    h.revert(run);
+    assert_eq!((h.get(Side::Repo, "a.md"), h.trashed().len()), (None, 1));
+}
+
+#[test]
+fn revert_brings_back_a_deleted_file() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.delete(Side::Kb, "a.md");
+    let run = h.recorded();
+    h.revert(run);
+    h.sync();
+    assert_eq!(
+        (h.get(Side::Repo, "a.md"), h.get(Side::Kb, "a.md")),
+        (Some(BASE.to_owned()), Some(BASE.to_owned()))
+    );
+}
+
+#[test]
+fn revert_moves_a_renamed_file_back() {
+    let h = Harness::new();
+    h.synced("old.md", BASE);
+    h.delete(Side::Kb, "old.md");
+    h.put(Side::Kb, "new.md", BASE);
+    let run = h.recorded();
+    h.revert(run);
+    assert_eq!(
+        (h.get(Side::Repo, "old.md"), h.get(Side::Repo, "new.md")),
+        (Some(BASE.to_owned()), None)
+    );
+}
+
+#[test]
+fn revert_restores_both_sides_of_a_merge() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.put(Side::Kb, "a.md", "L1\nKB\nL3\nL4\n");
+    h.put(Side::Repo, "a.md", "L1\nL2\nL3\nREPO\n");
+    let run = h.recorded();
+    h.revert(run);
+    assert_eq!(
+        (h.get(Side::Kb, "a.md"), h.get(Side::Repo, "a.md")),
+        (
+            Some("L1\nKB\nL3\nL4\n".to_owned()),
+            Some("L1\nL2\nL3\nREPO\n".to_owned())
+        )
+    );
+}
+
+#[test]
+fn file_changed_since_the_sync_is_left_alone() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.put(Side::Kb, "a.md", "new\n");
+    let run = h.recorded();
+    h.put(Side::Repo, "a.md", "edited after\n");
+    let report = h.revert(run);
+    assert_eq!(
+        (h.get(Side::Repo, "a.md").as_deref(), report.skipped.len()),
+        (Some("edited after\n"), 1)
+    );
+}
+
+#[test]
+fn file_created_since_a_deletion_is_left_alone() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.delete(Side::Kb, "a.md");
+    let run = h.recorded();
+    h.put(Side::Repo, "a.md", "brand new\n");
+    let report = h.revert(run);
+    assert_eq!(
+        (h.get(Side::Repo, "a.md").as_deref(), report.skipped.len()),
+        (Some("brand new\n"), 1)
+    );
+}
+
+#[test]
+fn revert_is_recorded_in_the_history() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.put(Side::Kb, "a.md", "new\n");
+    let run = h.recorded();
+    h.revert(run);
+    let latest = &h.engine.history(&h.pair.id, 1).unwrap()[0];
+    assert_eq!(
+        (
+            latest.trigger.as_str(),
+            latest.report.as_ref().unwrap()["reverts"].as_i64()
+        ),
+        ("revert", Some(run))
+    );
+}
+
+#[test]
+fn reverting_twice_is_refused() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.put(Side::Kb, "a.md", "new\n");
+    let run = h.recorded();
+    h.revert(run);
+    assert!(matches!(
+        h.engine.revert(&h.pair, run),
+        Err(markoo_core::Error::NotRevertible { .. })
+    ));
+}
+
+#[test]
+fn a_revert_can_be_reverted() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.put(Side::Kb, "a.md", "new\n");
+    let run = h.recorded();
+    h.revert(run);
+    let revert = h.latest_run();
+    h.revert(revert);
+    assert_eq!(h.get(Side::Repo, "a.md").as_deref(), Some("new\n"));
+}
+
+#[test]
+fn reverting_an_unknown_run_fails() {
+    let h = Harness::new();
+    assert!(matches!(
+        h.engine.revert(&h.pair, 42),
+        Err(markoo_core::Error::UnknownRun { .. })
+    ));
+}
+
+#[test]
+fn reverting_is_refused_while_the_pair_is_locked() {
+    let h = Harness::new();
+    h.put(Side::Kb, "a.md", "a\n");
+    let run = h.recorded();
+    let _lock = h.engine.lock_pair(&h.pair.id).unwrap();
+    assert!(matches!(
+        h.engine.revert(&h.pair, run),
+        Err(markoo_core::Error::Busy(_))
+    ));
+}
+
+#[test]
+fn one_way_overwrite_refuses_reverting_the_target() {
+    let h = one_way(TargetChanges::Overwrite);
+    h.put(Side::Kb, "a.md", "a\n");
+    let run = h.recorded();
+    assert!(matches!(
+        h.engine.revert(&h.pair, run),
+        Err(markoo_core::Error::NotRevertible { .. })
+    ));
+}
+
+#[test]
+fn one_way_protect_revert_becomes_a_divergence() {
+    let h = one_way(TargetChanges::Protect);
+    h.synced("a.md", BASE);
+    h.put(Side::Kb, "a.md", "new\n");
+    let run = h.recorded();
+    h.revert(run);
+    assert_eq!(h.pending_kinds().len(), 1);
+}
+
+#[test]
+fn sync_after_reverting_a_merge_is_a_conflict() {
+    let h = Harness::new();
+    h.synced("a.md", BASE);
+    h.put(Side::Kb, "a.md", "L1\nKB\nL3\nL4\n");
+    h.put(Side::Repo, "a.md", "L1\nL2\nL3\nREPO\n");
+    let run = h.recorded();
+    h.revert(run);
+    h.sync();
+    assert_eq!(
+        (
+            h.pending_kinds().len(),
+            h.get(Side::Kb, "a.md"),
+            h.get(Side::Repo, "a.md")
+        ),
+        (
+            1,
+            Some("L1\nKB\nL3\nL4\n".to_owned()),
+            Some("L1\nL2\nL3\nREPO\n".to_owned())
+        )
+    );
+}
+
+#[test]
+fn sync_after_reverting_a_creation_removes_it_from_the_other_side() {
+    let h = Harness::new();
+    h.put(Side::Kb, "a.md", "a\n");
+    let run = h.recorded();
+    h.revert(run);
+    h.sync();
+    assert_eq!(
+        (
+            h.get(Side::Kb, "a.md"),
+            h.trashed().len(),
+            h.pending_kinds()
+        ),
+        (None, 2, vec![])
+    );
+}
+
+#[test]
+fn sync_after_reverting_a_rename_moves_it_back_on_both_sides() {
+    let h = Harness::new();
+    h.synced("old.md", BASE);
+    h.delete(Side::Kb, "old.md");
+    h.put(Side::Kb, "new.md", BASE);
+    let run = h.recorded();
+    h.revert(run);
+    h.sync();
+    assert_eq!(
+        (
+            h.get(Side::Kb, "old.md"),
+            h.get(Side::Kb, "new.md"),
+            h.pending_kinds()
+        ),
+        (Some(BASE.to_owned()), None, vec![])
+    );
+}

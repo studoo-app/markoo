@@ -1660,3 +1660,46 @@ fn a_sync_from_the_command_line_goes_to_the_history() {
     let history = markoo_core::service::history(&engine_paths, "clara", 1).unwrap();
     assert_eq!(history[0]["trigger"], "cli");
 }
+
+// --- history and revert -------------------------------------------------------
+
+#[test]
+fn history_lists_the_syncs_with_their_number() {
+    let env = Env::with_pair();
+    env.write(&env.kb(), "a.md", "a\n");
+    env.ok(&["sync"]);
+    let out = env.ok(&["history", "clara"]);
+    assert!(out.contains("#1") && out.contains("1 to the repo"), "{out}");
+}
+
+#[test]
+fn revert_puts_the_files_back() {
+    let env = Env::with_pair();
+    env.write(&env.kb(), "a.md", "v1\n");
+    env.ok(&["sync"]);
+    env.write(&env.kb(), "a.md", "v2\n");
+    env.ok(&["sync"]);
+    let run = env.json(&["history", "clara"])[0]["id"].as_i64().unwrap();
+    env.ok(&["revert", "clara", &run.to_string()]);
+    assert_eq!(env.read(&env.repo(), "a.md").as_deref(), Some("v1\n"));
+}
+
+#[test]
+fn history_marks_a_reverted_sync() {
+    let env = Env::with_pair();
+    env.write(&env.kb(), "a.md", "a\n");
+    env.ok(&["sync"]);
+    env.ok(&["revert", "clara", "1"]);
+    let out = env.ok(&["history", "clara"]);
+    assert!(
+        out.contains("(reverted)") && out.contains("(reverts #1)"),
+        "{out}"
+    );
+}
+
+#[test]
+fn reverting_an_unknown_sync_fails() {
+    let env = Env::with_pair();
+    let err = env.fails(&["revert", "clara", "9"]);
+    assert!(err.contains("no sync 9"), "{err}");
+}

@@ -401,6 +401,77 @@ impl Ctx {
         Ok(())
     }
 
+    pub fn history(&self, reference: &str, limit: u32) -> Result<()> {
+        let config = self.config()?;
+        let pair = &config.pair(reference)?.pair;
+        let runs = self.engine()?.history(&pair.id, limit)?;
+        if self.json {
+            return self.print_json(&json!(runs));
+        }
+        if runs.is_empty() {
+            println!("No sync of {} has changed anything yet.", pair.label());
+            return Ok(());
+        }
+        let reports: Vec<Option<Report>> = runs
+            .iter()
+            .map(|run| {
+                run.report
+                    .clone()
+                    .and_then(|report| serde_json::from_value(report).ok())
+            })
+            .collect();
+        let reverted: Vec<i64> = reports
+            .iter()
+            .flatten()
+            .filter(|report| report.run.is_some())
+            .filter_map(|report| report.reverts)
+            .collect();
+        let now = now_millis();
+        for (run, report) in runs.iter().zip(&reports) {
+            let what = match (&run.error, report) {
+                (Some(error), _) => self.style.red(&format!("failed: {error}")),
+                (None, Some(report)) => report_summary(report),
+                (None, None) => String::new(),
+            };
+            let mut note = String::new();
+            if reverted.contains(&run.id) {
+                note = self.style.dim("  (reverted)");
+            } else if let Some(reverts) = report.as_ref().and_then(|report| report.reverts) {
+                note = self.style.dim(&format!("  (reverts #{reverts})"));
+            }
+            println!(
+                "{}  {}  {}  {what}{note}",
+                self.style.bold(&format!("#{}", run.id)),
+                self.style.dim(&age(now.saturating_sub(run.started_at))),
+                self.style.dim(&run.trigger),
+            );
+        }
+        println!("\nPut a sync back with: markoo revert {} <number>", pair.id);
+        Ok(())
+    }
+
+    pub fn revert(&self, reference: &str, run: i64) -> Result<()> {
+        let pair = service::usable_pair(&self.paths, reference)?;
+        let report = self.engine()?.revert(&pair, run)?;
+        if self.json {
+            return self.print_json(&json!({"pair": pair.id, "run": run, "report": report}));
+        }
+        let done = report.written.len() + report.trashed.len();
+        println!(
+            "{} {done} file(s) put back from sync #{run}.",
+            self.style.green("✓")
+        );
+        self.print_report(&report);
+        if done > 0 {
+            println!(
+                "  {}",
+                self.style
+                    .dim("The next sync carries the old versions to the other side.")
+            );
+        }
+        Ok(())
+    }
+
     /// Finds the pair of the file: `--pair`, or the only one with an issue on it.
     fn pair_with_issue(
         &self,
@@ -1002,6 +1073,48 @@ impl Ctx {
             println!("{colored}");
         }
     }
+}
+
+fn now_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| {
+            u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
+        })
+}
+
+/// `3 min ago`, `2 h ago`, `5 d ago`.
+fn age(millis: u64) -> String {
+    let minutes = millis / 60_000;
+    match minutes {
+        0 => "just now".to_owned(),
+        1..60 => format!("{minutes} min ago"),
+        60..1440 => format!("{} h ago", minutes / 60),
+        _ => format!("{} d ago", minutes / 1440),
+    }
+}
+
+/// `2 to the repo · 1 to the trash`
+fn report_summary(report: &Report) -> String {
+    let to = |side: Side| {
+        report
+            .written
+            .iter()
+            .filter(|file| file.side == side)
+            .count()
+    };
+    let mut parts = Vec::new();
+    for (count, label) in [
+        (to(Side::Repo), "to the repo"),
+        (to(Side::Kb), "to the KB"),
+        (report.trashed.len(), "to the trash"),
+        (report.skipped.len(), "skipped"),
+    ] {
+        if count > 0 {
+            parts.push(format!("{count} {label}"));
+        }
+    }
+    parts.join(" · ")
 }
 
 /// Entries worth showing: base bookkeeping is invisible to the user.

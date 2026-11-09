@@ -161,7 +161,7 @@
   {:else if tab === "transformations"}
     <TransformationsTab {pair} onchange={changed} />
   {:else if tab === "history"}
-    <HistoryTab {id} revision={revision + localRevision} />
+    <HistoryTab {id} revision={revision + localRevision} onchange={changed} />
   {:else if tab === "triggers"}
     <TriggersTab {pair} onchange={changed} />
   {:else}

@@ -91,7 +91,7 @@ pub struct PendingIssue {
 }
 
 /// How many runs are kept for each pair.
-const KEPT_RUNS: u32 = 500;
+pub(crate) const KEPT_RUNS: u32 = 500;
 
 /// A past sync of a pair.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -429,6 +429,26 @@ impl State {
             Ok((row.get::<_, String>(0)?, run))
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// One past sync of a pair.
+    pub fn run(&self, pair: &str, id: i64) -> Result<Option<RunRecord>, StateError> {
+        let mut statement = self.conn.prepare(
+            "SELECT id, source, started_at, duration_ms, report, error FROM runs
+             WHERE pair = ?1 AND id = ?2",
+        )?;
+        let mut rows = statement.query_map(params![pair, id], |row| {
+            let report: Option<String> = row.get(4)?;
+            Ok(RunRecord {
+                id: row.get(0)?,
+                trigger: row.get(1)?,
+                started_at: u64::try_from(row.get::<_, i64>(2)?).unwrap_or(0),
+                duration_ms: u64::try_from(row.get::<_, i64>(3)?).unwrap_or(0),
+                report: report.and_then(|text| serde_json::from_str(&text).ok()),
+                error: row.get(5)?,
+            })
+        })?;
+        Ok(rows.next().transpose()?)
     }
 
     /// The most recent syncs of a pair, the latest first.

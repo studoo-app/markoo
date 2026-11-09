@@ -6,9 +6,10 @@
 //! trash, both under `<data>/`.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::entry::{ContentHash, EntryPath, Side};
 use crate::fs::{Fs, FsError};
@@ -19,16 +20,50 @@ use crate::scan::{ReadError, read_canonical};
 use crate::state::{BaseEntry, IssueKind, PendingIssue, State, StateError};
 
 /// A file on one side.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileRef {
     /// Side of the file.
     pub side: Side,
     /// The entry.
     pub path: EntryPath,
+    /// For a file written: hash of its bytes right after, so that a revert can
+    /// tell whether it changed since.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash: Option<ContentHash>,
+    /// For a file written: its previous version was kept in the backups.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub backup: bool,
+    /// Where the file is, when it is not `path` under its side's folder (an
+    /// attachment kept elsewhere in the vault).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<PathBuf>,
+}
+
+impl FileRef {
+    pub(crate) fn new(side: Side, path: EntryPath) -> Self {
+        Self {
+            side,
+            path,
+            hash: None,
+            backup: false,
+            file: None,
+        }
+    }
+}
+
+/// A file moved within one side.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Renamed {
+    /// Side of the file.
+    pub side: Side,
+    /// Where it was.
+    pub from: EntryPath,
+    /// Where it is now.
+    pub to: EntryPath,
 }
 
 /// An entry waiting for the user.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IssueRef {
     /// The entry.
     pub path: EntryPath,
@@ -37,7 +72,7 @@ pub struct IssueRef {
 }
 
 /// An entry that could not be applied; the next sync will replan it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Skipped {
     /// The entry.
     pub path: EntryPath,
@@ -46,10 +81,21 @@ pub struct Skipped {
 }
 
 /// Outcome of applying a plan.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Report {
+    /// Folder of this run's backups and trashed files, under `<data>/backups/<pair>/`
+    /// and `<data>/trash/<pair>/`. Set when something was written or trashed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run: Option<String>,
+    /// For a revert: the history identifier of the sync it puts back.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reverts: Option<i64>,
     /// Files written (copies, merges, renames).
     pub written: Vec<FileRef>,
+    /// Files moved within a side; their new place is also in `written`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub renamed: Vec<Renamed>,
     /// Files moved to the trash.
     pub trashed: Vec<FileRef>,
     /// Entries waiting for the user.
@@ -85,6 +131,8 @@ pub(crate) struct Applier<'a, F: Fs> {
     pub repo_dialect: &'a dyn Dialect,
     pub index: &'a NameIndex,
     pub data_dir: &'a Path,
+    /// Groups the backups and trashed files of everything this applier does.
+    pub run: String,
 }
 
 impl<F: Fs> Applier<'_, F> {
@@ -98,6 +146,7 @@ impl<F: Fs> Applier<'_, F> {
         }
         let mut report = self.apply_entries(&plan.entries)?;
         report.written.extend(attachments.written);
+        report.run = self.run_if_used(&report);
         report.skipped.extend(attachments.skipped);
         report.attachment_conflicts = attachments.attachment_conflicts;
         for issue in self.state.pending(&self.pair.id)? {
@@ -129,11 +178,19 @@ impl<F: Fs> Applier<'_, F> {
             AttachmentAction::Copy { to, hash } => {
                 let result = self.copy_attachment(attachment, *to, hash, &entry);
                 match result {
-                    Ok(()) => {
+                    Ok(backup) => {
                         self.state.put_attachment(&self.pair.id, name, hash)?;
+                        let target = match to {
+                            Side::Repo => &attachment.repo_path,
+                            Side::Kb => &attachment.kb_path,
+                        };
+                        let file =
+                            (target != &entry.under(self.pair.root(*to))).then(|| target.clone());
                         report.written.push(FileRef {
-                            side: *to,
-                            path: entry,
+                            hash: Some(hash.clone()),
+                            backup,
+                            file,
+                            ..FileRef::new(*to, entry)
                         });
                     }
                     Err(e) => report.skipped.push(Skipped {
@@ -152,7 +209,7 @@ impl<F: Fs> Applier<'_, F> {
         to: Side,
         hash: &ContentHash,
         entry: &EntryPath,
-    ) -> Result<(), EntryError> {
+    ) -> Result<bool, EntryError> {
         let (source, target) = match to {
             Side::Repo => (&attachment.kb_path, &attachment.repo_path),
             Side::Kb => (&attachment.repo_path, &attachment.kb_path),
@@ -161,22 +218,21 @@ impl<F: Fs> Applier<'_, F> {
         if &ContentHash::of_bytes(&bytes) != hash {
             return Err(EntryError::ChangedSinceScan);
         }
-        if self.fs.meta(target)?.is_some() {
+        let backup = self.fs.meta(target)?.is_some();
+        if backup {
             let previous = self.fs.read(target)?;
-            let run = run_id();
             self.fs
-                .write_atomic(&self.keep_dir("backups", to, &run, entry), &previous)?;
+                .write_atomic(&self.keep_path("backups", to, entry), &previous)?;
         }
         self.fs.write_atomic(target, &bytes)?;
-        Ok(())
+        Ok(backup)
     }
 
     /// Applies some entries, leaving the other pending issues as they are.
     pub fn apply_entries(&self, entries: &[PlannedEntry]) -> Result<Report, StateError> {
-        let run = run_id();
         let mut report = Report::default();
         for entry in entries {
-            match self.apply_entry(entry, &run, &mut report) {
+            match self.apply_entry(entry, &mut report) {
                 Ok(()) => {}
                 Err(EntryError::State(e)) => return Err(e),
                 Err(e) => report.skipped.push(Skipped {
@@ -185,15 +241,16 @@ impl<F: Fs> Applier<'_, F> {
                 }),
             }
         }
+        report.run = self.run_if_used(&report);
         Ok(report)
     }
 
-    fn apply_entry(
-        &self,
-        entry: &PlannedEntry,
-        run: &str,
-        report: &mut Report,
-    ) -> Result<(), EntryError> {
+    /// The run's folder, if this report put anything in it.
+    fn run_if_used(&self, report: &Report) -> Option<String> {
+        (!report.written.is_empty() || !report.trashed.is_empty()).then(|| self.run.clone())
+    }
+
+    fn apply_entry(&self, entry: &PlannedEntry, report: &mut Report) -> Result<(), EntryError> {
         let path = &entry.path;
         match &entry.action {
             Action::Pending {
@@ -228,32 +285,21 @@ impl<F: Fs> Applier<'_, F> {
 
         match &entry.action {
             Action::Copy { to, content } => {
-                self.write(*to, path, content, run)?;
-                report.written.push(FileRef {
-                    side: *to,
-                    path: path.clone(),
-                });
+                report.written.push(self.write(*to, path, content)?);
                 self.record(path, content)?;
             }
             Action::Merge { content } => {
                 let merged = ContentHash::of(content);
                 for side in [Side::Kb, Side::Repo] {
                     if entry.seen(side) != Some(&merged) {
-                        self.write(side, path, content, run)?;
-                        report.written.push(FileRef {
-                            side,
-                            path: path.clone(),
-                        });
+                        report.written.push(self.write(side, path, content)?);
                     }
                 }
                 self.record(path, content)?;
             }
             Action::Trash { side } => {
-                self.trash(*side, path, run)?;
-                report.trashed.push(FileRef {
-                    side: *side,
-                    path: path.clone(),
-                });
+                self.trash(*side, path)?;
+                report.trashed.push(FileRef::new(*side, path.clone()));
                 self.forget(path)?;
             }
             Action::RecordBase { content } => self.record(path, content)?,
@@ -265,9 +311,15 @@ impl<F: Fs> Applier<'_, F> {
                 }
                 self.fs
                     .rename(&path.under(self.pair.root(*side)), &destination)?;
+                let moved = self.fs.read(&destination)?;
                 report.written.push(FileRef {
+                    hash: Some(ContentHash::of_bytes(&moved)),
+                    ..FileRef::new(*side, to.clone())
+                });
+                report.renamed.push(Renamed {
                     side: *side,
-                    path: to.clone(),
+                    from: path.clone(),
+                    to: to.clone(),
                 });
                 self.forget(path)?;
                 self.record(to, content)?;
@@ -302,18 +354,13 @@ impl<F: Fs> Applier<'_, F> {
         }
     }
 
-    fn write(
-        &self,
-        side: Side,
-        path: &EntryPath,
-        canonical: &str,
-        run: &str,
-    ) -> Result<(), EntryError> {
+    fn write(&self, side: Side, path: &EntryPath, canonical: &str) -> Result<FileRef, EntryError> {
         let absolute = path.under(self.pair.root(side));
-        if self.fs.meta(&absolute)?.is_some() {
+        let backup = self.fs.meta(&absolute)?.is_some();
+        if backup {
             let previous = self.fs.read(&absolute)?;
             self.fs
-                .write_atomic(&self.keep_dir("backups", side, run, path), &previous)?;
+                .write_atomic(&self.keep_path("backups", side, path), &previous)?;
         }
         let ctx = ConvertCtx {
             path,
@@ -321,25 +368,23 @@ impl<F: Fs> Applier<'_, F> {
         };
         let text = self.dialect(side).from_canonical(canonical, &ctx)?;
         self.fs.write_atomic(&absolute, text.as_bytes())?;
-        Ok(())
+        Ok(FileRef {
+            hash: Some(ContentHash::of_bytes(text.as_bytes())),
+            backup,
+            ..FileRef::new(side, path.clone())
+        })
     }
 
-    fn trash(&self, side: Side, path: &EntryPath, run: &str) -> Result<(), EntryError> {
+    fn trash(&self, side: Side, path: &EntryPath) -> Result<(), EntryError> {
         let absolute = path.under(self.pair.root(side));
         self.fs
-            .rename(&absolute, &self.keep_dir("trash", side, run, path))?;
+            .rename(&absolute, &self.keep_path("trash", side, path))?;
         Ok(())
     }
 
-    /// `<data>/<kind>/<pair>/<run>/<side>/<path>`
-    fn keep_dir(&self, kind: &str, side: Side, run: &str, path: &EntryPath) -> PathBuf {
-        let root = self
-            .data_dir
-            .join(kind)
-            .join(&self.pair.id)
-            .join(run)
-            .join(side.as_str());
-        path.under(&root)
+    /// `<data>/<kind>/<pair>/<run>/<side>/<path>` for this applier's run.
+    fn keep_path(&self, kind: &str, side: Side, path: &EntryPath) -> PathBuf {
+        keep_path(self.data_dir, kind, &self.pair.id, &self.run, side, path)
     }
 
     fn record(&self, path: &EntryPath, content: &str) -> Result<(), EntryError> {
@@ -361,10 +406,34 @@ impl<F: Fs> Applier<'_, F> {
     }
 }
 
-/// Identifier of an apply run, used to group its backups and trashed files.
+/// `<data>/<kind>/<pair>/<run>/<side>/<path>`
+pub(crate) fn keep_path(
+    data_dir: &Path,
+    kind: &str,
+    pair: &str,
+    run: &str,
+    side: Side,
+    path: &EntryPath,
+) -> PathBuf {
+    path.under(&data_dir.join(kind).join(pair).join(run).join(side.as_str()))
+}
+
+/// Identifier of an apply run, used to group its backups and trashed files:
+/// the time in milliseconds, made unique within the process so that two runs
+/// never share a folder.
 pub(crate) fn run_id() -> String {
-    let millis = SystemTime::now()
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_millis());
-    millis.to_string()
+        .map_or(0, |elapsed| {
+            u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
+        });
+    let mut last = LAST.load(Ordering::Relaxed);
+    loop {
+        let next = now.max(last + 1);
+        match LAST.compare_exchange_weak(last, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return next.to_string(),
+            Err(seen) => last = seen,
+        }
+    }
 }
