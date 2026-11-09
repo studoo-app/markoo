@@ -34,6 +34,8 @@ gantt
 
 **Done when**: `cargo test` passes in CI.
 
+**Status**: done. CI builds and tests on macOS, Linux and Windows, and passes on `main`.
+
 ### M1 — Sync engine
 - `scanner`, `state` (SQLite), `planner` (the 15 cases of the [classification](03-sync-algorithm.md#classification)), `merge` (3-way), `applier` (atomic, backups, trash).
 - All three directions (`both`, `kb-to-repo`, `repo-to-kb`) with `protect` / `overwrite` and divergences.
@@ -42,12 +44,16 @@ gantt
 
 **Done when**: every row of the classification table has a test, and replaying a sync produces no writes.
 
+**Status**: done. Every row of the classification table has its test, as do the three directions, `protect` / `overwrite`, exact renames and a second sync that writes nothing. These tests run on an in-memory file system; only a few tests write to disk.
+
 ### M2 — CLI
 - `init`, `status`, `diff`, `sync [--dry-run]`, `conflicts`, `resolve`.
 - `pair add|list|show|set|remove`, with an interactive wizard.
 - Colored output and `--json` for scripts.
 
 **Done when**: Markoo is usable day to day on a real pair (KB ↔ `clara/docs`).
+
+**Status**: done. Every planned command exists, with the `pair add` wizard, colors (off outside a terminal or with `NO_COLOR`) and `--json`. Markoo is used day to day on three real Obsidian pairs, but not yet on `clara/docs`.
 
 ### M3 — KB adapters: trait + Obsidian (first KB)
 - `KbAdapter` trait in `markoo-core::kb`: detection, file layout, dialect (`to_canonical` / `from_canonical`), name resolution (see [Adapter model](09-knowledge-bases.md#adapter-model)).
@@ -56,6 +62,8 @@ gantt
 - Golden tests and round-trip property tests, for each adapter.
 
 **Done when**: a round trip of a real Obsidian vault produces no difference and links work on GitHub.
+
+**Status**: done. The `KbAdapter` trait, the `obsidian` adapter and the `gfm` dialect are in place, with golden tests and round-trip property tests. The real-vault test (`real_vault_round_trip`, run by hand with `MARKOO_CORPUS`) changes no file on two real pairs. It reports broken links only because it copies the pair's folder without the rest of the vault; in the real repos, those links work.
 
 ### M4 — Daemon, interval, API
 - `markoo daemon`: job queue, lock, debounce, scheduler.
