@@ -201,15 +201,15 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      # As for macOS, the updater archive gets its target in the name.
+      # On Linux the updater takes the AppImage itself, with its signature
+      # (no archive). It gets its target in the name, as the macOS archives do.
       - name: Gather the files of the release
         run: |
           bundle="app/src-tauri/target/$TARGET/release/bundle"
           mkdir dist
-          cp "$bundle"/appimage/*.AppImage dist/
           cp "$bundle"/deb/*.deb dist/
-          cp "$bundle"/appimage/*.AppImage.tar.gz "dist/Markoo-$TARGET.AppImage.tar.gz"
-          cp "$bundle"/appimage/*.AppImage.tar.gz.sig "dist/Markoo-$TARGET.AppImage.tar.gz.sig"
+          cp "$bundle"/appimage/*.AppImage "dist/Markoo-$TARGET.AppImage"
+          cp "$bundle"/appimage/*.AppImage.sig "dist/Markoo-$TARGET.AppImage.sig"
       - uses: actions/upload-artifact@v4
         with:
           name: app-${{ env.TARGET }}
@@ -248,7 +248,7 @@ jobs:
           for key, name in [
               ("darwin-aarch64", "Markoo-aarch64-apple-darwin.app.tar.gz"),
               ("darwin-x86_64", "Markoo-x86_64-apple-darwin.app.tar.gz"),
-              ("linux-x86_64", "Markoo-x86_64-unknown-linux-gnu.AppImage.tar.gz"),
+              ("linux-x86_64", "Markoo-x86_64-unknown-linux-gnu.AppImage"),
           ]:
               platforms[key] = {
                   "signature": pathlib.Path("artifacts", name + ".sig").read_text().strip(),
