@@ -223,9 +223,9 @@ export function installMock(): void {
       case "known_kbs":
         return ["~/Obsidian/Knowledge", "~/Obsidian/Work"];
       case "inspect_kb":
-        return { exists: true, kb_type: "obsidian" };
+        return { exists: true, kb_type: "obsidian", overlap: null };
       case "inspect_repo":
-        return { exists: true, git: true, branch: "main", top_level: "~/Projets/clara" };
+        return { exists: true, git: true, branch: "main", top_level: "~/Projets/clara", overlap: null };
       default:
         return null;
     }

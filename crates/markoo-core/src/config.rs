@@ -9,9 +9,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use directories::BaseDirs;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use toml_edit::{Array, ArrayOfTables, DocumentMut, Item, Table, value};
 
+use crate::entry::Side;
 use crate::fs::{DiskFs, Fs, FsError};
 use crate::hooks::HookSettings;
 use crate::kb::KbType;
@@ -526,23 +527,25 @@ impl Config {
         }
         for (index, first) in self.pairs.iter().enumerate() {
             for second in &self.pairs[index + 1..] {
-                for (side, a, b) in [
-                    ("kb", &first.pair.kb, &second.pair.kb),
-                    ("repo", &first.pair.repo, &second.pair.repo),
-                ] {
-                    if nested(a, b) {
+                for side in [Side::Kb, Side::Repo] {
+                    if let Some(nesting) = nesting(second.pair.root(side), first.pair.root(side)) {
                         validation.errors.push(Problem {
                             pair: second.pair.id.clone(),
-                            message: format!(
-                                "its {side} folder overlaps with pair \"{}\"",
-                                first.pair.id
-                            ),
+                            message: overlap_message(side, nesting, &first.pair),
                         });
                     }
                 }
             }
         }
         validation
+    }
+
+    /// The first pair whose `side` folder shares files with `folder`, and
+    /// where `folder` sits relative to it.
+    pub fn overlapping_pair(&self, side: Side, folder: &Path) -> Option<(&PairEntry, Nesting)> {
+        self.pairs
+            .iter()
+            .find_map(|entry| nesting(folder, entry.pair.root(side)).map(|found| (entry, found)))
     }
 }
 
@@ -998,10 +1001,55 @@ pub fn expand_home(path: &str) -> PathBuf {
 }
 
 /// Whether one folder contains the other (or both are the same).
-fn nested(a: &Path, b: &Path) -> bool {
+/// Where a folder sits relative to another one that shares files with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Nesting {
+    /// Both are the same folder.
+    Same,
+    /// The folder is inside the other one.
+    Inside,
+    /// The other folder is inside this one.
+    Contains,
+}
+
+/// Where `a` sits relative to `b`, if one contains the other.
+pub fn nesting(a: &Path, b: &Path) -> Option<Nesting> {
     let a = a.canonicalize().unwrap_or_else(|_| a.to_path_buf());
     let b = b.canonicalize().unwrap_or_else(|_| b.to_path_buf());
-    a.starts_with(&b) || b.starts_with(&a)
+    if a == b {
+        Some(Nesting::Same)
+    } else if a.starts_with(&b) {
+        Some(Nesting::Inside)
+    } else if b.starts_with(&a) {
+        Some(Nesting::Contains)
+    } else {
+        None
+    }
+}
+
+fn nested(a: &Path, b: &Path) -> bool {
+    nesting(a, b).is_some()
+}
+
+/// Why a pair cannot have this folder, given the pair `other` that has it.
+fn overlap_message(side: Side, nesting: Nesting, other: &Pair) -> String {
+    let folder = other.root(side).display();
+    let side = match side {
+        Side::Kb => "kb",
+        Side::Repo => "repo",
+    };
+    let place = match nesting {
+        Nesting::Same => "is the same as",
+        Nesting::Inside => "is inside",
+        Nesting::Contains => "contains",
+    };
+    format!(
+        "its {side} folder {place} the {side} folder of pair \"{}\" ({}): \
+         a file can only be synced by one pair, choose a folder outside it",
+        other.label(),
+        folder
+    )
 }
 
 fn in_git_repository(folder: &Path) -> bool {
@@ -1365,7 +1413,29 @@ exclude = ["drafts/**"]
             pair_text("a", &dir.path().join("kb"), &dir.path().join("repo1")),
             pair_text("b", &dir.path().join("kb/sub"), &dir.path().join("repo2"))
         );
-        assert!(!Config::parse(&text).unwrap().validate().is_ok("b"));
+        let validation = Config::parse(&text).unwrap().validate();
+        assert!(!validation.is_ok("b"));
+        let message = &validation.errors[0].message;
+        assert!(message.contains("kb folder is inside the kb folder of pair \"a\""));
+        assert!(message.contains(&dir.path().join("kb").display().to_string()));
+    }
+
+    #[test]
+    fn the_pair_sharing_a_folder_is_found() {
+        let dir = tempfile::tempdir().unwrap();
+        folders(dir.path(), &["kb/sub", "repo", "other"]);
+        let text = pair_text("a", &dir.path().join("kb"), &dir.path().join("repo"));
+        let config = Config::parse(&text).unwrap();
+        let found = |side, folder: &str| {
+            config
+                .overlapping_pair(side, &dir.path().join(folder))
+                .map(|(entry, nesting)| (entry.pair.id.as_str(), nesting))
+        };
+        assert_eq!(found(Side::Kb, "kb/sub"), Some(("a", Nesting::Inside)));
+        assert_eq!(found(Side::Kb, "kb"), Some(("a", Nesting::Same)));
+        assert_eq!(found(Side::Kb, ""), Some(("a", Nesting::Contains)));
+        assert_eq!(found(Side::Kb, "other"), None);
+        assert_eq!(found(Side::Repo, "kb/sub"), None);
     }
 
     #[test]

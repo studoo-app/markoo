@@ -12,7 +12,7 @@ use markoo_core::config::{ConfigError, ConfigFile, NewPair};
 use markoo_core::fs::{DiskFs, Fs};
 use markoo_core::paths::{Overrides, Paths};
 use markoo_core::service::{self, SyncOutcome};
-use markoo_core::{manage, merge};
+use markoo_core::{Side, manage, merge};
 use markoo_daemon::{Daemon, Error as DaemonError, Options, Queue, Trigger};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -364,14 +364,22 @@ async fn uninstall_hooks(backend: State<'_, Backend>, pair: String) -> CommandRe
     blocking(move || service::uninstall_hooks(&paths, &pair, &program)).await
 }
 
+/// What the folder would be as a knowledge base, with the pair already
+/// syncing part of it in `overlap`.
 #[tauri::command]
-fn inspect_kb(path: String) -> Value {
-    service::inspect_kb(&path)
+fn inspect_kb(backend: State<'_, Backend>, path: String) -> Value {
+    let mut info = service::inspect_kb(&path);
+    info["overlap"] = service::folder_overlap(&backend.paths, Side::Kb, &path);
+    info
 }
 
+/// Where the folder stands in Git, with the pair already syncing part of it
+/// in `overlap`.
 #[tauri::command]
-fn inspect_repo(path: String) -> Value {
-    service::inspect_repo(&path)
+fn inspect_repo(backend: State<'_, Backend>, path: String) -> Value {
+    let mut info = service::inspect_repo(&path);
+    info["overlap"] = service::folder_overlap(&backend.paths, Side::Repo, &path);
+    info
 }
 
 #[tauri::command]

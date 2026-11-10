@@ -542,6 +542,25 @@ pub fn inspect_repo(path: &str) -> Value {
     })
 }
 
+/// The pair whose `side` folder already covers part of `path`, as
+/// `{"pair", "label", "folder", "nesting"}`, or `null`: a new pair cannot
+/// have this folder on that side, since a file is synced by one pair only.
+pub fn folder_overlap(paths: &Paths, side: Side, path: &str) -> Value {
+    let Ok(config) = Config::load(paths.config_file()) else {
+        return Value::Null;
+    };
+    let folder = expand_home(path);
+    match config.overlapping_pair(side, &folder) {
+        Some((entry, nesting)) => json!({
+            "pair": entry.pair.id,
+            "label": entry.pair.label(),
+            "folder": entry.pair.root(side),
+            "nesting": nesting,
+        }),
+        None => Value::Null,
+    }
+}
+
 /// Folders known to the knowledge base tools, suggested for a new pair.
 pub fn known_kbs() -> Vec<PathBuf> {
     crate::kb::known_kbs()
