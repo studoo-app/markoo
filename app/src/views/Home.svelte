@@ -242,7 +242,7 @@
             disabled={syncing !== null || !all.some(canSync)}
             onclick={() => syncProject(project)}
           >
-            <span class:spin={syncingProject === (project ?? "")}><Icon name="refresh" size={14} /></span>
+            <span class:spin={syncingProject === (project ?? "")}><Icon name="refresh" size={13} /></span>
             {t("Sync project")}
           </button>
           {#if project !== null}
@@ -252,7 +252,7 @@
               aria-label={t("Add a sync to {project}", { project })}
               onclick={() => onnew(project)}
             >
-              <Icon name="plus" size={14} stroke={2.5} />
+              <Icon name="plus" size={13} stroke={2.5} />
               {t("Add a sync")}
             </button>
           {/if}
@@ -264,7 +264,7 @@
           {@const state = status(pair)}
           <li class:paused={pair.paused}>
             <button class="open" type="button" onclick={() => onopen(pair.id)}>
-              <span class="tile" aria-hidden="true"><Icon name="folder" size={24} stroke={1.5} /></span>
+              <span class="tile" aria-hidden="true"><Icon name="folder" size={18} stroke={1.5} /></span>
               <span class="text">
                 <span class="name" title={pair.label}>{pair.name}</span>
                 <span class="sub" title={kbTooltip(pair)}>
@@ -302,7 +302,7 @@
                   disabled={pair.paused || pair.active || syncing !== null || pair.errors.length > 0}
                   onclick={() => sync(pair.id)}
                 >
-                  <span class:spin={syncing === pair.id || pair.active}><Icon name="refresh" /></span>
+                  <span class:spin={syncing === pair.id || pair.active}><Icon name="refresh" size={17} /></span>
                 </button>
                 <button
                   class="icon-button"
@@ -311,7 +311,7 @@
                   aria-label={t("Settings of {name}", { name: pair.label })}
                   onclick={() => onopen(pair.id, "general")}
                 >
-                  <Icon name="settings" />
+                  <Icon name="settings" size={17} />
                 </button>
                 <button
                   class="icon-button"
@@ -320,7 +320,7 @@
                   aria-label={t("Remove {name}", { name: pair.label })}
                   onclick={() => (confirming = pair.id)}
                 >
-                  <Icon name="trash" />
+                  <Icon name="trash" size={17} />
                 </button>
               </span>
             {/if}
@@ -390,13 +390,13 @@
   .search {
     position: relative;
     display: block;
-    margin: 0 0 30px;
+    margin: 0 0 22px;
     font-weight: 400;
     color: var(--muted);
   }
   .search :global(.icon) {
     position: absolute;
-    left: 22px;
+    left: 17px;
     top: 50%;
     transform: translateY(-50%);
     pointer-events: none;
@@ -405,12 +405,12 @@
     width: 100%;
     font: inherit;
     color: var(--ink);
-    height: 60px;
-    padding: 0 22px 0 60px;
+    height: 46px;
+    padding: 0 18px 0 48px;
     border: 1px solid color-mix(in srgb, var(--warn) 22%, var(--line));
-    border-radius: 14px;
+    border-radius: 12px;
     background: var(--field);
-    font-size: 16.5px;
+    font-size: 15px;
     letter-spacing: 0.01em;
   }
   .search input::placeholder {
@@ -424,19 +424,19 @@
 
   /* Group heading: serif title, italic hint, a thin rule. */
   section + section {
-    margin-top: 44px;
+    margin-top: 26px;
   }
   .group {
     display: flex;
     align-items: baseline;
-    gap: 14px;
-    margin: 0 6px 10px;
+    gap: 10px;
+    margin: 0 4px 8px;
     line-height: 1.2;
   }
   .group-title {
     flex: none;
     font-family: var(--serif);
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 500;
     white-space: nowrap;
   }
@@ -445,7 +445,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 14.5px;
+    font-size: 13px;
     font-style: italic;
     font-weight: 400;
     color: var(--muted);
@@ -455,7 +455,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 14px;
-    margin: 0 6px 10px;
+    margin: 0 4px 8px;
   }
   .group-head .group {
     flex: 1;
@@ -470,7 +470,7 @@
   .group-actions button {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
   }
   .rule {
     flex: 1;
@@ -487,15 +487,15 @@
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 12px;
+    gap: 8px;
     grid-template-columns: minmax(0, 1fr);
     container-type: inline-size;
   }
   li {
     display: flex;
     align-items: center;
-    gap: 22px;
-    padding: 21px 26px;
+    gap: 16px;
+    padding: 10px 14px 10px 16px;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--radius);
@@ -510,7 +510,7 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 26px;
+    gap: 14px;
     padding: 0;
     border: 0;
     background: none;
@@ -529,10 +529,10 @@
   .tile {
     display: grid;
     place-items: center;
-    width: 62px;
-    height: 62px;
+    width: 38px;
+    height: 38px;
     flex: none;
-    border-radius: 12px;
+    border-radius: 9px;
     background: var(--tile);
     border: 1px solid var(--line);
     color: var(--accent);
@@ -541,13 +541,13 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 1px;
   }
   .name {
     font-family: var(--serif);
-    font-size: 22px;
+    font-size: 16.5px;
     font-weight: 500;
-    line-height: 1.2;
+    line-height: 1.25;
     letter-spacing: 0.005em;
     /* Names are free text: two lines before cutting them short. */
     display: -webkit-box;
@@ -559,15 +559,15 @@
     transition: color 120ms ease;
   }
   .sub {
-    font-size: 15px;
+    font-size: 13px;
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .kind {
-    margin-right: 6px;
-    font-size: 12px;
+    margin-right: 5px;
+    font-size: 10.5px;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -579,17 +579,17 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 3px;
+    gap: 0;
     flex: none;
-    width: 104px;
+    width: 92px;
     text-align: right;
   }
   .meta strong {
-    font-size: 15.5px;
+    font-size: 13px;
     font-weight: 500;
   }
   .meta em {
-    font-size: 14px;
+    font-size: 12px;
     color: var(--muted);
   }
 
@@ -598,13 +598,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 9px;
+    gap: 7px;
     flex: none;
-    min-width: 138px;
-    height: 34px;
-    padding: 0 16px;
+    min-width: 112px;
+    height: 26px;
+    padding: 0 12px;
     border-radius: 999px;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.09em;
     text-transform: uppercase;
@@ -623,8 +623,8 @@
     color: var(--muted);
   }
   .dot {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: currentColor;
   }
@@ -634,17 +634,17 @@
   .confirm {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 4px;
     flex: none;
   }
   .icon-button {
     display: grid;
     place-items: center;
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     border: 0;
-    border-radius: 10px;
+    border-radius: 8px;
     background: none;
     color: var(--ink);
   }
@@ -664,9 +664,9 @@
     }
   }
   .small {
-    padding: 6px 12px;
-    border-radius: 9px;
-    font-size: 13.5px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 12.5px;
   }
 
   /* Main action. */
@@ -674,13 +674,13 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-top: 22px;
-    padding: 16px 26px;
+    margin-top: 18px;
+    padding: 11px 20px;
     border: 0;
-    border-radius: 12px;
+    border-radius: 10px;
     background: var(--accent);
     color: var(--on-accent);
-    font-size: 16px;
+    font-size: 14.5px;
     font-weight: 600;
     box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 20%, transparent);
   }
@@ -725,24 +725,24 @@
       display: none;
     }
     .name {
-      font-size: 19px;
+      font-size: 15.5px;
     }
   }
   @container (max-width: 560px) {
     li {
-      padding: 16px 18px;
-      gap: 12px;
+      padding: 9px 12px;
+      gap: 10px;
     }
     .actions {
-      gap: 2px;
+      gap: 0;
     }
     .icon-button {
-      width: 36px;
-      height: 36px;
+      width: 30px;
+      height: 30px;
     }
     .pill {
       min-width: 0;
-      padding: 0 12px;
+      padding: 0 10px;
     }
   }
 </style>
