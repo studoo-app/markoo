@@ -216,6 +216,13 @@ const fr: Record<string, string> = {
   "Detect from the folder": "Détecter depuis le dossier",
   "Name of the pair": "Nom du sync",
   "This folder does not exist.": "Ce dossier n'existe pas.",
+  "The sync “{label}” already uses this folder.": "Le sync « {label} » utilise déjà ce dossier.",
+  "This folder is inside the one of the sync “{label}” ({folder}).":
+    "Ce dossier est à l'intérieur de celui du sync « {label} » ({folder}).",
+  "This folder contains the one of the sync “{label}” ({folder}).":
+    "Ce dossier contient celui du sync « {label} » ({folder}).",
+  "A file can only be synced by one sync: choose a folder outside it.":
+    "Un fichier ne peut être synchronisé que par un seul sync : choisissez un dossier en dehors.",
   "✓ {label} {kind} detected": "✓ {kind} {label} détecté",
   "vault": "coffre",
   "folder": "dossier",

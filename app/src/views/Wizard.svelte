@@ -12,6 +12,7 @@
     nameTaken,
     projectsOf,
     type Direction,
+    type Overlap,
     type PairView,
     type Plan,
     type TargetChanges,
@@ -49,9 +50,14 @@
   let newProject = $state(initialProject ?? "");
   let kb = $state("");
   let kbType = $state("");
-  let detected = $state<{ exists: boolean; kb_type: string } | null>(null);
+  let detected = $state<{ exists: boolean; kb_type: string; overlap: Overlap | null } | null>(null);
   let repo = $state("");
-  let repoInfo = $state<{ exists: boolean; git: boolean; branch: string | null } | null>(null);
+  let repoInfo = $state<{
+    exists: boolean;
+    git: boolean;
+    branch: string | null;
+    overlap: Overlap | null;
+  } | null>(null);
   let direction = $state<Direction>("both");
   let targetChanges = $state<TargetChanges>("protect");
   let name = $state("");
@@ -160,12 +166,25 @@
     step === 0
       ? isValidProject(project) &&
         detected?.exists === true &&
+        !detected.overlap &&
         cleanName !== "" &&
         nameError === null
       : step === 1
-        ? repoInfo?.exists === true
+        ? repoInfo?.exists === true && !repoInfo.overlap
         : true,
   );
+
+  /** Why a folder already synced by another sync cannot be used. */
+  function overlapText(overlap: Overlap): string {
+    const values = { label: overlap.label, folder: overlap.folder };
+    const where =
+      overlap.nesting === "same"
+        ? t("The sync “{label}” already uses this folder.", values)
+        : overlap.nesting === "inside"
+          ? t("This folder is inside the one of the sync “{label}” ({folder}).", values)
+          : t("This folder contains the one of the sync “{label}” ({folder}).", values);
+    return `${where} ${t("A file can only be synced by one sync: choose a folder outside it.")}`;
+  }
 
   const conflicts = $derived(preview?.entries.filter((e) => e.kind === "pending").length ?? 0);
 
@@ -269,6 +288,8 @@
       <div class="hint">
         {#if detected && !detected.exists}
           <span class="error">{t("This folder does not exist.")}</span>
+        {:else if detected?.overlap}
+          <span class="error">{overlapText(detected.overlap)}</span>
         {:else if detected}
           <span class="ok">{t("✓ {label} {kind} detected", { label: kbLabel(detected.kb_type), kind: t(detected.kb_type === "obsidian" ? "vault" : "folder") })}</span>
         {/if}
@@ -306,6 +327,8 @@
       <div class="hint">
         {#if repoInfo && !repoInfo.exists}
           <span class="error">{t("This folder does not exist.")}</span>
+        {:else if repoInfo?.overlap}
+          <span class="error">{overlapText(repoInfo.overlap)}</span>
         {:else if repoInfo && !repoInfo.git}
           <span class="warn">{t("This folder is not in a Git repository.")}</span>
         {:else if repoInfo}

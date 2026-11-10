@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Each sync keeps its backups and trashed files in a single folder, and the history records it with the hash of each file written. Syncs recorded before this version cannot be reverted.
+- A folder already covered by another sync is reported as soon as it is picked in the new sync wizard (steps 1 and 2), instead of at the Filters step. The message names that sync and its folder, says whether the chosen folder is inside it, contains it or is the same, and explains that a file can only be synced by one sync.
 
 ## [1.0.0-rc.7] - 2026-11-08
 

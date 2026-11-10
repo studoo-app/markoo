@@ -200,13 +200,29 @@ export const api = {
   hooksState: (pair: string) => invoke<HooksState>("hooks_state", { pair }),
   installHooks: (pair: string) => invoke<HookChange[]>("install_hooks", { pair }),
   uninstallHooks: (pair: string) => invoke<HookChange[]>("uninstall_hooks", { pair }),
-  inspectKb: (path: string) => invoke<{ exists: boolean; kb_type: string }>("inspect_kb", { path }),
+  inspectKb: (path: string) =>
+    invoke<{ exists: boolean; kb_type: string; overlap: Overlap | null }>("inspect_kb", { path }),
   inspectRepo: (path: string) =>
-    invoke<{ exists: boolean; git: boolean; branch: string | null; top_level: string | null }>(
-      "inspect_repo",
-      { path },
-    ),
+    invoke<{
+      exists: boolean;
+      git: boolean;
+      branch: string | null;
+      top_level: string | null;
+      overlap: Overlap | null;
+    }>("inspect_repo", { path }),
   knownKbs: () => invoke<string[]>("known_kbs"),
+};
+
+/**
+ * A sync that already covers part of a folder: a file is synced by one sync
+ * only, so a new sync cannot use that folder on the same side.
+ */
+export type Overlap = {
+  pair: string;
+  label: string;
+  folder: string;
+  /** Where the chosen folder sits relative to the folder of that sync. */
+  nesting: "same" | "inside" | "contains";
 };
 
 /** Longest project or sync name the configuration accepts. */
