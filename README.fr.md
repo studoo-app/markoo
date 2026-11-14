@@ -15,7 +15,7 @@ Les outils de base de connaissance sont pris en charge par des **adaptateurs**. 
 > 🇬🇧 [English version](README.md)
 
 > [!WARNING]
-> **Version candidate.** Markoo a été essayé sur de vrais vaults, mais il reste jeune : gardez une sauvegarde de vos notes et commencez sur une copie. L'app Linux est nouvelle et moins éprouvée que celle de macOS ; Windows n'a que la ligne de commande pour l'instant.
+> Gardez une sauvegarde de vos notes et commencez sur une copie : une erreur dans le choix des dossiers copie beaucoup de fichiers. L'app Linux est nouvelle et moins éprouvée que celle de macOS ; Windows n'a que la ligne de commande pour l'instant.
 
 <p align="center">
   <picture>

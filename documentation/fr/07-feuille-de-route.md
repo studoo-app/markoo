@@ -93,7 +93,7 @@ gantt
 ### M8 — v1.0
 - Binaires signés (macOS notarisé), formule Homebrew, documentation utilisateur.
 
-**État** : en cours, avec des versions candidates. Fait : workflow de publication (ligne de commande pour macOS, Linux et Windows, app pour les Mac Apple Silicon et Linux x86_64, avec la commande incluse), signature et notarisation sur macOS, guide utilisateur, changelog. Pas fait : la formule Homebrew, reportée.
+**État** : terminé, publié en 1.1.0 après huit versions candidates. Fait : workflow de publication (ligne de commande pour macOS, Linux et Windows, app pour les Mac Apple Silicon et Linux x86_64, avec la commande incluse), signature et notarisation sur macOS, guide utilisateur, changelog. Pas fait : la formule Homebrew, reportée.
 
 ## Après la v1
 
