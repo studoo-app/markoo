@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-14
+
+First stable release.
+
 ### Added
 
 - The desktop app for Linux x86_64, as an AppImage and a `.deb`. The `.deb` installs the app as `markoo-app` and the command as `markoo`; the AppImage updates itself from the app.
@@ -15,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The command line and the app for Linux are built on Ubuntu 22.04: they need glibc 2.35 or later (Ubuntu 22.04, Debian 12 or later) instead of 2.39.
+- The README, the user guide and the roadmap no longer call Markoo a release candidate.
 
 ### Removed
 
@@ -154,7 +159,8 @@ First release candidate. Keep a backup of your notes, and start on a copy.
 - No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
 - Not implemented, and ignored with a warning: `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, `schedule.pause_on_battery`, merging frontmatter by key.
 
-[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.8...HEAD
+[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.8...v1.1.0
 [1.0.0-rc.8]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.7...v1.0.0-rc.8
 [1.0.0-rc.7]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.6...v1.0.0-rc.7
 [1.0.0-rc.6]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.5...v1.0.0-rc.6

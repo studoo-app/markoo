@@ -16,7 +16,7 @@ Knowledge base tools are supported through **adapters**. **Obsidian is the first
 > 🇫🇷 [Version française](README.fr.md)
 
 > [!WARNING]
-> **Release candidate.** Markoo has been tried on real vaults, but it is still young: keep a backup of your notes, and start on a copy. The Linux app is new and less tried than the macOS one; Windows only has the command line for now.
+> Keep a backup of your notes, and start on a copy: a mistake in the choice of folders copies a lot of files. The Linux app is new and less tried than the macOS one; Windows only has the command line for now.
 
 <p align="center">
   <picture>

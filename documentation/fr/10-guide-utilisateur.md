@@ -4,7 +4,7 @@
 
 Markoo garde synchronisés un dossier de votre base de connaissance (KB) et un dossier d'un dépôt Git. Ce guide couvre l'usage courant ; les autres pages expliquent le fonctionnement.
 
-> **Gardez une sauvegarde de vos notes et commencez sur une copie.** Markoo est une version candidate. Il conserve ce qu'il écrase, mais une erreur dans le choix des dossiers copie beaucoup de fichiers.
+> **Gardez une sauvegarde de vos notes et commencez sur une copie.** Markoo conserve ce qu'il écrase, mais une erreur dans le choix des dossiers copie beaucoup de fichiers.
 
 ## Installer
 

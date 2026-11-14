@@ -4,7 +4,7 @@
 
 Markoo keeps a folder of your knowledge base (KB) and a folder of a Git repository in sync. This guide covers daily use; the other pages explain how it works.
 
-> **Keep a backup of your notes, and start on a copy.** Markoo is a release candidate. It keeps what it overwrites, but a mistake in the choice of folders copies a lot of files.
+> **Keep a backup of your notes, and start on a copy.** Markoo keeps what it overwrites, but a mistake in the choice of folders copies a lot of files.
 
 ## Install
 
