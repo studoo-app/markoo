@@ -39,8 +39,42 @@
       const key = new Date(entry.run.started_at).toDateString();
       byDay.set(key, [...(byDay.get(key) ?? []), entry]);
     }
-    return [...byDay.entries()].map(([key, runs]) => ({ key, label: dayLabel(key), runs }));
+    return [...byDay.entries()].map(([key, runs]) => ({
+      key,
+      label: dayLabel(key),
+      count: runs.length,
+      rows: collapse(runs),
+    }));
   });
+
+  // One row of the list: a run, or a streak of consecutive runs of the same
+  // sync that ended the same way (the latest first).
+  interface Row {
+    key: string;
+    pair: string;
+    runs: RunRecord[];
+    result: Outcome;
+  }
+
+  // Consecutive runs of the same sync with the same outcome make one row, so
+  // a sync that runs every few minutes without news does not fill the screen.
+  function collapse(runs: ActivityEntry[]): Row[] {
+    const rows: Row[] = [];
+    for (const entry of runs) {
+      const result = outcome(entry.run);
+      const last = rows.at(-1);
+      if (last && last.pair === entry.pair && sameOutcome(last.result, result)) {
+        last.runs.push(entry.run);
+      } else {
+        rows.push({ key: entry.pair + ":" + entry.run.id, pair: entry.pair, runs: [entry.run], result });
+      }
+    }
+    return rows;
+  }
+
+  function sameOutcome(a: Outcome, b: Outcome): boolean {
+    return a.tone === b.tone && a.text === b.text;
+  }
 
   async function load() {
     try {
@@ -72,28 +106,60 @@
     return new Date(milliseconds).toLocaleTimeString(locale(), { timeStyle: "short" });
   }
 
+  // "1:04 – 1:54 PM" for a streak, from its first run to its latest.
+  function timeRange(runs: RunRecord[]): string {
+    const latest = runs[0].started_at;
+    if (runs.length === 1) return time(latest);
+    const format = new Intl.DateTimeFormat(locale(), { timeStyle: "short" });
+    return format.formatRange(runs.at(-1)!.started_at, latest);
+  }
+
+  // The duration of a run, or the average one of a streak.
+  function rowDuration(runs: RunRecord[]): string {
+    const total = runs.reduce((sum, run) => sum + run.duration_ms, 0);
+    const text = duration(Math.round(total / runs.length));
+    return runs.length > 1 ? `~${text}` : text;
+  }
+
+  function triggers(runs: RunRecord[]): string {
+    return [...new Set(runs.map((run) => run.trigger))].join(", ");
+  }
+
   function duration(milliseconds: number): string {
     return milliseconds < 1000 ? `${milliseconds} ms` : `${(milliseconds / 1000).toFixed(1)} s`;
   }
 
+  interface Outcome {
+    label: string;
+    text: string;
+    /** The parts of the text, the skipped ones flagged to stand out. */
+    parts: { text: string; flagged: boolean }[];
+    tone: string;
+  }
+
   // What the run did, and whether it went well.
-  function outcome(run: RunRecord): { label: string; text: string; tone: string; icon: IconName } {
-    if (run.error) return { label: t("Failed"), text: run.error, tone: "error", icon: "alert" };
+  function outcome(run: RunRecord): Outcome {
+    if (run.error) {
+      return { label: t("Failed"), text: run.error, parts: [{ text: run.error, flagged: false }], tone: "error" };
+    }
     const report = run.report;
     const parts = report
       ? [
-          report.written.length > 0 && t("{count} written", { count: report.written.length }),
-          report.trashed.length > 0 && t("{count} to the trash", { count: report.trashed.length }),
-          report.pending.length > 0 && t("{count} to settle", { count: report.pending.length }),
-          report.skipped.length > 0 && t("{count} skipped", { count: report.skipped.length }),
-        ].filter((part): part is string => typeof part === "string")
+          report.written.length > 0 && { text: t("{count} written", { count: report.written.length }), flagged: false },
+          report.trashed.length > 0 && { text: t("{count} to the trash", { count: report.trashed.length }), flagged: false },
+          report.pending.length > 0 && { text: t("{count} to settle", { count: report.pending.length }), flagged: true },
+          report.skipped.length > 0 && { text: t("{count} skipped", { count: report.skipped.length }), flagged: true },
+        ].filter((part) => part !== false)
       : [];
-    if (parts.length === 0) return { label: t("No change"), text: t("nothing to do"), tone: "muted", icon: "minus" };
-    if (report && report.pending.length > 0) {
-      return { label: t("To settle"), text: parts.join(" · "), tone: "warn", icon: "clock" };
+    const text = parts.map((part) => part.text).join(" · ");
+    if (parts.length === 0) {
+      return { label: t("No change"), text: t("nothing to do"), parts: [{ text: t("nothing to do"), flagged: false }], tone: "muted" };
     }
-    return { label: t("Synced"), text: parts.join(" · "), tone: "ok", icon: "check" };
+    if (report && report.pending.length > 0) return { label: t("To settle"), text, parts, tone: "warn" };
+    return { label: t("Synced"), text, parts, tone: "ok" };
   }
+
+  const icons: Record<string, IconName> = { ok: "check", warn: "clock", error: "alert", muted: "minus" };
 </script>
 
 <header class="intro">
@@ -132,7 +198,7 @@
   <p class="muted">{t("Loading…")}</p>
 {:else if visible.length === 0}
   <div class="empty">
-    <span class="tile big" aria-hidden="true"><Icon name="activity" size={28} stroke={1.25} /></span>
+    <span class="tile" aria-hidden="true"><Icon name="activity" size={28} stroke={1.25} /></span>
     <h2>{t("Nothing yet")}</h2>
     <p class="muted">{t("Syncs appear here once they have written, moved or flagged a file.")}</p>
   </div>
@@ -141,25 +207,37 @@
     <section>
       <h2 class="group">
         <span class="group-title">{day.label}</span>
-        <span class="group-hint">{day.runs.length} {day.runs.length === 1 ? t("run") : t("runs")}</span>
+        <span class="group-hint">{day.count} {day.count === 1 ? t("run") : t("runs")}</span>
         <span class="rule" aria-hidden="true"></span>
       </h2>
       <ul>
-        {#each day.runs as entry (entry.pair + ":" + entry.run.id)}
-          {@const result = outcome(entry.run)}
-          <li>
-            <button class="open" type="button" onclick={() => onopen(entry.pair)}>
-              <span class="tile {result.tone}" aria-hidden="true"><Icon name={result.icon} size={22} stroke={1.6} /></span>
-              <span class="text">
-                <span class="name">{labelOf(pairs, entry.pair)}</span>
-                <span class="sub" class:error={result.tone === "error"} title={result.text}>{result.text}</span>
+        {#each day.rows as row (row.key)}
+          <li class={row.result.tone}>
+            <button
+              class="row"
+              type="button"
+              onclick={() => onopen(row.pair)}
+              aria-label="{labelOf(pairs, row.pair)} · {row.result.label} · {row.result.text} · {timeRange(row.runs)}"
+            >
+              <span class="status {row.result.tone}" title={row.result.label} aria-hidden="true">
+                <Icon name={icons[row.result.tone]} size={16} stroke={1.8} />
               </span>
+              <span class="when">
+                {timeRange(row.runs)}
+              </span>
+              <span class="name">{labelOf(pairs, row.pair)}</span>
+              <span class="summary" title={row.result.text}>
+                {#if row.runs.length > 1}
+                  <span class="count" title={t("{count} identical runs", { count: row.runs.length })}>×{row.runs.length}</span>
+                {/if}
+                {#each row.result.parts as part, index (index)}
+                  {#if index > 0}<span class="sep" aria-hidden="true">·</span>{/if}
+                  <span class:flagged={part.flagged}>{part.text}</span>
+                {/each}
+              </span>
+              <span class="meta">{rowDuration(row.runs)} · {t("via {trigger}", { trigger: triggers(row.runs) })}</span>
+              <span class="chevron" aria-hidden="true">›</span>
             </button>
-            <span class="meta">
-              <strong>{time(entry.run.started_at)}</strong>
-              <em>{duration(entry.run.duration_ms)} · {t("via {trigger}", { trigger: entry.run.trigger })}</em>
-            </span>
-            <span class="pill {result.tone}"><span class="dot" aria-hidden="true"></span>{result.label}</span>
           </li>
         {/each}
       </ul>
@@ -173,14 +251,14 @@
     justify-content: space-between;
     align-items: flex-end;
     gap: 32px;
-    padding-bottom: 24px;
-    margin-bottom: 26px;
+    padding-bottom: 18px;
+    margin-bottom: 22px;
     border-bottom: 1px solid var(--line);
   }
   .lead h1 {
-    font-size: 38px;
+    font-size: 34px;
     line-height: 1.1;
-    margin-bottom: 14px;
+    margin-bottom: 8px;
   }
   .lead p {
     margin: 0;
@@ -246,7 +324,7 @@
   }
 
   section + section {
-    margin-top: 40px;
+    margin-top: 28px;
   }
   .group {
     display: flex;
@@ -281,146 +359,144 @@
     align-self: center;
   }
 
+  /* One card per day, one line per run (or streak of identical runs). */
   ul {
     list-style: none;
     margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 12px;
-    grid-template-columns: minmax(0, 1fr);
-    container-type: inline-size;
-  }
-  li {
-    display: flex;
-    align-items: center;
-    gap: 22px;
-    padding: 21px 26px;
+    padding: 4px 0;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
+    container-type: inline-size;
   }
-  .open {
-    flex: 1;
-    min-width: 0;
-    display: flex;
+  li + li {
+    border-top: 1px solid var(--line);
+  }
+  .row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 20px 9.5em minmax(8em, 15em) minmax(0, 1fr) auto 10px;
     align-items: center;
-    gap: 26px;
-    padding: 0;
+    column-gap: 16px;
+    padding: 9px 18px;
     border: 0;
+    border-radius: 0;
     background: none;
     text-align: left;
+    font-size: 14px;
+    line-height: 1.35;
   }
-  .open:focus-visible {
-    outline: none;
+  li:first-child .row {
+    border-radius: calc(var(--radius) - 4px) calc(var(--radius) - 4px) 0 0;
   }
-  li:has(.open:focus-visible) {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
+  li:last-child .row {
+    border-radius: 0 0 calc(var(--radius) - 4px) calc(var(--radius) - 4px);
   }
-  .open:hover:not(:disabled) .name {
+  .row:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--tile) 70%, transparent);
+  }
+  .row:hover .name,
+  .row:hover .chevron {
     color: var(--accent);
   }
-  .tile {
+  .row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  /* Failures are tinted: they are what the eye should find first. */
+  li.error .row {
+    background: color-mix(in srgb, var(--danger) 7%, transparent);
+  }
+  li.error .row:hover {
+    background: color-mix(in srgb, var(--danger) 11%, transparent);
+  }
+  .status {
     display: grid;
     place-items: center;
-    width: 62px;
-    height: 62px;
-    flex: none;
-    border-radius: 12px;
-    background: var(--tile);
-    border: 1px solid var(--line);
     color: var(--muted);
   }
-  .tile.ok {
+  .status.ok {
     color: var(--ok);
   }
-  .tile.warn {
+  .status.warn {
     color: var(--warn);
   }
-  .tile.error {
+  .status.error {
     color: var(--danger);
   }
-  .tile.big {
-    width: 64px;
-    height: 64px;
-    color: var(--accent);
+  .status.muted {
+    opacity: 0.55;
   }
-  .text {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+  .when {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--ink);
   }
   .name {
-    font-family: var(--serif);
-    font-size: 22px;
     font-weight: 500;
-    line-height: 1.2;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     transition: color 120ms ease;
   }
-  .sub {
-    font-size: 15px;
-    color: var(--muted);
+  .summary {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--muted);
   }
-  .sub.error {
-    color: var(--danger);
+  .sep {
+    margin: 0 0.4em;
   }
-  .meta {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 3px;
-    flex: none;
-    text-align: right;
-  }
-  .meta strong {
-    font-size: 15.5px;
+  .flagged {
+    color: var(--warn);
     font-weight: 500;
   }
-  .meta em {
-    font-size: 14px;
-    color: var(--muted);
-  }
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    flex: none;
-    min-width: 138px;
-    height: 34px;
-    padding: 0 16px;
-    border-radius: 999px;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    background: color-mix(in srgb, currentColor 13%, transparent);
-  }
-  .pill.ok {
-    color: var(--ok);
-  }
-  .pill.warn {
-    color: var(--warn);
-  }
-  .pill.error {
+  li.error .summary {
     color: var(--danger);
   }
-  .pill.muted {
-    color: var(--muted);
+  .count {
+    display: inline-block;
+    margin-right: 8px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--tile);
+    border: 1px solid var(--line);
+    font-size: 12.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
   }
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: currentColor;
+  .meta {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .chevron {
+    font-size: 18px;
+    line-height: 1;
+    color: var(--muted);
+    opacity: 0.6;
+  }
+  /* Runs with nothing to tell stay quiet. */
+  li.muted .when,
+  li.muted .name {
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .tile {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    background: var(--tile);
+    border: 1px solid var(--line);
+    color: var(--accent);
   }
   .empty {
     display: flex;
@@ -444,12 +520,36 @@
   }
 
   /* Narrow window: these come last so they win over the rules above. */
-  @container (max-width: 620px) {
-    .meta em {
+  @container (max-width: 760px) {
+    .row {
+      grid-template-columns: 20px 9.5em minmax(6em, 12em) minmax(0, 1fr) 10px;
+    }
+    .meta {
       display: none;
     }
-    .pill {
-      min-width: 0;
+  }
+  @container (max-width: 520px) {
+    .row {
+      grid-template-columns: 20px minmax(0, 1fr) auto 10px;
+      grid-template-areas: "status name when chevron" "status summary summary chevron";
+      row-gap: 2px;
+    }
+    .status {
+      grid-area: status;
+    }
+    .name {
+      grid-area: name;
+    }
+    .summary {
+      grid-area: summary;
+    }
+    .chevron {
+      grid-area: chevron;
+    }
+    .when {
+      grid-area: when;
+      font-size: 13px;
+      color: var(--muted);
     }
   }
 </style>

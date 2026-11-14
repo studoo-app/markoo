@@ -180,39 +180,7 @@ export function installMock(): void {
           },
         };
       case "activity":
-        return [
-          {
-            pair: "clara",
-            run: {
-              id: 2, trigger: "interval", started_at: Date.now() - 120000, duration_ms: 84, error: null,
-              report: {
-                written: [{ path: "adr/001-stack.md", side: "repo" }, { path: "guide/install.md", side: "kb" }],
-                trashed: [{ path: "old.md", side: "kb" }],
-                skipped: [],
-                pending: [],
-              },
-            },
-          },
-          {
-            pair: "markoo-documentation",
-            run: {
-              id: 1, trigger: "hook", started_at: Date.now() - 900000, duration_ms: 1240, error: null,
-              report: {
-                written: [{ path: "README.md", side: "repo" }],
-                trashed: [],
-                skipped: [{ path: "draft.md", reason: "changed during the sync" }],
-                pending: [{}],
-              },
-            },
-          },
-          {
-            pair: "notes-api",
-            run: {
-              id: 1, trigger: "interval", started_at: Date.now() - 3600000, duration_ms: 12, report: null,
-              error: 'pair "notes-api": the kb folder is unavailable',
-            },
-          },
-        ];
+        return activity();
       case "global_settings":
         return {
           interval: "300s", on_startup: true, api_enabled: true, api_port: 4848,
@@ -230,4 +198,40 @@ export function installMock(): void {
         return null;
     }
   }, { shouldMockEvents: true });
+}
+
+/** Runs across every sync, the latest first: a few that did something, and
+ * long streaks of identical runs, as an interval trigger makes them. */
+function activity() {
+  const minute = 60000;
+  const now = Date.now();
+  const empty = { written: [], trashed: [], skipped: [], pending: [] };
+  const skipped = { ...empty, skipped: [{ path: "draft.md", reason: "changed during the sync" }] };
+  type Entry = { pair: string; run: Record<string, unknown> };
+  const entries: Entry[] = [];
+  let id = 1000;
+  const add = (pair: string, ago: number, run: Record<string, unknown>) =>
+    entries.push({
+      pair,
+      run: { id: id++, trigger: "interval", duration_ms: 300 + (id % 7) * 11, error: null, ...run, started_at: now - ago * minute },
+    });
+
+  add("clara", 2, {
+    duration_ms: 84,
+    report: {
+      ...empty,
+      written: [{ path: "adr/001-stack.md", side: "repo" }, { path: "guide/install.md", side: "kb" }],
+      trashed: [{ path: "old.md", side: "kb" }],
+    },
+  });
+  // A file skipped at every run, every five minutes.
+  for (let ago = 4; ago <= 54; ago += 5) add("markoo-documentation", ago, { report: skipped });
+  add("markoo-documentation", 57, { trigger: "hook", duration_ms: 1240, report: { ...empty, written: [{ path: "README.md", side: "repo" }], pending: [{}] } });
+  add("notes-api", 60, { duration_ms: 12, report: null, error: 'pair "notes-api": the kb folder is unavailable' });
+  for (let ago = 61; ago <= 120; ago += 5) add("clara-documentation", ago, { report: empty });
+  add("clara", 125, { trigger: "hook", report: { ...empty, written: [{ path: "glossary.md", side: "repo" }] } });
+  // Yesterday.
+  for (let ago = 24 * 60; ago <= 24 * 60 + 90; ago += 10) add("markoo-documentation", ago, { report: skipped });
+  add("clara", 26 * 60, { report: { ...empty, written: [{ path: "a.md", side: "kb" }, { path: "b.md", side: "kb" }] } });
+  return entries.sort((a, b) => (b.run.started_at as number) - (a.run.started_at as number));
 }

@@ -284,6 +284,7 @@ const fr: Record<string, string> = {
   "nothing to do": "rien à faire",
   "Synced": "Synchronisé",
   "{count} written": "{count} écrit(s)",
+  "{count} identical runs": "{count} exécutions identiques",
   // Projects.
   "Project": "Projet",
   "Project name": "Nom du projet",
