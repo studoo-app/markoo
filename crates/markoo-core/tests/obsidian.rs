@@ -138,6 +138,29 @@ fn repo_edit_does_not_bounce_back() {
 }
 
 #[test]
+fn repo_edit_reaches_a_vault_note_read_differently_since() {
+    // The vault note was written by a sync and not touched since, but a note
+    // of the same name appeared elsewhere in the vault: its `[[b|English]]`
+    // now reads back as another canonical form. The file itself did not
+    // change, so the next repo edit must reach it instead of being skipped as
+    // "changed since the scan" at every sync.
+    let v = Vault::new();
+    v.repo("fr/a.md", "> [English](../en/b.md)\n");
+    v.repo("en/b.md", "B\n");
+    v.sync();
+    assert_eq!(v.read_kb("fr/a.md").as_deref(), Some("> [[b|English]]\n"));
+    v.vault("Other/en/b.md", "Elsewhere\n");
+    v.repo("fr/a.md", "> [English](../en/b.md)\n\nMore.\n");
+    let report = v.sync();
+    assert!(report.skipped.is_empty(), "{:?}", report.skipped);
+    assert_eq!(
+        v.read_repo("fr/a.md").as_deref(),
+        Some("> [English](../en/b.md)\n\nMore.\n")
+    );
+    assert!(v.read_kb("fr/a.md").unwrap().ends_with("\n\nMore.\n"));
+}
+
+#[test]
 fn new_repo_note_linking_to_a_new_repo_note_gets_wikilinks() {
     let v = Vault::new();
     v.repo("a.md", "[b](./b.md)\n");
