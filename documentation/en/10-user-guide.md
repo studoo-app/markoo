@@ -8,15 +8,33 @@ Markoo keeps a folder of your knowledge base (KB) and a folder of a Git reposito
 
 ## Install
 
+Supported systems:
+
+| System | Desktop app | Command line |
+| --- | --- | --- |
+| macOS 11 or later, Apple Silicon | ✅ | ✅ |
+| macOS 11 or later, Intel | ❌ | ✅ |
+| Linux x86_64 with glibc 2.35 or later (Ubuntu 22.04, Debian 12 or later) | ✅ | ✅ |
+| Windows 10 or later, x86_64 | ❌ | ✅ |
+
 ### Desktop app (macOS)
 
-Download the `.dmg` for your Mac from the [releases](https://github.com/studoo-app/markoo/releases) (`aarch64` for Apple Silicon, `x64` for Intel) and drag Markoo to Applications.
+Download the `.dmg` from the [releases](https://github.com/studoo-app/markoo/releases) and drag Markoo to Applications. The app is built for Apple Silicon Macs only; on an Intel Mac, use the command line.
 
 The app is signed and notarized by Apple, so it opens normally. It includes the `markoo` command, in `/Applications/Markoo.app/Contents/MacOS/markoo`.
 
+### Desktop app (Linux)
+
+Two packages are on the same page:
+
+- **`.deb`** for Debian, Ubuntu and their derivatives: `sudo apt install ./Markoo_<version>_amd64.deb`. It installs the app as `markoo-app`, with a menu entry, and the command as `/usr/bin/markoo`. It needs WebKitGTK 4.1, which `apt` installs with it.
+- **`.AppImage`** for the other distributions: make it executable (`chmod +x Markoo-x86_64-unknown-linux-gnu.AppImage`) and run it. The AppImage updates itself from the app.
+
+The menu bar icon needs a desktop with tray support (AppIndicator). On GNOME, that means the AppIndicator extension.
+
 ### Command line only
 
-Download the archive for your system from the same page and put `markoo` somewhere in your `PATH`. It runs on macOS, Linux and Windows. On macOS it is signed and notarized too, but a Mac has to reach Apple the first time it runs it, to check. If the system blocks it, offline for example, use the copy inside the app or remove the quarantine mark:
+Download the archive for your system from the same page and put `markoo` somewhere in your `PATH`. It runs on macOS (Apple Silicon and Intel), Linux x86_64 and Windows x86_64. On macOS it is signed and notarized too, but a Mac has to reach Apple the first time it runs it, to check. If the system blocks it, offline for example, use the copy inside the app or remove the quarantine mark:
 
 ```bash
 xattr -d com.apple.quarantine ./markoo

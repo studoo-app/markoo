@@ -8,15 +8,33 @@ Markoo garde synchronisés un dossier de votre base de connaissance (KB) et un d
 
 ## Installer
 
+Systèmes pris en charge :
+
+| Système | Application | Ligne de commande |
+| --- | --- | --- |
+| macOS 11 ou plus récent, Apple Silicon | ✅ | ✅ |
+| macOS 11 ou plus récent, Intel | ❌ | ✅ |
+| Linux x86_64 avec glibc 2.35 ou plus récent (Ubuntu 22.04, Debian 12 ou plus récents) | ✅ | ✅ |
+| Windows 10 ou plus récent, x86_64 | ❌ | ✅ |
+
 ### Application (macOS)
 
-Téléchargez le `.dmg` correspondant à votre Mac sur les [versions publiées](https://github.com/studoo-app/markoo/releases) (`aarch64` pour Apple Silicon, `x64` pour Intel) et glissez Markoo dans Applications.
+Téléchargez le `.dmg` sur les [versions publiées](https://github.com/studoo-app/markoo/releases) et glissez Markoo dans Applications. L'app est construite pour les Mac Apple Silicon seulement ; sur un Mac Intel, utilisez la ligne de commande.
 
 L'app est signée et notarisée par Apple : elle s'ouvre donc normalement. Elle contient la commande `markoo`, dans `/Applications/Markoo.app/Contents/MacOS/markoo`.
 
+### Application (Linux)
+
+Deux paquets sont sur la même page :
+
+- **`.deb`** pour Debian, Ubuntu et leurs dérivées : `sudo apt install ./Markoo_<version>_amd64.deb`. Il installe l'app sous le nom `markoo-app`, avec une entrée dans le menu, et la commande dans `/usr/bin/markoo`. Il a besoin de WebKitGTK 4.1, qu'`apt` installe avec lui.
+- **`.AppImage`** pour les autres distributions : rendez-le exécutable (`chmod +x Markoo-x86_64-unknown-linux-gnu.AppImage`) et lancez-le. L'AppImage se met à jour depuis l'app.
+
+L'icône de la barre de menus demande un bureau qui gère les icônes de notification (AppIndicator). Sous GNOME, il faut l'extension AppIndicator.
+
 ### Ligne de commande seule
 
-Téléchargez l'archive de votre système sur la même page et placez `markoo` dans votre `PATH`. Elle tourne sur macOS, Linux et Windows. Sur macOS, elle est aussi signée et notarisée, mais un Mac doit pouvoir joindre Apple à son premier lancement pour le vérifier. Si le système la bloque, hors ligne par exemple, utilisez la copie incluse dans l'app ou retirez la marque de quarantaine :
+Téléchargez l'archive de votre système sur la même page et placez `markoo` dans votre `PATH`. Elle tourne sur macOS (Apple Silicon et Intel), Linux x86_64 et Windows x86_64. Sur macOS, elle est aussi signée et notarisée, mais un Mac doit pouvoir joindre Apple à son premier lancement pour le vérifier. Si le système la bloque, hors ligne par exemple, utilisez la copie incluse dans l'app ou retirez la marque de quarantaine :
 
 ```bash
 xattr -d com.apple.quarantine ./markoo

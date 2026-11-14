@@ -16,7 +16,7 @@ Knowledge base tools are supported through **adapters**. **Obsidian is the first
 > 🇫🇷 [Version française](README.fr.md)
 
 > [!WARNING]
-> **Release candidate.** Markoo has been tried on real vaults, but it is still young: keep a backup of your notes, and start on a copy. Linux and Windows only have the command line for now.
+> **Release candidate.** Markoo has been tried on real vaults, but it is still young: keep a backup of your notes, and start on a copy. The Linux app is new and less tried than the macOS one; Windows only has the command line for now.
 
 <p align="center">
   <picture>
@@ -36,7 +36,7 @@ Knowledge base tools are supported through **adapters**. **Obsidian is the first
 - **Rename detection**: a moved or renamed note is moved on the other side too, and links pointing to it are updated.
 - **Many triggers**: time interval, Git hooks (`post-merge`…), local HTTP API, MCP server for Claude and other AI agents, CLI.
 - **Desktop app**: menu bar status, pair setup wizard, side-by-side conflict view.
-- **Cross-platform**: the app runs on macOS; the command line also runs on Linux and Windows.
+- **Cross-platform**: the app runs on macOS (Apple Silicon) and Linux; the command line also runs on Intel Macs and Windows. See [supported systems](#supported-systems).
 
 <p align="center">
   <picture>
@@ -64,6 +64,17 @@ Details: [sync algorithm](documentation/en/03-sync-algorithm.md).
 ## Usage
 
 Get the app or the command line from the [releases](https://github.com/studoo-app/markoo/releases), or build from source with `cargo install --path crates/markoo-cli --locked`. The [user guide](documentation/en/10-user-guide.md) explains the rest.
+
+### Supported systems
+
+| System | Desktop app | Command line |
+| --- | --- | --- |
+| macOS 11 or later, Apple Silicon | ✅ `.dmg` | ✅ |
+| macOS 11 or later, Intel | ❌ | ✅ |
+| Linux x86_64 (glibc 2.35 or later: Ubuntu 22.04, Debian 12 or later) | ✅ `.AppImage`, `.deb` | ✅ |
+| Windows 10 or later, x86_64 | ❌ | ✅ |
+
+The app includes the command line. Linux on ARM and Windows on ARM have no build; the command line can be built from source there.
 
 ```bash
 markoo pair add clara --project Clara --kb ~/Obsidian/Knowledge/Projects/Clara --kb-type obsidian --repo ~/code/clara/docs --direction both

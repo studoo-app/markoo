@@ -15,7 +15,7 @@ Les outils de base de connaissance sont pris en charge par des **adaptateurs**. 
 > 🇬🇧 [English version](README.md)
 
 > [!WARNING]
-> **Version candidate.** Markoo a été essayé sur de vrais vaults, mais il reste jeune : gardez une sauvegarde de vos notes et commencez sur une copie. Linux et Windows n'ont que la ligne de commande pour l'instant.
+> **Version candidate.** Markoo a été essayé sur de vrais vaults, mais il reste jeune : gardez une sauvegarde de vos notes et commencez sur une copie. L'app Linux est nouvelle et moins éprouvée que celle de macOS ; Windows n'a que la ligne de commande pour l'instant.
 
 <p align="center">
   <picture>
@@ -35,7 +35,7 @@ Les outils de base de connaissance sont pris en charge par des **adaptateurs**. 
 - **Détection des renommages** : une note déplacée ou renommée l'est aussi de l'autre côté, et les liens qui pointent vers elle sont mis à jour.
 - **Nombreux déclencheurs** : intervalle de temps, hooks Git (`post-merge`…), API HTTP locale, serveur MCP pour Claude et d'autres agents IA, CLI.
 - **Application desktop** : état dans la barre de menus, assistant de création de paire, vue de conflit côte à côte.
-- **Multi-plateforme** : l'app tourne sur macOS ; la ligne de commande tourne aussi sur Linux et Windows.
+- **Multi-plateforme** : l'app tourne sur macOS (Apple Silicon) et Linux ; la ligne de commande tourne aussi sur les Mac Intel et Windows. Voir les [systèmes pris en charge](#systèmes-pris-en-charge).
 
 <p align="center">
   <picture>
@@ -63,6 +63,17 @@ Détails : [algorithme de synchronisation](documentation/fr/03-algorithme-de-syn
 ## Utilisation
 
 Récupérez l'app ou la ligne de commande sur les [versions publiées](https://github.com/studoo-app/markoo/releases), ou compilez depuis les sources avec `cargo install --path crates/markoo-cli --locked`. Le [guide utilisateur](documentation/fr/10-guide-utilisateur.md) explique la suite.
+
+### Systèmes pris en charge
+
+| Système | Application | Ligne de commande |
+| --- | --- | --- |
+| macOS 11 ou plus récent, Apple Silicon | ✅ `.dmg` | ✅ |
+| macOS 11 ou plus récent, Intel | ❌ | ✅ |
+| Linux x86_64 (glibc 2.35 ou plus récent : Ubuntu 22.04, Debian 12 ou plus récents) | ✅ `.AppImage`, `.deb` | ✅ |
+| Windows 10 ou plus récent, x86_64 | ❌ | ✅ |
+
+L'app contient la ligne de commande. Linux sur ARM et Windows sur ARM n'ont pas de build ; la ligne de commande peut y être compilée depuis les sources.
 
 ```bash
 markoo pair add clara --project Clara --kb ~/Obsidian/Knowledge/Projets/Clara --kb-type obsidian --repo ~/code/clara/docs --direction both
