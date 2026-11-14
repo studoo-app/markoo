@@ -88,12 +88,12 @@ gantt
 - Vue de conflit en trois colonnes avec éditeur.
 - [Interface de configuration](08-interface-de-configuration.md) : assistant de création, choix du sens, filtres avec aperçu, transformations, déclencheurs.
 
-**État** : terminé sur macOS, mais les écrans ont surtout été vérifiés avec des données d'exemple. Le retour en arrière depuis l'historique est fait. Pas fait : les intervalles par paire, les builds Linux et Windows de l'app.
+**État** : terminé sur macOS, mais les écrans ont surtout été vérifiés avec des données d'exemple. Le retour en arrière depuis l'historique est fait. L'app est aussi construite pour Linux x86_64 (AppImage et deb), vérifiée pour l'instant par le seul build de publication. Pas fait : les intervalles par paire, le build Windows de l'app. L'app n'est plus construite pour les Mac Intel.
 
 ### M8 — v1.0
 - Binaires signés (macOS notarisé), formule Homebrew, documentation utilisateur.
 
-**État** : en cours, avec des versions candidates. Fait : workflow de publication (ligne de commande pour macOS, Linux et Windows, app pour macOS, avec la commande incluse), signature et notarisation sur macOS, guide utilisateur, changelog. Pas fait : la formule Homebrew, reportée.
+**État** : en cours, avec des versions candidates. Fait : workflow de publication (ligne de commande pour macOS, Linux et Windows, app pour les Mac Apple Silicon et Linux x86_64, avec la commande incluse), signature et notarisation sur macOS, guide utilisateur, changelog. Pas fait : la formule Homebrew, reportée.
 
 ## Après la v1
 

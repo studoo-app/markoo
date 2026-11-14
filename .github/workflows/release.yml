@@ -22,7 +22,9 @@ jobs:
         include:
           - { os: macos-latest, target: aarch64-apple-darwin }
           - { os: macos-latest, target: x86_64-apple-darwin }
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          # The oldest Ubuntu still supported: what is built against its glibc
+          # also runs on the newer distributions.
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
@@ -91,7 +93,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+        # Apple Silicon only: the app is not built for Intel Macs any more.
+        target: [aarch64-apple-darwin]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -145,9 +148,9 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      # Both architectures make an archive with the same name: each one gets
-      # its target in the name, so that the release keeps them apart. All the
-      # files go in one flat folder, so that the release job finds them as is.
+      # The archive gets its target in the name, as the Linux AppImage does, so
+      # that the release keeps them apart. All the files go in one flat folder,
+      # so that the release job finds them as is.
       - name: Gather the files of the release by architecture
         run: |
           bundle="app/src-tauri/target/${{ matrix.target }}/release/bundle"
@@ -161,10 +164,66 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  app-linux:
+    name: app (x86_64-unknown-linux-gnu)
+    # Same reason as the command line: built on the oldest supported Ubuntu.
+    runs-on: ubuntu-22.04
+    env:
+      TARGET: x86_64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the libraries Tauri needs on Linux
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.TARGET }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: app-${{ env.TARGET }}
+          workspaces: |
+            .
+            app/src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Build the command shipped with the app
+        run: |
+          cargo build --release --locked -p markoo-cli --target "$TARGET"
+          mkdir -p app/src-tauri/binaries
+          cp "target/$TARGET/release/markoo" "app/src-tauri/binaries/markoo-$TARGET"
+      - run: npm ci
+        working-directory: app
+      # The updater checks a signature made with this key: see the updater
+      # section of the app configuration.
+      - run: npx tauri build --target "$TARGET" --bundles appimage,deb --config src-tauri/tauri.release.json
+        working-directory: app
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      # On Linux the updater takes the AppImage itself, with its signature
+      # (no archive). It gets its target in the name, as the macOS archives do.
+      - name: Gather the files of the release
+        run: |
+          bundle="app/src-tauri/target/$TARGET/release/bundle"
+          mkdir dist
+          cp "$bundle"/deb/*.deb dist/
+          cp "$bundle"/appimage/*.AppImage "dist/Markoo-$TARGET.AppImage"
+          cp "$bundle"/appimage/*.AppImage.sig "dist/Markoo-$TARGET.AppImage.sig"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ env.TARGET }}
+          path: dist/*
+          if-no-files-found: error
+
   release:
     name: draft release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [cli, app]
+    needs: [cli, app, app-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -190,9 +249,11 @@ jobs:
           import datetime, json, pathlib, sys
           version, tag, repo = sys.argv[1:4]
           platforms = {}
-          for arch, target in [("aarch64", "aarch64-apple-darwin"), ("x86_64", "x86_64-apple-darwin")]:
-              name = f"Markoo-{target}.app.tar.gz"
-              platforms[f"darwin-{arch}"] = {
+          for key, name in [
+              ("darwin-aarch64", "Markoo-aarch64-apple-darwin.app.tar.gz"),
+              ("linux-x86_64", "Markoo-x86_64-unknown-linux-gnu.AppImage"),
+          ]:
+              platforms[key] = {
                   "signature": pathlib.Path("artifacts", name + ".sig").read_text().strip(),
                   "url": f"https://github.com/{repo}/releases/download/{tag}/{name}",
               }

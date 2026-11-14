@@ -88,12 +88,12 @@ gantt
 - Three-column conflict view with an editor.
 - [Configuration UI](08-configuration-ui.md): creation wizard, direction choice, filters with preview, transformations, triggers.
 
-**Status**: done on macOS, except that the screens were mostly checked with sample data. Rollback from the history is done. Not done: per-pair intervals, the Linux and Windows builds of the app.
+**Status**: done on macOS, except that the screens were mostly checked with sample data. Rollback from the history is done. The app is built for Linux x86_64 too (AppImage and deb), so far only checked by the release build. Not done: per-pair intervals, the Windows build of the app. The app is no longer built for Intel Macs.
 
 ### M8 — v1.0
 - Signed binaries (notarized on macOS), Homebrew formula, user documentation.
 
-**Status**: in progress, with release candidates. Done: release workflow (command line for macOS, Linux and Windows, app for macOS, with the command included), signing and notarization on macOS, user guide, changelog. Not done: the Homebrew formula, postponed.
+**Status**: in progress, with release candidates. Done: release workflow (command line for macOS, Linux and Windows, app for Apple Silicon Macs and Linux x86_64, with the command included), signing and notarization on macOS, user guide, changelog. Not done: the Homebrew formula, postponed.
 
 ## After v1
 

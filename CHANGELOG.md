@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The desktop app for Linux x86_64, as an AppImage and a `.deb`. The `.deb` installs the app as `markoo-app` and the command as `markoo`; the AppImage updates itself from the app.
+- The README and the user guide list the supported systems.
+
+### Changed
+
+- The command line and the app for Linux are built on Ubuntu 22.04: they need glibc 2.35 or later (Ubuntu 22.04, Debian 12 or later) instead of 2.39.
+
+### Removed
+
+- The desktop app is no longer built for Intel Macs. The command line still is. An app already installed on an Intel Mac stays on its version.
+
 ## [1.0.0-rc.8] - 2026-11-14
 
 ### Added
