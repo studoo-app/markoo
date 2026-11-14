@@ -338,6 +338,22 @@ impl<F: Fs> Applier<'_, F> {
 
     fn ensure_unchanged(&self, entry: &PlannedEntry, side: Side) -> Result<(), EntryError> {
         let absolute = entry.path.under(self.pair.root(side));
+        // Same shortcut as the scan: a file whose size and modification time
+        // did not move since the last sync was seen with the base hash, without
+        // being read. Reading it now could give another canonical form (a
+        // wikilink resolved against a vault that changed since) and skip the
+        // entry at every sync although the file is untouched.
+        if let Some(base) = self.state.base(&self.pair.id, &entry.path)?
+            && entry.seen(side) == Some(&base.hash)
+        {
+            let base_meta = match side {
+                Side::Kb => base.kb_meta,
+                Side::Repo => base.repo_meta,
+            };
+            if base_meta.is_some() && self.fs.meta(&absolute)? == base_meta {
+                return Ok(());
+            }
+        }
         let ctx = ConvertCtx {
             path: &entry.path,
             index: self.index,

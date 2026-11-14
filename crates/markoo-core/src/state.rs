@@ -215,6 +215,26 @@ impl State {
         Ok(bases)
     }
 
+    /// Loads the base of one entry.
+    pub fn base(&self, pair: &str, path: &EntryPath) -> Result<Option<BaseEntry>, StateError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT content, hash, kb_size, kb_mtime, repo_size, repo_mtime
+                 FROM entries WHERE pair = ?1 AND path = ?2",
+                params![pair, path.as_str()],
+                |row| {
+                    Ok(BaseEntry {
+                        content: row.get(0)?,
+                        hash: ContentHash::from_stored(row.get(1)?),
+                        kb_meta: meta_from(row.get(2)?, row.get(3)?),
+                        repo_meta: meta_from(row.get(4)?, row.get(5)?),
+                    })
+                },
+            )
+            .optional()?)
+    }
+
     /// Records the base of an entry.
     pub fn put_base(
         &self,
