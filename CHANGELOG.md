@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-14
+
+### Changed
+
+- The **Activity** screen of the app shows one compact line per sync instead of a card, and gathers identical syncs that follow each other on a single line, so many more fit on screen.
+
+### Fixed
+
+- A file of the vault untouched since the last sync could be reported as "changed since the scan" at every sync, and the changes from the repository never reached it. This happened when a wikilink written by Markoo became ambiguous because a note of the same name appeared elsewhere in the vault.
+
 ## [1.1.0] - 2026-11-14
 
 First stable release.
@@ -159,7 +169,8 @@ First release candidate. Keep a backup of your notes, and start on a copy.
 - No rollback from the history: files overwritten or deleted stay in Markoo's `backups` and `trash` folders.
 - Not implemented, and ignored with a warning: `conflict` strategies other than `ask`, `filenames = "kebab"`, `strip_comments`, `inline_embeds`, `schedule.pause_on_battery`, merging frontmatter by key.
 
-[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/studoo-app/markoo/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/studoo-app/markoo/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.8...v1.1.0
 [1.0.0-rc.8]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.7...v1.0.0-rc.8
 [1.0.0-rc.7]: https://github.com/studoo-app/markoo/compare/v1.0.0-rc.6...v1.0.0-rc.7

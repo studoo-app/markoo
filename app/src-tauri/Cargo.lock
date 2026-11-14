@@ -2058,7 +2058,7 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "markoo-app"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "markoo-core",
  "markoo-daemon",
@@ -2078,7 +2078,7 @@ dependencies = [
 
 [[package]]
 name = "markoo-core"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "blake3",
  "diffy",
@@ -2097,7 +2097,7 @@ dependencies = [
 
 [[package]]
 name = "markoo-daemon"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "axum",
  "getrandom 0.4.3",
@@ -2112,7 +2112,7 @@ dependencies = [
 
 [[package]]
 name = "markoo-mcp"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "markoo-core",
  "rmcp",
